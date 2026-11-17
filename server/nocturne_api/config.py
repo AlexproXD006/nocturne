@@ -124,5 +124,25 @@ SPOTIFY_REDIRECT_URI: str = _optional(
 )
 # Import downloads: max parallel YouTube downloads (capped at 2) and the pause
 # between starting two downloads, in seconds.
-SPOTIFY_IMPORT_CONCURRENCY: int = max(1, min(2, int(_optional("NOCTURNE_SPOTIFY_IMPORT_CONCURRENCY", "2") or 2)))
-SPOTIFY_IMPORT_DELAY: float = float(_optional("NOCTURNE_SPOTIFY_IMPORT_DELAY", "3") or 3)
+# Parallel YouTube downloads per Spotify import. Empty/"auto" = one per CPU the
+# container can use (read at the start of each import, so adding cores live
+# helps the next import), clamped to 2..8. A number overrides it (1..8).
+SPOTIFY_IMPORT_CONCURRENCY_RAW: str = (_optional("NOCTURNE_SPOTIFY_IMPORT_CONCURRENCY", "auto") or "auto").strip().lower()
+SPOTIFY_IMPORT_DELAY: float = float(_optional("NOCTURNE_SPOTIFY_IMPORT_DELAY", "1") or 1)
+
+
+def spotify_import_concurrency() -> int:
+    raw = SPOTIFY_IMPORT_CONCURRENCY_RAW
+    if raw not in ("", "auto"):
+        try:
+            return max(1, min(8, int(raw)))
+        except ValueError:
+            pass
+    try:
+        cpus = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        cpus = os.cpu_count() or 2
+    return max(2, min(8, cpus))
+
+
+SPOTIFY_IMPORT_CONCURRENCY: int = spotify_import_concurrency()

@@ -101,7 +101,7 @@ All settings are environment variables; [`.env.example`](.env.example) documents
 | `SPOTIPY_CLIENT_ID` / `SPOTIPY_CLIENT_SECRET` | – | Spotify API credentials (optional): downloads/metadata, and users connecting their Spotify account to import playlists. |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | – | Older aliases of the above (accepted when `SPOTIPY_*` are not set). |
 | `NOCTURNE_SPOTIFY_REDIRECT_URI` | `<NOCTURNE_PUBLIC_URL>/v1/spotify/callback` | OAuth redirect URI for "Connect Spotify". Must be registered exactly in the Spotify app. |
-| `NOCTURNE_SPOTIFY_IMPORT_CONCURRENCY` / `NOCTURNE_SPOTIFY_IMPORT_DELAY` | `2` / `3` | Playlist import: parallel YouTube downloads (max 2) and seconds between starting two. |
+| `NOCTURNE_SPOTIFY_IMPORT_CONCURRENCY` / `NOCTURNE_SPOTIFY_IMPORT_DELAY` | `auto` / `1` | Playlist import: parallel YouTube downloads (`auto` = one per CPU, 2–8; or a number up to 8) and seconds between starting two. If YouTube throttles (429 / "not a bot"), all downloads pause 90 s and the song is retried once. |
 | `AUDIO_FORMAT` | `opus` | Format for new downloads (`opus`, `mp3`, `m4a`, `flac`, `wav`). |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Optional Ollama server to time plain lyrics. Skipped if unreachable. |
 | `WHISPER_MODEL` / `WHISPER_DEVICE` / `WHISPER_COMPUTE_TYPE` | `small` / `auto` / `auto` | faster-whisper settings (image built with `WITH_WHISPER=true`). |

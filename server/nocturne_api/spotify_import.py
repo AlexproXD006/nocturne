@@ -26,6 +26,7 @@ through v1_spotify_track_map / the library match, so nothing is downloaded twice
 from __future__ import annotations
 
 import asyncio
+import re
 import json
 import logging
 import secrets
@@ -589,13 +590,19 @@ async def _download_all(run: _Run, dm, items, unmatched: list[int], known_before
         todo.append(i)
     run.save()
 
-    sem = asyncio.Semaphore(config.SPOTIFY_IMPORT_CONCURRENCY)
+    sem = asyncio.Semaphore(config.spotify_import_concurrency())
     tasks: list[asyncio.Task] = []
 
     async def one(i: int) -> None:
         sid, cand = items[i]
         try:
+            await _wait_throttle()
             reason = await _download_one(run, dm, i, sid, cand, known_before, claimed)
+            if reason and _is_throttled(reason) and not _cancelled(run.id):
+                # YouTube is rate-limiting this IP: pause every download, then retry once.
+                _trip_throttle()
+                await _wait_throttle()
+                reason = await _download_one(run, dm, i, sid, cand, known_before, claimed)
         except Exception as e:
             logger.warning("import %s: download of %r failed: %s", run.id, cand.title, type(e).__name__)
             reason = f"Error al descargar: {type(e).__name__}"
@@ -617,6 +624,31 @@ async def _download_all(run: _Run, dm, items, unmatched: list[int], known_before
             await asyncio.sleep(config.SPOTIFY_IMPORT_DELAY)
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
+
+
+THROTTLE_PAUSE = 90.0          # seconds every download waits after YouTube throttles us
+_throttle_until = 0.0
+_THROTTLE_RE = re.compile(r"429|too many requests|not a bot|sign in to confirm|http error 403", re.I)
+
+
+def _is_throttled(reason: str) -> bool:
+    return bool(_THROTTLE_RE.search(reason or ""))
+
+
+def _trip_throttle() -> None:
+    global _throttle_until
+    until = time.monotonic() + THROTTLE_PAUSE
+    if until > _throttle_until:
+        _throttle_until = until
+        logger.warning("YouTube is throttling downloads; pausing imports for %ds", int(THROTTLE_PAUSE))
+
+
+async def _wait_throttle() -> None:
+    while True:
+        left = _throttle_until - time.monotonic()
+        if left <= 0:
+            return
+        await asyncio.sleep(min(left, 5.0))
 
 
 async def _download_one(run: _Run, dm, i: int, sid: str, cand: ca.Candidate,

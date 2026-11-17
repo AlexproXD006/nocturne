@@ -532,3 +532,33 @@ def test_entry_track_still_skips_episodes_missing_and_untitled():
     assert spotify.entry_track({"track": None})[0] is None
     assert spotify.entry_track({"track": {"id": "e1", "type": "episode", "name": "Pod"}})[1].startswith("Episodio")
     assert spotify.entry_track({"track": {"id": "t", "type": "track", "name": "  "}})[0] is None
+
+
+# ── import speed: CPU-based concurrency and YouTube throttle back-off ─────────
+
+def test_import_concurrency_follows_cpus_and_override(monkeypatch):
+    from nocturne_api import config
+    monkeypatch.setattr(config, "SPOTIFY_IMPORT_CONCURRENCY_RAW", "auto")
+    monkeypatch.setattr(config.os, "sched_getaffinity", lambda _p: set(range(6)))
+    assert config.spotify_import_concurrency() == 6
+    monkeypatch.setattr(config.os, "sched_getaffinity", lambda _p: {0})
+    assert config.spotify_import_concurrency() == 2          # floor
+    monkeypatch.setattr(config.os, "sched_getaffinity", lambda _p: set(range(32)))
+    assert config.spotify_import_concurrency() == 8          # ceiling
+    monkeypatch.setattr(config, "SPOTIFY_IMPORT_CONCURRENCY_RAW", "3")
+    assert config.spotify_import_concurrency() == 3
+    monkeypatch.setattr(config, "SPOTIFY_IMPORT_CONCURRENCY_RAW", "99")
+    assert config.spotify_import_concurrency() == 8
+
+
+def test_throttle_detection_and_pause(monkeypatch):
+    import asyncio
+    from nocturne_api import spotify_import as si
+    assert si._is_throttled("Falló la descarga: ERROR: HTTP Error 429: Too Many Requests")
+    assert si._is_throttled("Sign in to confirm you're not a bot")
+    assert not si._is_throttled("No se encontró en YouTube una versión que coincida")
+    monkeypatch.setattr(si, "THROTTLE_PAUSE", 0.05)
+    monkeypatch.setattr(si, "_throttle_until", 0.0)
+    si._trip_throttle()
+    assert si._throttle_until > 0
+    asyncio.run(si._wait_throttle())                         # returns once the pause is over

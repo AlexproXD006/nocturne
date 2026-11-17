@@ -286,7 +286,7 @@ class DownloadManager:
         self.download_queue: dict[str, dict] = {}
         self.active_downloads: set[str]      = set()
         self.progress_callbacks: list[Callable[..., Coroutine]] = []
-        self._executor = ThreadPoolExecutor(max_workers=3)
+        self._executor = ThreadPoolExecutor(max_workers=8)
         self._main_loop: asyncio.AbstractEventLoop | None = None
         Path(MUSIC_DIR).mkdir(parents=True, exist_ok=True)
 
