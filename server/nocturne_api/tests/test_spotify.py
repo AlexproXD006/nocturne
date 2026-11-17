@@ -229,7 +229,8 @@ async def test_entry_track_shapes():
     assert entry_track(_track("a" * 22, "X", ["Y"], 100))[0]["name"] == "X"
     assert entry_track(_track("a" * 22, "X", ["Y"], 100, shape="track"))[0]["name"] == "X"
     assert entry_track({"item": {"id": "e", "name": "Ep", "type": "episode"}})[0] is None
-    assert entry_track({"is_local": True, "track": {"id": None, "name": "L", "type": "track"}})[0] is None
+    # local files are kept (searched by name), with a stable synthetic id
+    assert entry_track({"is_local": True, "track": {"id": None, "name": "L", "type": "track"}})[0]["id"].startswith("local:")
     assert entry_track({"track": None})[0] is None
 
 
@@ -435,7 +436,8 @@ async def test_full_import(client, fake_spotify, monkeypatch):
     reasons = {f["title"]: f["reason"] for f in d["failures"]}
     assert "Sin Resultado" in reasons and "YouTube" in reasons["Sin Resultado"]
     assert any("Episodio" in f["reason"] for f in d["failures"])
-    assert any("local" in f["reason"].lower() for f in d["failures"])
+    # the local file is no longer skipped: it was searched on YouTube and not found
+    assert "YouTube" in reasons["local.mp3"]
     assert d["finishedAt"]
     assert dm.downloads == ["https://www.youtube.com/watch?v=good1", "https://www.youtube.com/watch?v=good2"]
     assert dm.max_in_flight <= 2
@@ -501,3 +503,32 @@ async def test_cancel_and_restart_recovery(client, fake_spotify):
     # cancelled stays cancelled
     d = (await client.get(f"/spotify/imports/{row['id']}", headers=h)).json()
     assert d["status"] == "cancelled"
+
+
+# ── entry_track: local files and unplayable tracks are still importable ──────
+
+def test_entry_track_local_file_gets_stable_synthetic_id():
+    from nocturne_api import spotify
+    entry = {"is_local": True, "track": {"id": None, "type": "track", "name": "Mi Tema",
+             "artists": [{"name": "Artista Local", "id": None}], "duration_ms": 201000, "is_local": True}}
+    t1, r1 = spotify.entry_track(entry)
+    t2, _ = spotify.entry_track(entry)
+    assert r1 is None and t1["id"].startswith("local:") and t1["id"] == t2["id"]
+    other = {"is_local": True, "track": {**entry["track"], "name": "Otro Tema"}}
+    assert spotify.entry_track(other)[0]["id"] != t1["id"]
+
+
+def test_entry_track_unplayable_and_idless_tracks_are_kept():
+    from nocturne_api import spotify
+    t, r = spotify.entry_track({"track": {"id": "abc", "type": "track", "name": "X", "is_playable": False,
+                                          "artists": [{"name": "Y"}], "duration_ms": 1000}})
+    assert r is None and t["id"] == "abc"
+    t, r = spotify.entry_track({"track": {"id": None, "type": "track", "name": "Sin Id", "artists": [], "duration_ms": 1}})
+    assert r is None and t["id"].startswith("local:")
+
+
+def test_entry_track_still_skips_episodes_missing_and_untitled():
+    from nocturne_api import spotify
+    assert spotify.entry_track({"track": None})[0] is None
+    assert spotify.entry_track({"track": {"id": "e1", "type": "episode", "name": "Pod"}})[1].startswith("Episodio")
+    assert spotify.entry_track({"track": {"id": "t", "type": "track", "name": "  "}})[0] is None

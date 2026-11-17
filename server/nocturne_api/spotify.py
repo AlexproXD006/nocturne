@@ -492,17 +492,28 @@ async def playlist_items(user_id: str, playlist_id: str, max_items: int = 10000)
     return out
 
 
+def _synthetic_id(t: dict) -> str:
+    """Stable id for entries Spotify gives no id (local files): name + artists + duration."""
+    import hashlib
+    artists = ",".join((a or {}).get("name") or "" for a in (t.get("artists") or []) if isinstance(a, dict))
+    key = f"{(t.get('name') or '').strip().lower()}|{artists.strip().lower()}|{t.get('duration_ms') or ''}"
+    return "local:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:22]
+
+
 def entry_track(entry: dict) -> tuple[Optional[dict], Optional[str]]:
-    """(track, None) for an importable track, else (None, reason)."""
+    """(track, None) for an importable track, else (None, reason).
+
+    Local files and tracks Spotify can't play (region-locked, removed) still carry
+    their name/artists/duration, so they are kept: they can't be streamed from
+    Spotify, but they can be matched in the library or found on YouTube.
+    """
     t = entry.get("item") if isinstance(entry.get("item"), dict) else entry.get("track")
     if not isinstance(t, dict):
         return None, "Elemento no disponible en Spotify"
-    if t.get("type") and t.get("type") != "track":
+    if t.get("type") and t.get("type") not in ("track",) and not (entry.get("is_local") or t.get("is_local")):
         return None, "Episodio de podcast (no es una canción)"
-    if entry.get("is_local") or t.get("is_local"):
-        return None, "Archivo local de Spotify (no se puede buscar)"
-    if not t.get("id") or not t.get("name"):
-        return None, "Canción no disponible en Spotify"
-    if t.get("is_playable") is False:
-        return None, "Canción no disponible en tu país en Spotify"
+    if not (t.get("name") or "").strip():
+        return None, "Elemento sin título en Spotify"
+    if not t.get("id"):
+        t = {**t, "id": _synthetic_id(t)}
     return t, None
