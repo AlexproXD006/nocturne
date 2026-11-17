@@ -96,7 +96,7 @@ def mount_downloads(app) -> None:
         resp = FileResponse(
             str(apk_path),
             media_type="application/vnd.android.package-archive",
-            filename="nocturne-1.0.4.apk",
+            filename="nocturne-1.0.5.apk",
         )
         resp.headers["Cache-Control"] = "public, max-age=3600"
         return _add_security(resp)

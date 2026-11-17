@@ -2,6 +2,19 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.0.5 — 2026-11-17
+
+**Firma de release para Android** · web, android
+
+### Novedades
+
+- La app de Android pasa a estar firmada con la clave oficial de Nocturne: la APK de esta web y la de GitHub son la misma y se actualizan entre sí.
+- Las versiones de GitHub (releases) incluyen la APK firmada y la app de escritorio.
+
+### Correcciones
+
+- Esta actualización requiere desinstalar la app anterior UNA sola vez, porque cambia la firma. Tu biblioteca, likes y playlists están en el servidor y no se pierden; solo tendrás que volver a iniciar sesión y elegir tu tema.
+
 ## 1.0.4 — 2026-11-17
 
 **Notificación multimedia, carátulas oficiales y arreglos** · web, android
