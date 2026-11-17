@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist-web/
+dist-hosted/
+release/
+coverage/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+src/renderer/.env
+src/renderer/.env.*
+*.pem
+*.key
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties
+
+# Android (the android/ project itself is committed; build products are not)
+android/.gradle/
+android/build/
+android/app/build/
+android/app/release/
+android/app/debug/
+android/local.properties
+android/captures/
+android/.idea/
+android/**/*.apk
+android/**/*.aab
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/capacitor-cordova-android-plugins/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+npm-debug.log*
+
+# Local backup copies (never commit)
+*.bak
+*.bak-*
+*.themebak
+*.media3bak
+*.betabak
+*.polish.bak
+*.prev*
+*.orig

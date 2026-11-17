@@ -1,0 +1,497 @@
+@import '@fontsource-variable/inter';
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --color-ink-950: #08080b;
+  --color-ink-900: #0e0e12;
+  --color-ink-850: #131318;
+  --color-ink-800: #18181e;
+  --color-ink-700: #22222a;
+  --color-ink-600: #2e2e38;
+  --color-fg: #f3f3f6;
+  --color-fg-muted: #a1a1ad;
+  --color-fg-subtle: #6c6c78;
+  --color-line: rgb(255 255 255 / 0.07);
+
+  --color-accent: rgb(var(--accent-rgb));
+  --color-accent-soft: rgb(var(--accent-rgb) / 0.16);
+
+  --radius-card: 14px;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root {
+  --accent-rgb: 255 122 92;
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   Interface themes. Each selectable theme overrides the ten surface/text/line
+   variables the whole UI reads through Tailwind utilities (bg-ink-*, text-fg-*,
+   border-line, …). The accent is independent and lives in --accent-rgb, so it
+   is intentionally never set here. `dark` is the default (its values match the
+   @theme/:root block above); it is restated for clarity and so switching back
+   to it from another theme fully resets every variable. */
+:root[data-theme='dark'] {
+  --color-ink-950: #08080b;
+  --color-ink-900: #0e0e12;
+  --color-ink-850: #131318;
+  --color-ink-800: #18181e;
+  --color-ink-700: #22222a;
+  --color-ink-600: #2e2e38;
+  --color-fg: #f3f3f6;
+  --color-fg-muted: #a1a1ad;
+  --color-fg-subtle: #6c6c78;
+  --color-line: rgb(255 255 255 / 0.07);
+}
+/* Adaptive: near-black base; the shell chrome turns to glass so the
+   AdaptiveBackdrop (blurred cover + dominant-colour glow) shows through.
+   Modals/menus keep their solid surfaces. */
+:root[data-theme='adaptive'] {
+  --color-ink-950: #050507;
+  --color-ink-900: #0b0b0f;
+  --color-ink-850: #121217;
+  --color-ink-800: #18181f;
+  --color-ink-700: #24242d;
+  --color-ink-600: #30303a;
+  --color-fg: #f5f5f8;
+  --color-fg-muted: #b3b3bf;
+  --color-fg-subtle: #7a7a87;
+  --color-line: rgb(255 255 255 / 0.09);
+}
+:root[data-theme='adaptive'] body,
+:root[data-theme='adaptive'] .app-shell {
+  background: #000;
+}
+:root[data-theme='adaptive'] .app-chrome {
+  background-color: rgb(0 0 0 / 0.32);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+:root[data-theme='adaptive'] .app-chrome-fade {
+  background-image: linear-gradient(to top, rgb(0 0 0 / 0.75), rgb(0 0 0 / 0.35));
+  backdrop-filter: blur(20px);
+}
+:root[data-theme='adaptive'] .app-main {
+  background-color: rgb(8 8 12 / 0.38);
+  backdrop-filter: blur(8px);
+}
+.ambient-in {
+  animation: ambient-in 1.1s var(--ease-out-soft) both;
+}
+@keyframes ambient-in {
+  from {
+    opacity: 0;
+  }
+}
+
+:root[data-theme='oled'] {
+  --color-ink-950: #000000;
+  --color-ink-900: #050506;
+  --color-ink-850: #0a0a0c;
+  --color-ink-800: #101014;
+  --color-ink-700: #1a1a20;
+  --color-ink-600: #26262e;
+  --color-fg: #f3f3f6;
+  --color-fg-muted: #a1a1ad;
+  --color-fg-subtle: #6c6c78;
+  --color-line: rgb(255 255 255 / 0.10);
+}
+:root[data-theme='dim'] {
+  --color-ink-950: #15202b;
+  --color-ink-900: #1a2735;
+  --color-ink-850: #1e2a39;
+  --color-ink-800: #22303f;
+  --color-ink-700: #2c3b4d;
+  --color-ink-600: #38475a;
+  --color-fg: #f0f3f5;
+  --color-fg-muted: #8899a6;
+  --color-fg-subtle: #5b6b78;
+  --color-line: rgb(255 255 255 / 0.08);
+}
+:root[data-theme='midnight'] {
+  --color-ink-950: #0a0e1a;
+  --color-ink-900: #0e1322;
+  --color-ink-850: #121829;
+  --color-ink-800: #171e33;
+  --color-ink-700: #202a45;
+  --color-ink-600: #2c3857;
+  --color-fg: #eef1f8;
+  --color-fg-muted: #9aa3bd;
+  --color-fg-subtle: #646c85;
+  --color-line: rgb(150 170 255 / 0.10);
+}
+:root[data-theme='dracula'] {
+  --color-ink-950: #282a36;
+  --color-ink-900: #21222c;
+  --color-ink-850: #2a2c3a;
+  --color-ink-800: #343746;
+  --color-ink-700: #44475a;
+  --color-ink-600: #565972;
+  --color-fg: #f8f8f2;
+  --color-fg-muted: #9ea5b8;
+  --color-fg-subtle: #6272a4;
+  --color-line: rgb(255 255 255 / 0.08);
+}
+:root[data-theme='nord'] {
+  --color-ink-950: #2e3440;
+  --color-ink-900: #292f3a;
+  --color-ink-850: #343b48;
+  --color-ink-800: #3b4252;
+  --color-ink-700: #434c5e;
+  --color-ink-600: #4c566a;
+  --color-fg: #eceff4;
+  --color-fg-muted: #9aa3b2;
+  --color-fg-subtle: #717a8c;
+  --color-line: rgb(255 255 255 / 0.08);
+}
+:root[data-theme='tokyonight'] {
+  --color-ink-950: #1a1b26;
+  --color-ink-900: #16161e;
+  --color-ink-850: #1e2030;
+  --color-ink-800: #24283b;
+  --color-ink-700: #292e42;
+  --color-ink-600: #3b4261;
+  --color-fg: #c0caf5;
+  --color-fg-muted: #9aa5ce;
+  --color-fg-subtle: #565f89;
+  --color-line: rgb(255 255 255 / 0.07);
+}
+:root[data-theme='catppuccin'] {
+  --color-ink-950: #1e1e2e;
+  --color-ink-900: #181825;
+  --color-ink-850: #232336;
+  --color-ink-800: #313244;
+  --color-ink-700: #45475a;
+  --color-ink-600: #585b70;
+  --color-fg: #cdd6f4;
+  --color-fg-muted: #a6adc8;
+  --color-fg-subtle: #6c7086;
+  --color-line: rgb(255 255 255 / 0.07);
+}
+:root[data-theme='rosepine'] {
+  --color-ink-950: #191724;
+  --color-ink-900: #161421;
+  --color-ink-850: #1f1d2e;
+  --color-ink-800: #26233a;
+  --color-ink-700: #403d52;
+  --color-ink-600: #524f67;
+  --color-fg: #e0def4;
+  --color-fg-muted: #908caa;
+  --color-fg-subtle: #6e6a86;
+  --color-line: rgb(255 255 255 / 0.07);
+}
+:root[data-theme='gruvbox'] {
+  --color-ink-950: #1d2021;
+  --color-ink-900: #282828;
+  --color-ink-850: #32302f;
+  --color-ink-800: #3c3836;
+  --color-ink-700: #504945;
+  --color-ink-600: #665c54;
+  --color-fg: #ebdbb2;
+  --color-fg-muted: #a89984;
+  --color-fg-subtle: #7c6f64;
+  --color-line: rgb(255 255 255 / 0.07);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink-950);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
+  overflow: hidden;
+  user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+}
+
+/* Thin, unobtrusive scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.14) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.12);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(255 255 255 / 0.22);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Range input used for seek + volume */
+.range {
+  --fill: 0%;
+  appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+}
+.range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--track-fill, var(--color-fg)) var(--fill), rgb(255 255 255 / 0.16) var(--fill));
+}
+.range:hover {
+  --track-fill: var(--color-accent);
+}
+.range::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 999px;
+  background: #fff;
+  opacity: 0;
+  transition: opacity 120ms;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+}
+.range:hover::-webkit-slider-thumb,
+.range:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
+}
+/* Touch screens have no hover: show the thumb (seek, volume, crossfade) permanently, a bit
+   larger, so the position is visible and there is something to grab. */
+@media (hover: none) {
+  .range::-webkit-slider-thumb {
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    opacity: 1;
+  }
+}
+.range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.16);
+}
+.range::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--track-fill, var(--color-fg));
+}
+
+/* Now-playing equalizer bars */
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+.eq span {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--color-accent);
+  transform-origin: bottom;
+  animation: eq 0.9s ease-in-out infinite;
+}
+.eq span:nth-child(2) { animation-delay: -0.3s; }
+.eq span:nth-child(3) { animation-delay: -0.6s; }
+.eq.paused span { animation-play-state: paused; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-up {
+  animation: fade-up 260ms var(--ease-out-soft) both;
+}
+
+/* Modal entrance / exit: scale + fade, paired with a backdrop fade.
+   Both are disabled under the reduced-motion media query below; callers also
+   gate them in JS so the Settings "Motion: Reduced" option disables them too. */
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes modal-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(6px) scale(0.97); }
+}
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.modal-pop { animation: modal-in 200ms var(--ease-out-soft) both; }
+.modal-pop-out { animation: modal-out 160ms var(--ease-out-soft) both; }
+.overlay-fade { animation: overlay-in 180ms ease both; }
+.overlay-fade-out { animation: overlay-out 160ms ease both; }
+
+@keyframes shimmer {
+  from { background-position: -200px 0; }
+  to { background-position: calc(200px + 100%) 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.04), rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.04));
+  background-size: 200px 100%;
+  background-repeat: no-repeat;
+  background-color: rgb(255 255 255 / 0.04);
+  animation: shimmer 1.4s infinite linear;
+}
+
+/* Lyrics */
+.lyric-line {
+  transition: color 300ms var(--ease-out-soft), opacity 300ms, transform 400ms var(--ease-out-soft), filter 300ms;
+  transform-origin: left center;
+}
+.lyric-active-fill {
+  background-image: linear-gradient(90deg, #fff var(--p, 0%), rgb(255 255 255 / 0.55) calc(var(--p, 0%) + 8%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Lyrics: word-by-word sync, backing vocals, duets and instrumental gaps */
+.lyric-line-end {
+  transform-origin: right center;
+}
+.lyric-wordgroup {
+  white-space: nowrap;
+}
+.lyric-word {
+  display: inline-block;
+  transition: color 220ms var(--ease-out-soft), transform 320ms var(--ease-out-soft), filter 320ms var(--ease-out-soft);
+}
+.lyric-live .lyric-word {
+  color: rgb(255 255 255 / 0.4);
+}
+.lyric-live .lyric-word.is-sung {
+  color: #fff;
+}
+.lyric-live .lyric-word.is-current {
+  color: transparent;
+  background-image: linear-gradient(90deg, #fff var(--wp, 0%), rgb(255 255 255 / 0.4) calc(var(--wp, 0%) + 6%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  transform: translateY(-2px);
+  filter: drop-shadow(0 0 10px rgb(255 255 255 / 0.35));
+}
+.lyrics-reduced .lyric-live .lyric-word.is-current {
+  transform: none;
+  filter: none;
+}
+.lyric-bg {
+  display: block;
+  margin-top: 0.15em;
+  font-size: 0.62em;
+  font-weight: 600;
+  line-height: 1.25;
+  opacity: 0.72;
+}
+.lyric-live .lyric-bg {
+  opacity: 0.9;
+}
+.lyric-gap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2rem;
+  transform-origin: left center;
+  opacity: 0.35;
+  transition: opacity 300ms;
+}
+.lyric-gap.is-active {
+  opacity: 1;
+  animation: lyric-breathe 2.6s ease-in-out infinite;
+}
+.lyric-gap-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 9999px;
+  background: #fff;
+  opacity: 0.25;
+}
+.lyric-gap.is-active .lyric-gap-dot {
+  opacity: clamp(0.25, calc(var(--gp, 0) * 3 - var(--i, 0)), 1);
+}
+.lyrics-reduced .lyric-gap.is-active {
+  animation: none;
+}
+
+/* Share-selection mode: the line that was just picked pops to confirm the tap.
+   Gated through the same `.lyrics-reduced` root class as the other lyric motion. */
+@keyframes lyric-pick {
+  0% { transform: scale(0.98); }
+  55% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+.lyric-pick {
+  animation: lyric-pick 220ms var(--ease-out-soft);
+}
+.lyrics-reduced .lyric-pick {
+  animation: none;
+}
+
+@keyframes lyric-breathe {
+  0%,
+  100% {
+    transform: scale(0.92);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}

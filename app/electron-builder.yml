@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json
+#
+# Desktop packaging (Windows + Linux). Build with:
+#   npm run dist:win     (on Windows)
+#   npm run dist:linux   (on Linux)
+# Installers are written to release/.
+appId: es.alexcloudweb.nocturne
+productName: Nocturne
+copyright: Copyright (c) 2026 Alex
+artifactName: Nocturne-${version}-${os}-${arch}.${ext}
+
+directories:
+  output: release
+  buildResources: build
+
+# Ship only the compiled app. Sources, tests, source maps and tooling stay out.
+# build/icon.png is included because the main process uses it as the window icon.
+files:
+  - out/**
+  - package.json
+  - build/icon.png
+  - "!**/*.map"
+  - "!**/*.d.ts"
+
+asar: true
+compression: normal
+npmRebuild: false
+
+# Security hardening of the Electron binary itself (applied by electron-builder
+# through @electron/fuses). See docs/SECURITY.md.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  loadBrowserProcessSpecificV8Snapshot: false
+  grantFileProtocolExtraPrivileges: false
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+    - target: portable
+      arch: [x64, arm64]
+  # Metadata only: the binaries are signed when WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD
+  # (or CSC_LINK / CSC_KEY_PASSWORD) are set in the environment.
+  signtoolOptions:
+    publisherName:
+      - Alex
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Nocturne
+  deleteAppDataOnUninstall: false
+  artifactName: Nocturne-Setup-${version}-${arch}.${ext}
+
+portable:
+  artifactName: Nocturne-Portable-${version}-${arch}.${ext}
+
+linux:
+  icon: build/icon.png
+  category: AudioVideo;Audio;Player
+  synopsis: Clean, ad-free music player for your own server
+  description: Nocturne is a lightweight desktop player for your self-hosted music server, with gapless playback, synced lyrics and media-key support.
+  maintainer: Alex <noreply@example.com>
+  vendor: Alex
+  executableName: nocturne
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64, arm64]
+    - target: rpm
+      arch: [x64]
+  # The player opens no files and registers no URL schemes, so the desktop entry
+  # carries no MimeType key.
+  desktop:
+    entry:
+      Name: Nocturne
+      Comment: Clean, ad-free music player
+      Keywords: music;player;audio;lyrics;
+      StartupWMClass: Nocturne
+      Terminal: "false"
+      Type: Application
+
+appImage:
+  artifactName: Nocturne-${version}-linux-${arch}.AppImage
+
+deb:
+  packageCategory: sound
+  priority: optional
+  artifactName: nocturne_${version}_${arch}.deb
+
+rpm:
+  artifactName: nocturne-${version}.${arch}.rpm
+
+# Releases are attached to GitHub Releases by the CI workflow, not by electron-builder.
+publish: null

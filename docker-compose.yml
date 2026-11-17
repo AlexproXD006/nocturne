@@ -1,0 +1,25 @@
+# Nocturne server: docker compose up -d
+#
+# 1. cp .env.example .env   and fill in at least the two secrets and the admin user.
+# 2. docker compose up -d   (builds the image locally the first time; set NOCTURNE_IMAGE
+#                            in .env to use a prebuilt image from GHCR instead).
+# 3. Open http://localhost:8000 (or your NOCTURNE_PUBLIC_URL) and sign in.
+services:
+  nocturne:
+    image: ${NOCTURNE_IMAGE:-nocturne:local}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: nocturne
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${NOCTURNE_PORT:-8000}:8000"
+    volumes:
+      # Music files, library.db, nocturne.db and Nocturne's data (art cache).
+      # The container runs as uid 10001: `sudo chown -R 10001:10001 ./music`
+      # (or uncomment `user:` below to run as your own uid instead).
+      - ${MUSIC_PATH:-./music}:/music
+      # Optional: release downloads + in-app update feed (latest.json).
+      # - ./downloads:/downloads:ro
+    # user: "1000:1000"

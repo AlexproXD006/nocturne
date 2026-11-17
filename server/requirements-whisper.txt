@@ -1,0 +1,4 @@
+# OPTIONAL: word-timed lyric generation from audio with faster-whisper (CPU).
+# Adds roughly 300 MB of wheels plus the model download on first use.
+# Without it, lyric timing falls back to the optional Ollama LLM (OLLAMA_BASE_URL).
+faster-whisper==1.2.1

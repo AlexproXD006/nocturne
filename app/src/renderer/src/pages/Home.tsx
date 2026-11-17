@@ -1,0 +1,123 @@
+import type { ReactNode } from 'react'
+import { Heart, Play } from 'lucide-react'
+import { api, useSession, usePlayer } from '../services'
+import { useResource } from '../hooks/useResource'
+import { greeting } from '../lib/format'
+import type { HomeSection, Track } from '../api/types'
+import { Shelf, type CardItem } from '../components/cards'
+import { Artwork, ErrorState } from '../components/common'
+import { TrackList } from '../components/TrackList'
+import { useNav } from '../store/nav'
+import { Page } from './Page'
+
+function toCards(section: HomeSection): CardItem[] {
+  switch (section.kind) {
+    case 'albums': return section.items.map((item) => ({ kind: 'album' as const, item }))
+    case 'artists': return section.items.map((item) => ({ kind: 'artist' as const, item }))
+    case 'playlists': return section.items.map((item) => ({ kind: 'playlist' as const, item }))
+    default: return []
+  }
+}
+
+function QuickTile({ title, images, onOpen, onPlay, icon }: { title: string; images?: Track['artwork']; onOpen: () => void; onPlay?: () => void; icon?: ReactNode }): ReactNode {
+  return (
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen()}
+      className="group flex h-14 cursor-pointer items-center gap-3 overflow-hidden rounded-lg bg-white/[0.07] pr-3 transition-colors hover:bg-white/[0.12] md:h-16"
+    >
+      {icon ?? <Artwork images={images} size={64} className="h-14 w-14 shrink-0 md:h-16 md:w-16" rounded="rounded-none" />}
+      <span className="line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug font-semibold [overflow-wrap:anywhere] md:text-sm">{title}</span>
+      {onPlay && (
+        <button
+          aria-label={`Play ${title}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onPlay()
+          }}
+          className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-ink-950 opacity-0 shadow-lg transition group-hover:opacity-100 md:flex"
+        >
+          <Play className="ml-0.5 h-4 w-4" fill="currentColor" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+export function HomePage(): ReactNode {
+  const name = useSession((s) => s.session?.user.displayName || s.session?.user.username)
+  const home = useResource('home', (signal) => api.home(signal))
+  const go = useNav((s) => s.go)
+  const playTracks = usePlayer((s) => s.playTracks)
+  const hour = new Date().getHours()
+
+  const sections = home.data?.sections ?? []
+  const quick = sections.find((s) => s.kind === 'albums' || s.kind === 'playlists')
+  const quickCards = quick ? toCards(quick).slice(0, 5) : []
+
+  return (
+    <Page tint="rgb(var(--accent-rgb) / 0.22)">
+      <h1 className="fade-up mb-5 text-2xl font-extrabold tracking-tight md:text-3xl">
+        {greeting(hour)}
+        {name ? `, ${name}` : ''}
+      </h1>
+
+      {home.loading && (
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="skeleton h-14 rounded-lg md:h-16" />
+          ))}
+        </div>
+      )}
+      {home.error && !home.data && <ErrorState message={home.error} onRetry={home.reload} />}
+
+      {home.data && (
+        <>
+          <div className="fade-up mb-9 grid grid-cols-2 gap-2 lg:grid-cols-3">
+            <QuickTile
+              title="Liked Songs"
+              onOpen={() => go({ name: 'liked' })}
+              icon={
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center bg-gradient-to-br from-accent to-[#7b5cff] md:h-16 md:w-16">
+                  <Heart className="h-5 w-5 text-white" fill="currentColor" />
+                </span>
+              }
+            />
+            {quickCards.map((c) => (
+              <QuickTile
+                key={`${c.kind}:${c.item.id}`}
+                title={c.kind === 'playlist' ? c.item.name : c.kind === 'album' ? c.item.title : c.item.name}
+                images={c.item.artwork}
+                onOpen={() => go({ name: c.kind, id: c.item.id })}
+              />
+            ))}
+          </div>
+
+          {sections.map((section) =>
+            section.kind === 'tracks' ? (
+              section.items.length > 0 && (
+                <section key={section.id} className="fade-up mb-8">
+                  <div className="mb-2 flex items-end justify-between">
+                    <h2 className="text-xl font-bold tracking-tight">{section.title}</h2>
+                    <button
+                      className="text-sm font-semibold text-fg-muted hover:text-fg"
+                      onClick={() => void playTracks(section.items, 0, { type: 'home', id: section.id, name: section.title })}
+                    >
+                      Play all
+                    </button>
+                  </div>
+                  <TrackList tracks={section.items.slice(0, 6)} context={{ type: 'home', id: section.id, name: section.title }} header={false} />
+                </section>
+              )
+            ) : (
+              <Shelf key={section.id} title={section.title} cards={toCards(section)} />
+            )
+          )}
+          {sections.length === 0 && <p className="py-10 text-center text-fg-muted">Your server didn't send anything for the home screen yet.</p>}
+        </>
+      )}
+    </Page>
+  )
+}

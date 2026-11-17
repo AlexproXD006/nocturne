@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Labels for the system media controls (NocturneMediaService). -->
+<resources>
+    <string name="nocturne_media_channel_name">Playback</string>
+    <string name="nocturne_media_like">Save to liked songs</string>
+    <string name="nocturne_media_unlike">Remove from liked songs</string>
+    <string name="nocturne_media_shuffle_on">Shuffle on</string>
+    <string name="nocturne_media_shuffle_off">Shuffle off</string>
+    <string name="nocturne_media_repeat_off">Repeat off</string>
+    <string name="nocturne_media_repeat_all">Repeat all</string>
+    <string name="nocturne_media_repeat_one">Repeat one</string>
+</resources>

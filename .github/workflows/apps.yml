@@ -1,0 +1,162 @@
+name: apps
+
+# Packages the client apps (Windows/Linux desktop + Android APK) from app/.
+# Typecheck and tests run in ci.yml; this workflow only builds installers and,
+# on a version tag, attaches them to a GitHub Release.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'app/**'
+      - '.github/workflows/apps.yml'
+  workflow_dispatch:
+
+# Least privilege by default; only the release job below is granted write access.
+permissions:
+  contents: read
+
+concurrency:
+  group: apps-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  CI: 'true'
+
+defaults:
+  run:
+    working-directory: app
+
+jobs:
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist:win
+            artifact: nocturne-windows
+            files: |
+              app/release/*.exe
+          - os: ubuntu-latest
+            script: dist:linux
+            artifact: nocturne-linux
+            files: |
+              app/release/*.AppImage
+              app/release/*.deb
+              app/release/*.rpm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install rpm tooling (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm
+      - run: npm ci
+      - name: Package
+        run: npm run ${{ matrix.script }}
+        env:
+          # Optional Authenticode signing; leave the secrets unset for unsigned builds.
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 14
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NOCTURNE_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - name: Build web bundle, sync Capacitor and patch the Android project
+        run: npm run android:sync
+      - name: Decode signing keystore
+        if: env.NOCTURNE_KEYSTORE_B64 != ''
+        env:
+          KS_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          umask 077
+          echo "$NOCTURNE_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/nocturne.jks"
+          {
+            echo "NOCTURNE_KEYSTORE=$RUNNER_TEMP/nocturne.jks"
+            echo "NOCTURNE_KEYSTORE_PASSWORD=$KS_PASSWORD"
+            echo "NOCTURNE_KEY_ALIAS=$KS_ALIAS"
+            echo "NOCTURNE_KEY_PASSWORD=$KS_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+      - name: Assemble APK (signed release when secrets exist, otherwise debug)
+        working-directory: app/android
+        run: |
+          if [ -n "$NOCTURNE_KEYSTORE_B64" ]; then
+            ./gradlew --no-daemon assembleRelease
+            echo "APK_KIND=release" >> "$GITHUB_ENV"
+          else
+            echo "::notice::No ANDROID_KEYSTORE_BASE64 secret: building a debug-signed APK."
+            ./gradlew --no-daemon assembleDebug
+            echo "APK_KIND=debug" >> "$GITHUB_ENV"
+          fi
+      - name: Collect APK
+        run: |
+          version=$(node -p "require('./package.json').version")
+          mkdir -p dist-android
+          apk=$(find android/app/build/outputs/apk/$APK_KIND -name '*.apk' | head -n 1)
+          test -n "$apk"
+          cp "$apk" "dist-android/Nocturne-${version}-android-${APK_KIND}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nocturne-android-${{ env.APK_KIND }}
+          path: app/dist-android/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [desktop, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Drop debug-signed APKs (never published)
+        run: find artifacts -name '*-debug.apk' -delete
+      - name: List release files
+        run: ls -lh artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

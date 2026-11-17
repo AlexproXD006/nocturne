@@ -1,0 +1,68 @@
+# ── Dependencies ──────────────────────────────────────────────
+node_modules/
+venv/
+.venv/
+
+# ── Builds / outputs ──────────────────────────────────────────
+app/out/
+app/dist-web/
+app/dist-hosted/
+app/dist-android/
+app/release/
+coverage/
+*.tsbuildinfo
+dist/
+build/
+!app/build/
+
+# ── Environment and secrets (.env.example IS committed) ───────
+.env
+.env.*
+!.env.example
+.nocturne.env
+*.pem
+*.key
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties
+secrets/
+
+# ── Data: music library, databases, release downloads ────────
+music/
+downloads/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+.nocturne_data/
+
+# ── Python / tool caches ──────────────────────────────────────
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.config/
+.nv/
+
+# ── Local backup copies ───────────────────────────────────────
+*.bak
+*.bak-*
+*.themebak
+*.media3bak
+*.betabak
+*.polish.bak
+*.prev*
+*.orig
+
+# ── OS / editor ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log

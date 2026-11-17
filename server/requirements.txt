@@ -1,0 +1,25 @@
+# Nocturne server (NOVA backend + nocturne_api) runtime dependencies.
+# Pinned to the versions the reference deployment runs (Python 3.13).
+# Optional extras: requirements-whisper.txt (local lyric timing), requirements-dev.txt (tests).
+
+# Web stack (fastapi/starlette/uvicorn are held back by spotdl 4.x)
+fastapi==0.103.2
+uvicorn==0.23.2
+websockets==14.2
+python-multipart==0.0.24
+pydantic==2.12.5
+aiofiles==25.1.0
+python-dotenv==1.2.2
+requests==2.33.1
+
+# Library, tags and downloads (spotdl/yt-dlp also need the ffmpeg binary)
+mutagen==1.47.0
+spotdl==4.4.3
+spotipy==2.26.0
+yt-dlp==2026.3.17
+pytube==15.0.0
+
+# Nocturne API: auth tokens, password hashing, artwork resizing
+PyJWT==2.15.1
+argon2-cffi==25.1.0
+pillow==13.0.0

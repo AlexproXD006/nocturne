@@ -1,0 +1,50 @@
+# Build context is the repository root; only app/ and server/ are needed.
+*
+!app/
+!server/
+
+# App: dependencies, build outputs and anything platform-specific
+app/node_modules
+app/out
+app/dist-web
+app/dist-hosted
+app/release
+app/coverage
+app/android
+app/docs
+app/tests
+app/mock-server
+app/**/*.tsbuildinfo
+
+# Server: tests, docs, caches, local state
+server/nocturne_api/tests
+server/docs
+server/pytest.ini
+server/requirements-dev.txt
+server/venv
+server/.venv
+server/music
+server/.cache
+server/.config
+**/__pycache__
+**/.pytest_cache
+**/*.py[cod]
+**/*.db
+**/*.db-*
+**/*.sqlite*
+
+# Secrets and backups, never in an image
+**/.env
+**/.env.*
+**/.nocturne.env
+**/*.jks
+**/*.keystore
+**/*.pem
+**/*.key
+**/*.bak
+**/*.bak-*
+**/*.themebak
+**/*.media3bak
+**/*.betabak
+**/*.prev*
+**/*.log
