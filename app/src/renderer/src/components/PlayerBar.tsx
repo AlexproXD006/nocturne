@@ -8,6 +8,7 @@ import { readPosition, useFrame } from '../hooks/useClock'
 import { Artwork, IconButton, LikeButton } from './common'
 import { SeekBar, TransportControls, VolumeControl } from './controls'
 import { DevicesButton } from './Devices'
+import { AddToPlaylistButton } from './Playlists'
 
 function NowPlayingInfo(): ReactNode {
   const item = usePlayer((s) => currentItem(s.queue))
@@ -43,6 +44,7 @@ function NowPlayingInfo(): ReactNode {
         </p>
       </div>
       <LikeButton trackId={t.id} serverValue={t.liked} />
+      <AddToPlaylistButton tracks={[t]} size="sm" className="-ml-1" />
     </div>
   )
 }

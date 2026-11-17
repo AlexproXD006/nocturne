@@ -8,6 +8,7 @@ import { useUpdates } from '../store/updates'
 import { ExternalLink, cx } from '../components/common'
 import { Logo } from '../components/Shell'
 import { Page } from './Page'
+import { SpotifySettings, useSpotifyImportEnabled } from '../components/Spotify'
 import { isPrerelease } from '../lib/version'
 
 function Section({ title, children }: { title: string; children: ReactNode }): ReactNode {
@@ -314,6 +315,7 @@ export function SettingsPage(): ReactNode {
   const lastServerUrl = useSession((s) => s.lastServerUrl)
   const logout = useSession((s) => s.logout)
   const admin = useSession(isAdmin)
+  const spotify = useSpotifyImportEnabled()
   const go = useNav((s) => s.go)
   const [signingOut, setSigningOut] = useState(false)
   const fadeId = useId()
@@ -406,6 +408,12 @@ export function SettingsPage(): ReactNode {
             <LogOut className="h-4 w-4" /> Sign out
           </button>
         </Section>
+
+        {spotify && (
+          <Section title="Spotify">
+            <SpotifySettings />
+          </Section>
+        )}
 
         {platform.hostedOrigin && (
           <Section title="Apps">

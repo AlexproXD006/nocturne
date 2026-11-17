@@ -66,11 +66,39 @@ export interface Playlist {
   owner?: { id: string; name: string }
   artwork: Image[]
   trackCount?: number
+  /** True when the signed-in user may rename / delete / change the tracks of this playlist. */
+  editable?: boolean
 }
 
 export interface PlaylistDetail extends Playlist {
+  /** In playlist order. */
   tracks: Track[]
 }
+
+export interface CreatePlaylistInput {
+  /** 1–100 characters. */
+  name: string
+  /** ≤ 300 characters. */
+  description?: string
+  /** Songs to put in the new playlist, in order. */
+  trackIds?: string[]
+}
+
+export interface UpdatePlaylistInput {
+  name?: string
+  description?: string
+}
+
+/** Response of POST /v1/playlists/:id/tracks. Songs already in the playlist are skipped, not duplicated. */
+export interface AddToPlaylistResult {
+  added: number
+  skipped: string[]
+  playlist: Playlist
+}
+
+/** Limits enforced by the server (and mirrored by the forms). */
+export const PLAYLIST_NAME_MAX = 100
+export const PLAYLIST_DESCRIPTION_MAX = 300
 
 export type UserRole = 'admin' | 'user'
 
@@ -107,7 +135,78 @@ export interface ServerInfo {
     uploadMaxBytes?: number
     /** Server implements /v1/connect/* (remote playback control between devices). */
     connect?: boolean
+    /** Server lets users create and edit their own playlists (POST/PATCH/DELETE /v1/playlists…). */
+    playlists?: boolean
+    /** Server implements /v1/spotify/* (connect a Spotify account and import its playlists). */
+    spotifyImport?: boolean
   }
+}
+
+// ---- Spotify import (capabilities.spotifyImport) ------------------------
+
+export interface SpotifyAccount {
+  id: string
+  displayName: string
+}
+
+/** GET /v1/spotify/status */
+export interface SpotifyStatus {
+  /** False when the server has no Spotify app credentials: importing is unavailable. */
+  configured: boolean
+  connected: boolean
+  account?: SpotifyAccount
+  /** ISO 8601: when the stored Spotify authorization stops working (~180 days after connecting). */
+  expiresAt?: string
+}
+
+/** One of the user's playlists on Spotify (GET /v1/spotify/playlists). */
+export interface SpotifyPlaylist {
+  id: string
+  name: string
+  trackCount: number
+  /** Cover image URL. */
+  image?: string
+  /** Display name of the owner. */
+  owner?: string
+  public?: boolean
+}
+
+export type SpotifyImportStatus = 'queued' | 'reading' | 'matching' | 'downloading' | 'done' | 'failed' | 'cancelled'
+
+export interface SpotifyImportFailure {
+  title: string
+  artists: string
+  reason: string
+}
+
+export interface SpotifyImport {
+  id: string
+  status: SpotifyImportStatus
+  spotifyPlaylist: { id: string; name: string; image?: string }
+  /** The Nocturne playlist being filled, once it exists. */
+  playlistId?: string
+  total: number
+  /** Songs that were already in the library. */
+  matched: number
+  /** Songs downloaded to the server during the import. */
+  downloaded: number
+  /** Songs that could not be found / downloaded. */
+  failed: number
+  /** Songs not processed yet. */
+  pending: number
+  failures: SpotifyImportFailure[]
+  /** Optional human readable reason when `status` is 'failed' (not in the base contract). */
+  error?: string
+  createdAt: string
+  finishedAt?: string
+}
+
+/** POST /v1/spotify/imports */
+export interface StartSpotifyImportInput {
+  /** Spotify playlist id or open.spotify.com URL. */
+  playlist: string
+  /** Download songs missing from the library (server default: true). */
+  download?: boolean
 }
 
 // ---- Connect (remote playback control) --------------------------------

@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { Heart, Library as LibraryIcon } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { AudioLines, Heart, Library as LibraryIcon, Plus } from 'lucide-react'
 import { api } from '../services'
 import { usePaged } from '../hooks/usePaged'
 import { useNav, type LibraryTab } from '../store/nav'
@@ -9,6 +9,8 @@ import { TrackList } from '../components/TrackList'
 import { formatTotal, plural } from '../lib/format'
 import { prefersReducedMotion, useSettings } from '../store/settings'
 import { HeroHeader, Page, PlayButtons } from './Page'
+import { CreatePlaylistDialog, NewPlaylistTile, usePlaylistsEnabled } from '../components/Playlists'
+import { ImportSpotifyTile, SpotifyImportDialog, SpotifyImports, useSpotifyImportEnabled } from '../components/Spotify'
 
 /** Loading placeholder for a list of songs (matches the TrackList row height). */
 function SongsSkeleton(): ReactNode {
@@ -46,14 +48,75 @@ function LibraryGrid({ tab }: { tab: LibraryTab }): ReactNode {
     return { ...p, items: p.items.map((item) => ({ kind: 'playlist' as const, item })) }
   })
 
+  const canCreate = usePlaylistsEnabled() && tab === 'playlists'
+  const canImport = useSpotifyImportEnabled() && tab === 'playlists'
+  const [creating, setCreating] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const dialog = (
+    <>
+      {creating && <CreatePlaylistDialog onClose={() => setCreating(false)} />}
+      {importing && <SpotifyImportDialog onClose={() => setImporting(false)} />}
+    </>
+  )
+
   if (paged.error && paged.items.length === 0) return <ErrorState message={paged.error} onRetry={paged.reload} />
   if (paged.loading && paged.items.length === 0) return <CardSkeletonGrid />
   if (paged.done && paged.items.length === 0) {
-    return <EmptyState icon={<LibraryIcon className="h-9 w-9" strokeWidth={1.4} />} title={`No ${tab} yet`} hint="Things you add on your server will show up here." />
+    return (
+      <>
+        <EmptyState
+          icon={<LibraryIcon className="h-9 w-9" strokeWidth={1.4} />}
+          title={`No ${tab} yet`}
+          hint={
+            canCreate
+              ? 'Create a playlist and add your favorite songs to it.'
+              : canImport
+                ? 'Import your playlists from Spotify to get started.'
+                : 'Things you add on your server will show up here.'
+          }
+          action={
+            (canCreate || canImport) && (
+              <div className="flex flex-wrap justify-center gap-2">
+                {canCreate && (
+                  <button
+                    type="button"
+                    onClick={() => setCreating(true)}
+                    className="inline-flex h-11 items-center gap-2 rounded-full bg-accent px-5 text-sm font-bold text-ink-950 transition hover:brightness-110 active:scale-[0.98]"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden /> New playlist
+                  </button>
+                )}
+                {canImport && (
+                  <button
+                    type="button"
+                    onClick={() => setImporting(true)}
+                    className="inline-flex h-11 items-center gap-2 rounded-full bg-white/[0.08] px-5 text-sm font-bold transition hover:bg-white/[0.14] active:scale-[0.98]"
+                  >
+                    <AudioLines className="h-4 w-4 text-[#1ed760]" aria-hidden /> Import from Spotify
+                  </button>
+                )}
+              </div>
+            )
+          }
+        />
+        {dialog}
+      </>
+    )
   }
   return (
     <>
-      <CardGrid cards={paged.items} />
+      <CardGrid
+        cards={paged.items}
+        leading={
+          canCreate || canImport ? (
+            <>
+              {canCreate && <NewPlaylistTile onClick={() => setCreating(true)} />}
+              {canImport && <ImportSpotifyTile onClick={() => setImporting(true)} />}
+            </>
+          ) : undefined
+        }
+      />
+      {dialog}
       {!paged.done && (
         <div ref={paged.sentinel} className="flex justify-center py-8">
           {paged.loading && <Spinner />}
@@ -115,6 +178,7 @@ export function LibraryPage({ tab = 'playlists' }: { tab?: LibraryTab }): ReactN
         ))}
       </div>
       <div key={tab} className={cx(!reduced && 'fade-up')}>
+        {tab === 'playlists' && <SpotifyImports />}
         {tab === 'songs' ? <LibrarySongs /> : <LibraryGrid tab={tab} />}
       </div>
     </Page>

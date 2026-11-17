@@ -194,4 +194,16 @@ async def get_lyrics(track_id: str, account: dict = Depends(require_user)):
             except Exception:
                 pass
 
+    # Automatic lyrics from LRCLIB (v1_lyrics_auto), lazily looked up on first request.
+    from . import lyrics_auto
+    try:
+        auto = lyrics_auto.get_auto(track_id)
+    except Exception:
+        auto = None
+    if auto and lyrics_auto.is_fresh(auto):
+        return lyrics_auto.response_from_row(auto)
+    res = await lyrics_auto.lookup_for_request(row)
+    if res is not None:
+        return res.response()
+
     return {"synced": None, "plain": None, "ttml": None}

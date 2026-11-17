@@ -230,30 +230,8 @@ async def get_artist(artist_id: str, account: dict = Depends(require_user)):
 # Playlists
 # ---------------------------------------------------------------------------
 
-@router.get("/library/playlists")
-async def list_playlists(
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
-    account: dict = Depends(require_user),
-):
-    rows = nova_db.get_playlists()
-    playlists = [playlist_to_wire(r) for r in rows]
-    return _paginate(playlists, offset, limit)
-
-
-@router.get("/playlists/{playlist_id}")
-@router.get("/library/playlists/{playlist_id}")
-async def get_playlist(playlist_id: str, account: dict = Depends(require_user)):
-    row = nova_db.get_playlist(playlist_id)
-    if not row:
-        raise HTTPException(status_code=404, detail={"message": "Playlist not found.", "code": "not_found"})
-
-    liked = _liked_set(account["id"])
-    track_rows = nova_db.get_playlist_tracks(playlist_id)
-    pl = playlist_to_wire(row)
-    pl["tracks"] = [track_to_wire(t, liked=t["id"] in liked) for t in track_rows]
-    pl["trackCount"] = len(track_rows)
-    return pl
+# GET /library/playlists and /playlists/{id} moved to routes_playlists.py
+# (with the write API and ownership rules).
 
 
 # ---------------------------------------------------------------------------

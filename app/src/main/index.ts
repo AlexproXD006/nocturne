@@ -6,6 +6,7 @@ import {
   BrowserWindow,
   ipcMain,
   net,
+  Notification,
   protocol,
   safeStorage,
   screen,
@@ -27,6 +28,7 @@ import {
 } from './security'
 import { SecureStore } from './secure-store'
 import { loadBounds, saveBounds } from './window-state'
+import { parseUpdateNotice } from './update-notice'
 
 const DEV_SERVER = process.env['ELECTRON_RENDERER_URL']
 const isDev = !app.isPackaged && Boolean(DEV_SERVER)
@@ -46,6 +48,42 @@ app.commandLine.appendSwitch('enable-features', 'HardwareMediaKeyHandling,MediaS
 
 let mainWindow: BrowserWindow | null = null
 let store: SecureStore | null = null
+// Strong reference: a garbage-collected Notification loses its click handler.
+let updateNotification: Notification | null = null
+
+function focusMainWindow(): void {
+  const win = mainWindow
+  if (!win || win.isDestroyed()) return
+  if (win.isMinimized()) win.restore()
+  if (!win.isVisible()) win.show()
+  win.focus()
+}
+
+/** "Nocturne X available": click focuses the window and opens the download URL. */
+function showUpdateNotification(raw: unknown): boolean {
+  const notice = parseUpdateNotice(raw)
+  if (!notice || !Notification.isSupported()) return false
+  try {
+    updateNotification?.close()
+    const n = new Notification({
+      title: notice.title,
+      body: notice.body,
+      icon: join(__dirname, '../../build/icon.png')
+    })
+    n.on('click', () => {
+      focusMainWindow()
+      void shell.openExternal(notice.url).catch(() => undefined)
+    })
+    n.on('close', () => {
+      if (updateNotification === n) updateNotification = null
+    })
+    updateNotification = n
+    n.show()
+    return true
+  } catch {
+    return false
+  }
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -216,6 +254,7 @@ function registerIpc(): void {
     if (!isSafeExternalUrl(url)) throw new Error('Refusing to open non-web URL')
     await shell.openExternal(url)
   })
+  handle(IPC.notifyUpdate, (_e, info: unknown) => showUpdateNotification(info))
 }
 
 async function bootstrap(): Promise<void> {

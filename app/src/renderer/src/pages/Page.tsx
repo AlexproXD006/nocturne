@@ -37,7 +37,7 @@ export function Page({ children, header, tint }: { children: ReactNode; header?:
   )
 }
 
-export function PlayButtons({ tracks, context }: { tracks: Track[]; context: QueueContext }): ReactNode {
+export function PlayButtons({ tracks, context, children }: { tracks: Track[]; context: QueueContext; children?: ReactNode }): ReactNode {
   const playTracks = usePlayer((s) => s.playTracks)
   const disabled = tracks.length === 0
   return (
@@ -54,6 +54,7 @@ export function PlayButtons({ tracks, context }: { tracks: Track[]; context: Que
       <IconButton label="Shuffle play" size="lg" disabled={disabled} onClick={() => void playTracks(tracks, Math.floor(Math.random() * tracks.length), context, { shuffle: true })}>
         <Shuffle className="h-6 w-6" />
       </IconButton>
+      {children}
     </div>
   )
 }

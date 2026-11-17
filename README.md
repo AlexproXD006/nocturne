@@ -98,8 +98,10 @@ All settings are environment variables; [`.env.example`](.env.example) documents
 | `NOCTURNE_TRUSTED_PROXIES` | – | Proxy IPs whose `X-Forwarded-For` is trusted (rate limiting). |
 | `NOCTURNE_HSTS` | `true` | Send `Strict-Transport-Security` on web responses. |
 | `NOCTURNE_UPLOAD_MAX_MB` | `200` | Max size of one uploaded file. |
-| `SPOTIPY_CLIENT_ID` / `SPOTIPY_CLIENT_SECRET` | – | Spotify API credentials for downloads/metadata (optional). |
-| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | – | Same values; makes `/v1/info` advertise Spotify as a source. |
+| `SPOTIPY_CLIENT_ID` / `SPOTIPY_CLIENT_SECRET` | – | Spotify API credentials (optional): downloads/metadata, and users connecting their Spotify account to import playlists. |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | – | Older aliases of the above (accepted when `SPOTIPY_*` are not set). |
+| `NOCTURNE_SPOTIFY_REDIRECT_URI` | `<NOCTURNE_PUBLIC_URL>/v1/spotify/callback` | OAuth redirect URI for "Connect Spotify". Must be registered exactly in the Spotify app. |
+| `NOCTURNE_SPOTIFY_IMPORT_CONCURRENCY` / `NOCTURNE_SPOTIFY_IMPORT_DELAY` | `2` / `3` | Playlist import: parallel YouTube downloads (max 2) and seconds between starting two. |
 | `AUDIO_FORMAT` | `opus` | Format for new downloads (`opus`, `mp3`, `m4a`, `flac`, `wav`). |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Optional Ollama server to time plain lyrics. Skipped if unreachable. |
 | `WHISPER_MODEL` / `WHISPER_DEVICE` / `WHISPER_COMPUTE_TYPE` | `small` / `auto` / `auto` | faster-whisper settings (image built with `WITH_WHISPER=true`). |
@@ -148,6 +150,24 @@ If `latest.json` is newer than GitHub, or GitHub has nothing, `latest.json` is s
 `GET /v1/downloads` returns a summary (versions, sizes, SHA-256, links) used by the download page
 [`server/download-page/descargar.html`](server/download-page/descargar.html); copy it into the downloads
 folder to serve it at `/descargar`.
+
+### Playlists and Spotify import
+
+Every user can create, edit, reorder and delete their own playlists (`POST/PATCH/DELETE /v1/playlists…`).
+Own playlists are private (visible to the owner and admins); playlists created before this feature or
+through the legacy NOVA importer are shared: everyone sees them, only admins edit them.
+
+With Spotify credentials configured, users can connect their Spotify account
+(`POST /v1/spotify/authorize` opens Spotify's consent page, which comes back to
+`/v1/spotify/callback`) and import any playlist they can read (`POST /v1/spotify/imports`). Spotify apps
+in *Development mode* need user authorization to read playlist items, and the account must be added
+under *Users and access* in the Spotify dashboard. The import runs in the background: songs already in
+the library are matched by title/artist/duration (high confidence only); missing ones are searched on
+YouTube (title, artist and duration within ±15 s must agree) and downloaded, at most two at a time.
+The Nocturne playlist keeps Spotify's order. Tokens are stored encrypted with a key derived from
+`NOCTURNE_JWT_SECRET` (changing that secret disconnects every Spotify account). Imports do not
+resume after a server restart: they are marked failed, and importing the same playlist again
+reuses the playlist and skips what is already there.
 
 ## Building the apps
 

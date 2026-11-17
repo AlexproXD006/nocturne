@@ -76,12 +76,13 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
   )
 }
 
-export function EmptyState({ icon, title, hint }: { icon: ReactNode; title: string; hint?: string }): ReactNode {
+export function EmptyState({ icon, title, hint, action }: { icon: ReactNode; title: string; hint?: string; action?: ReactNode }): ReactNode {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-20 text-center fade-up">
       <div className="mb-1 text-fg-subtle">{icon}</div>
       <p className="font-semibold">{title}</p>
       {hint && <p className="max-w-sm text-sm text-fg-muted">{hint}</p>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   )
 }

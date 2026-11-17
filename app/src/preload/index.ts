@@ -21,7 +21,8 @@ const bridge: NocturneBridge = {
   },
   app: {
     info: () => ipcRenderer.invoke(IPC.appInfo),
-    openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url)
+    openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
+    notifyUpdate: (info) => ipcRenderer.invoke(IPC.notifyUpdate, info)
   }
 }
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Page } from '../api/types'
+import { resources } from '../lib/resource'
 import { describeError, isAbort } from '../api/errors'
 
 export interface PagedState<T> {
@@ -64,6 +65,10 @@ export function usePaged<T>(key: string, fetchPage: (offset: number, limit: numb
     load()
     return () => ctrlRef.current?.abort()
   }, [key, nonce, load])
+
+  // Paged lists are not stored in the resource cache, but share its key space so that
+  // `resources.invalidate('library:playlists')` (after creating / deleting a playlist…) reloads them.
+  useEffect(() => resources.subscribe(key, () => setNonce((n) => n + 1)), [key])
 
   const observer = useRef<IntersectionObserver | null>(null)
   const sentinel = useCallback(

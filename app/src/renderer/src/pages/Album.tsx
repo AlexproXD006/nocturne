@@ -7,6 +7,7 @@ import { ErrorState } from '../components/common'
 import { TrackList } from '../components/TrackList'
 import { formatTotal, plural } from '../lib/format'
 import { HeroHeader, Page, PlayButtons, useTint } from './Page'
+import { AddToPlaylistButton } from '../components/Playlists'
 
 const KIND_LABEL: Record<NonNullable<AlbumDetail['type']>, string> = {
   album: 'Album',
@@ -76,7 +77,9 @@ export function AlbumPage({ id }: { id: string }): ReactNode {
   return (
     <Page tint={tint}>
       <HeroHeader images={album.artwork} kind={KIND_LABEL[album.type ?? 'album']} title={album.title} meta={meta} />
-      <PlayButtons tracks={album.tracks} context={context} />
+      <PlayButtons tracks={album.tracks} context={context}>
+        <AddToPlaylistButton tracks={album.tracks} label={album.title} size="lg" />
+      </PlayButtons>
       {res.error && <ErrorState message={res.error} onRetry={res.reload} />}
       <TrackList tracks={album.tracks} context={context} showArt={false} showAlbum={false} />
     </Page>

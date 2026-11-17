@@ -46,6 +46,16 @@ export function useResource<T>(key: string | null, fetcher: (signal: AbortSignal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, nonce])
 
+  // `resources.invalidate()` marks the cached value stale and notifies subscribers: refetch while
+  // mounted so edits made elsewhere (e.g. a renamed playlist) show up without a manual reload.
+  // A cleared cache (sign-out) has no value to refresh and is left alone.
+  useEffect(() => {
+    if (!key) return
+    return resources.subscribe(key, () => {
+      if (resources.peek(key) !== undefined && !resources.isFresh(key)) setNonce((n) => n + 1)
+    })
+  }, [key])
+
   const reload = useCallback(() => setNonce((n) => n + 1), [])
   return { data, error, loading: loading && data === undefined, reload }
 }

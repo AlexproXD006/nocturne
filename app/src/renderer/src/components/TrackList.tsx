@@ -1,5 +1,5 @@
-import { memo, useCallback, type ReactNode } from 'react'
-import { Clock3, Disc3, ListEnd, ListPlus, MoreHorizontal, Pause, Play, UserRound } from 'lucide-react'
+import { memo, useCallback, useRef, useState, type ReactNode } from 'react'
+import { Clock3, Disc3, GripVertical, ListEnd, ListMinus, ListMusic, ListPlus, MoreHorizontal, Pause, Play, UserRound } from 'lucide-react'
 import type { Track } from '../api/types'
 import type { QueueContext } from '../player/queue'
 import { currentItem } from '../player/queue'
@@ -9,6 +9,8 @@ import { useUi } from '../store/ui'
 import { artistNames, formatTime } from '../lib/format'
 import { Artwork, LikeButton, cx } from './common'
 import { Menu, useMenu } from './Menu'
+import { usePlaylistsEnabled } from './Playlists'
+import { usePlaylistUi } from '../store/playlists'
 
 export function Equalizer({ paused }: { paused?: boolean }): ReactNode {
   return (
@@ -51,17 +53,28 @@ interface RowProps {
   isCurrent: boolean
   isPlaying: boolean
   onPlay: (index: number) => void
+  /** Editable playlist: adds "Remove from this playlist" to the row menu. */
+  onRemove?: (index: number) => void
+  /** Editable playlist (desktop): drag-and-drop reordering via a grip handle. */
+  dnd?: { start: (index: number) => void; drop: (index: number) => void; end: () => void }
 }
 
-const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCurrent, isPlaying, onPlay }: RowProps): ReactNode {
+const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCurrent, isPlaying, onPlay, onRemove, dnd }: RowProps): ReactNode {
   const { menu, open, close } = useMenu()
   const go = useNav((s) => s.go)
   const toast = useUi((s) => s.toast)
   const toggle = usePlayer((s) => s.toggle)
+  const playlists = usePlaylistsEnabled()
+  // The row only becomes draggable while the mouse is down on the grip, so touch scrolling and
+  // text selection elsewhere in the row behave normally.
+  const [armed, setArmed] = useState(false)
+  const [over, setOver] = useState(false)
 
   const items = [
     { label: 'Play next', icon: <ListPlus />, onSelect: () => (usePlayer.getState().addNext([track]), toast(`“${track.title}” will play next`)) },
     { label: 'Add to queue', icon: <ListEnd />, onSelect: () => (usePlayer.getState().addToQueue([track]), toast('Added to queue')) },
+    ...(playlists ? [{ label: 'Add to playlist…', icon: <ListMusic />, onSelect: () => usePlaylistUi.getState().openPicker([track]) }] : []),
+    ...(playlists && onRemove ? [{ label: 'Remove from this playlist', icon: <ListMinus />, onSelect: () => onRemove(index) }] : []),
     ...(track.album ? [{ label: 'Go to album', icon: <Disc3 />, onSelect: () => go({ name: 'album', id: track.album!.id }) }] : []),
     ...(track.artists[0] ? [{ label: 'Go to artist', icon: <UserRound />, onSelect: () => go({ name: 'artist', id: track.artists[0]!.id }) }] : [])
   ]
@@ -73,6 +86,44 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
       role="row"
       tabIndex={0}
       aria-current={isCurrent || undefined}
+      draggable={dnd ? armed : undefined}
+      onDragStart={
+        dnd &&
+        ((e) => {
+          e.dataTransfer.effectAllowed = 'move'
+          try {
+            e.dataTransfer.setData('text/plain', track.title)
+          } catch {
+            /* some engines refuse setData; the drag still works */
+          }
+          dnd.start(index)
+        })
+      }
+      onDragOver={
+        dnd &&
+        ((e) => {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          if (!over) setOver(true)
+        })
+      }
+      onDragLeave={dnd && (() => setOver(false))}
+      onDrop={
+        dnd &&
+        ((e) => {
+          e.preventDefault()
+          setOver(false)
+          dnd.drop(index)
+        })
+      }
+      onDragEnd={
+        dnd &&
+        (() => {
+          setArmed(false)
+          setOver(false)
+          dnd.end()
+        })
+      }
       onDoubleClick={activate}
       onClick={(e) => {
         // Single tap plays on touch screens; desktop uses double-click like other players.
@@ -89,7 +140,8 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
         'group grid h-14 cursor-default items-center gap-3 rounded-lg px-3 text-sm transition-colors duration-100',
         'grid-cols-[28px_minmax(0,1fr)_auto] md:grid-cols-[28px_minmax(0,1fr)_minmax(0,0.7fr)_auto]',
         !showAlbum && 'md:grid-cols-[28px_minmax(0,1fr)_auto]',
-        'hover:bg-white/[0.05] focus-visible:bg-white/[0.05]'
+        'hover:bg-white/[0.05] focus-visible:bg-white/[0.05]',
+        over && 'ring-1 ring-accent/60'
       )}
     >
       <div className="relative flex w-7 items-center justify-center text-fg-muted tabular-nums">
@@ -144,6 +196,17 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
       )}
 
       <div className="flex items-center gap-1">
+        {dnd && (
+          <span
+            aria-hidden
+            title="Drag to reorder"
+            onPointerDown={(e) => e.pointerType === 'mouse' && setArmed(true)}
+            onPointerUp={() => setArmed(false)}
+            className="hidden h-8 w-6 cursor-grab items-center justify-center text-fg-subtle opacity-0 transition group-hover:opacity-100 active:cursor-grabbing md:flex"
+          >
+            <GripVertical className="h-4 w-4" />
+          </span>
+        )}
         <span className="opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
           <LikeButton trackId={track.id} serverValue={track.liked} />
         </span>
@@ -171,13 +234,19 @@ export function TrackList({
   context,
   showArt = true,
   showAlbum = true,
-  header = true
+  header = true,
+  onRemove,
+  onMove
 }: {
   tracks: Track[]
   context: QueueContext
   showArt?: boolean
   showAlbum?: boolean
   header?: boolean
+  /** Editable playlist: remove the song at `index`. */
+  onRemove?: (index: number) => void
+  /** Editable playlist: move the song at `from` to `to` (desktop drag-and-drop). */
+  onMove?: (from: number, to: number) => void
 }): ReactNode {
   const currentId = usePlayer((s) => currentItem(s.queue)?.track.id)
   const sameContext = usePlayer((s) => s.queue.context?.type === context.type && s.queue.context?.id === context.id)
@@ -187,6 +256,24 @@ export function TrackList({
     (index: number) => void usePlayer.getState().playTracks(tracks, index, context),
     [tracks, context]
   )
+
+  const dragFrom = useRef<number | null>(null)
+  const moveRef = useRef(onMove)
+  moveRef.current = onMove
+  const hasMove = Boolean(onMove)
+  const [dnd] = useState(() => ({
+    start: (i: number) => {
+      dragFrom.current = i
+    },
+    drop: (to: number) => {
+      const from = dragFrom.current
+      dragFrom.current = null
+      if (from !== null && from !== to) moveRef.current?.(from, to)
+    },
+    end: () => {
+      dragFrom.current = null
+    }
+  }))
 
   return (
     <div role="table" aria-label="Tracks" className="-mx-3">
@@ -217,6 +304,8 @@ export function TrackList({
           isCurrent={t.id === currentId && (sameContext || context.type === 'search' || context.type === 'home')}
           isPlaying={isPlaying}
           onPlay={onPlay}
+          onRemove={onRemove}
+          dnd={hasMove ? dnd : undefined}
         />
       ))}
     </div>

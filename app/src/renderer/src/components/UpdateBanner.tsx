@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Download, X } from 'lucide-react'
 import { platform, useSession } from '../services'
 import { useUpdates } from '../store/updates'
+import { useUpdateReveal } from '../store/updateNotifications'
 import { readJson, writeJson } from '../lib/storage'
 
 const DISMISS_KEY = 'nocturne.update.dismissed'
@@ -23,6 +24,8 @@ export function UpdateBanner(): ReactNode {
   const downloadUrl = useUpdates((s) => s.downloadUrl)
   const autoCheck = useUpdates((s) => s.autoCheck)
   const [dismissed, setDismissed] = useState<string>(() => readDismissed())
+  // Set when the user tapped the "update available" system notification: show even if dismissed.
+  const revealed = useUpdateReveal((s) => s.version)
 
   // Check once after sign-in, on native builds only.
   useEffect(() => {
@@ -31,7 +34,7 @@ export function UpdateBanner(): ReactNode {
 
   if (platform.hostedOrigin || platform.kind === 'web') return null
   if (!available || !latest || !downloadUrl) return null
-  if (dismissed === latest.version) return null
+  if (dismissed === latest.version && revealed !== latest.version) return null
 
   const dismiss = (): void => {
     try {
@@ -40,6 +43,7 @@ export function UpdateBanner(): ReactNode {
       /* ignore */
     }
     setDismissed(latest.version)
+    useUpdateReveal.getState().reveal(null)
   }
 
   return (

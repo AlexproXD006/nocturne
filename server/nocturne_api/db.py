@@ -173,6 +173,89 @@ _MIGRATIONS: list[tuple[int, str]] = [
         );
         CREATE INDEX IF NOT EXISTS idx_v1_connect_user ON v1_connect_sessions(user_id);
     """),
+    (4, """
+        -- Automatic lyrics from LRCLIB (nocturne_api/lyrics_auto.py). The admin-curated
+        -- v1_lyrics table and .lrc files next to the audio keep priority.
+        -- 'not_found' rows are negative-cache entries refetched after 7 days.
+        CREATE TABLE IF NOT EXISTS v1_lyrics_auto (
+            track_id       TEXT PRIMARY KEY,
+            status         TEXT NOT NULL
+                               CHECK(status IN ('found','instrumental','not_found')),
+            synced         TEXT,
+            plain          TEXT,
+            source         TEXT,
+            matched_title  TEXT,
+            matched_artist TEXT,
+            lrclib_id      INTEGER,
+            confidence     REAL,
+            fetched_at     TEXT NOT NULL
+        );
+    """),
+    (5, """
+        -- User playlists: owner/description for NOVA's playlists table (library.db).
+        -- No row (or owner_id NULL) = shared/legacy playlist: visible to everyone,
+        -- editable by admins only. See nocturne_api/routes_playlists.py.
+        CREATE TABLE IF NOT EXISTS v1_playlist_meta (
+            playlist_id  TEXT PRIMARY KEY,
+            owner_id     TEXT,
+            description  TEXT,
+            created_at   TEXT NOT NULL,
+            updated_at   TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_v1_playlist_meta_owner ON v1_playlist_meta(owner_id);
+
+        -- Spotify account connection per user (OAuth Authorization Code).
+        -- access_token / refresh_token are encrypted at rest (nocturne_api/spotify.py).
+        CREATE TABLE IF NOT EXISTS v1_spotify_tokens (
+            user_id            TEXT PRIMARY KEY,
+            access_token       TEXT,
+            refresh_token      TEXT NOT NULL,
+            expires_at         TEXT NOT NULL,
+            refresh_expires_at TEXT,
+            scope              TEXT,
+            account_id         TEXT,
+            account_name       TEXT,
+            created_at         TEXT NOT NULL,
+            updated_at         TEXT NOT NULL
+        );
+
+        -- Spotify playlist imports (background job, nocturne_api/spotify_import.py).
+        CREATE TABLE IF NOT EXISTS v1_spotify_imports (
+            id                   TEXT PRIMARY KEY,
+            user_id              TEXT NOT NULL,
+            status               TEXT NOT NULL DEFAULT 'queued'
+                                     CHECK(status IN ('queued','reading','matching',
+                                                      'downloading','done','failed','cancelled')),
+            spotify_playlist_id  TEXT NOT NULL,
+            spotify_name         TEXT,
+            spotify_image        TEXT,
+            playlist_id          TEXT,
+            download             INTEGER NOT NULL DEFAULT 1,
+            total                INTEGER NOT NULL DEFAULT 0,
+            matched              INTEGER NOT NULL DEFAULT 0,
+            downloaded           INTEGER NOT NULL DEFAULT 0,
+            failed               INTEGER NOT NULL DEFAULT 0,
+            failures             TEXT NOT NULL DEFAULT '[]',
+            error                TEXT,
+            created_at           TEXT NOT NULL,
+            started_at           TEXT,
+            finished_at          TEXT,
+            updated_at           TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_v1_spotify_imports_user
+            ON v1_spotify_imports(user_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_v1_spotify_imports_status
+            ON v1_spotify_imports(status);
+
+        -- Spotify track id -> library track id, learnt by imports (match or download).
+        -- Lets later imports/re-syncs reuse the exact track without fuzzy matching.
+        CREATE TABLE IF NOT EXISTS v1_spotify_track_map (
+            spotify_track_id TEXT PRIMARY KEY,
+            track_id         TEXT NOT NULL,
+            source           TEXT NOT NULL,
+            created_at       TEXT NOT NULL
+        );
+    """),
 ]
 
 

@@ -13,6 +13,7 @@ import { SeekBar, TransportControls, VolumeControl } from './controls'
 import { LyricsView } from './LyricsView'
 import { QueuePanel } from './QueuePanel'
 import { Visualizer } from './Visualizer'
+import { AddToPlaylistButton } from './Playlists'
 
 const STYLES: { id: VisualizerStyle; label: string; icon: ReactNode }[] = [
   { id: 'aurora', label: 'Aurora', icon: <Sparkles className="h-4 w-4" /> },
@@ -145,7 +146,10 @@ export function FullscreenPlayer(): ReactNode {
                 </button>
               )}
             </div>
-            <LikeButton trackId={track.id} serverValue={track.liked} size="md" />
+            <div className="flex shrink-0 items-center gap-1">
+              <AddToPlaylistButton tracks={[track]} size="lg" />
+              <LikeButton trackId={track.id} serverValue={track.liked} size="md" />
+            </div>
           </div>
           <div className={cx('mt-5 w-full max-w-[520px] transition-opacity duration-500', idle && 'lg:opacity-60')}>
             <SeekBar />

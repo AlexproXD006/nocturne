@@ -528,6 +528,13 @@ async def upload_track(
             except Exception as exc:  # pragma: no cover - never fail the upload
                 import logging
                 logging.getLogger(__name__).warning("cover lookup not started: %s", exc)
+        # Synced lyrics from LRCLIB in the background (non-fatal, stored in v1_lyrics_auto).
+        try:
+            from .. import lyrics_auto
+            lyrics_auto.auto_fetch_async(track)
+        except Exception as exc:  # pragma: no cover - never fail the upload
+            import logging
+            logging.getLogger(__name__).warning("lyrics lookup not started: %s", exc)
         row = nova_db.get_track(track_id)
         return _admin_track(row or track)
     except Exception as e:

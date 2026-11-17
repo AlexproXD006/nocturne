@@ -1,5 +1,8 @@
 import type { NocturneBridge, WindowState } from '../../../shared/ipc'
 import { createNativeNowPlaying, type NocturneMediaPlugin } from './nocturneMedia'
+import { createNativeUpdates, type NativeUpdates, type NocturneUpdatesPlugin } from './nocturneUpdates'
+
+export type { NativeUpdates } from './nocturneUpdates'
 
 export type PlatformKind = 'desktop' | 'android' | 'web'
 
@@ -57,6 +60,13 @@ export interface Platform {
   openExternal(url: string): Promise<void>
   /** Native now-playing controls (Android Media3 session). Desktop uses navigator.mediaSession. */
   nativeNowPlaying: NativeNowPlaying | null
+  /** Android only: background update check (WorkManager) + "update available" notification. */
+  nativeUpdates?: NativeUpdates | null
+  /**
+   * Desktop only: show a native "update available" notification; clicking it focuses the window
+   * and opens `url`. Resolves false when notifications are unsupported or the call fails.
+   */
+  notifyUpdate?: ((info: { version: string; url: string }) => Promise<boolean>) | null
 }
 
 function isAndroid(): boolean {
@@ -108,7 +118,15 @@ function desktopPlatform(bridge: NocturneBridge): Platform {
     hostedOrigin: null,
     window: bridge.window,
     openExternal: (url) => bridge.app.openExternal(url),
-    nativeNowPlaying: null
+    nativeNowPlaying: null,
+    nativeUpdates: null,
+    notifyUpdate: async (info) => {
+      try {
+        return typeof bridge.app.notifyUpdate === 'function' ? (await bridge.app.notifyUpdate(info)) === true : false
+      } catch {
+        return false
+      }
+    }
   }
 }
 
@@ -122,6 +140,10 @@ function androidPlatform(): Platform {
   // App-local Media3 plugin (android/.../media/NocturneMediaPlugin.java), registered in MainActivity.
   const mediaBox = import('@capacitor/core').then(({ registerPlugin }) => ({
     plugin: registerPlugin<NocturneMediaPlugin>('NocturneMedia')
+  }))
+  // App-local update-check plugin (android/.../updates/NocturneUpdatesPlugin.java), registered in MainActivity.
+  const updatesBox = import('@capacitor/core').then(({ registerPlugin }) => ({
+    plugin: registerPlugin<NocturneUpdatesPlugin>('NocturneUpdates')
   }))
 
   return {
@@ -143,7 +165,9 @@ function androidPlatform(): Platform {
     openExternal: async (url) => {
       window.open(url, '_blank', 'noopener,noreferrer')
     },
-    nativeNowPlaying: createNativeNowPlaying(mediaBox)
+    nativeNowPlaying: createNativeNowPlaying(mediaBox),
+    nativeUpdates: createNativeUpdates(updatesBox),
+    notifyUpdate: null
   }
 }
 
@@ -158,7 +182,9 @@ function webPlatform(): Platform {
     openExternal: async (url) => {
       window.open(url, '_blank', 'noopener,noreferrer')
     },
-    nativeNowPlaying: null
+    nativeNowPlaying: null,
+    nativeUpdates: null,
+    notifyUpdate: null
   }
 }
 

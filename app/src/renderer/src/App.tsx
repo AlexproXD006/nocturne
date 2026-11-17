@@ -16,6 +16,9 @@ import { ErrorState, IconButton, Spinner } from './components/common'
 import { FullscreenPlayer } from './components/FullscreenPlayer'
 import { LyricsView } from './components/LyricsView'
 import { MiniPlayer, PlayerBar } from './components/PlayerBar'
+import { PlaylistPickerHost } from './components/Playlists'
+import { SpotifyImportsHost } from './components/Spotify'
+import { usePlaylistUi } from './store/playlists'
 import { QueuePanel } from './components/QueuePanel'
 import { UpdateBanner } from './components/UpdateBanner'
 import { AdaptiveBackdrop } from './components/AdaptiveBackdrop'
@@ -150,6 +153,8 @@ function SignedInShell(): ReactNode {
         <MobileNav />
       </div>
       {fullscreen && <FullscreenPlayer />}
+      <PlaylistPickerHost />
+      <SpotifyImportsHost />
     </div>
   )
 }
@@ -180,6 +185,7 @@ export function App(): ReactNode {
     resources.clear()
     useUi.getState().closePanel()
     useUi.getState().setFullscreen(false)
+    usePlaylistUi.getState().closePicker()
   }, [status])
 
   return (

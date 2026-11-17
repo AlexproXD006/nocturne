@@ -112,3 +112,17 @@ MUSIC_ROOT: str = str(Path(_music_dir).resolve())
 
 # ── Art cache ─────────────────────────────────────────────────────────────────
 ART_CACHE_DIR: str = str(Path(DATA_DIR) / "art_cache")
+
+# ── Spotify account connection + playlist import ──────────────────────────────
+# App credentials (https://developer.spotify.com/dashboard). Both spellings are
+# accepted: SPOTIPY_* is what spotipy/spotdl read, SPOTIFY_* is the older alias.
+SPOTIFY_CLIENT_ID: str = _optional("SPOTIPY_CLIENT_ID") or _optional("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET: str = _optional("SPOTIPY_CLIENT_SECRET") or _optional("SPOTIFY_CLIENT_SECRET")
+# OAuth redirect URI — must be registered EXACTLY in the Spotify app settings.
+SPOTIFY_REDIRECT_URI: str = _optional(
+    "NOCTURNE_SPOTIFY_REDIRECT_URI", f"{PUBLIC_URL}/v1/spotify/callback"
+)
+# Import downloads: max parallel YouTube downloads (capped at 2) and the pause
+# between starting two downloads, in seconds.
+SPOTIFY_IMPORT_CONCURRENCY: int = max(1, min(2, int(_optional("NOCTURNE_SPOTIFY_IMPORT_CONCURRENCY", "2") or 2)))
+SPOTIFY_IMPORT_DELAY: float = float(_optional("NOCTURNE_SPOTIFY_IMPORT_DELAY", "3") or 3)

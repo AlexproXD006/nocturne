@@ -16,6 +16,7 @@ import { createLibrary } from './library.mjs'
 import { lyricsFor } from './lyrics.mjs'
 import { withRealisticCatalog } from './realistic.mjs'
 import { itemFromResultId } from './sources.mjs'
+import { createSpotify } from './spotify.mjs'
 import { isApiPath, resolveStaticDir, serveStatic } from './static.mjs'
 import { plainFromLrc, plainFromTtml } from './ttml.mjs'
 import { userJson } from './userjson.mjs'
@@ -78,7 +79,11 @@ export function resolveOptions(options = {}, env = process.env) {
     jobTickMs: options.jobTickMs ?? envInt(env, 'MOCK_JOB_TICK_MS', 700, 0, 60_000),
     staticDir: options.staticDir ?? (env.MOCK_STATIC_DIR || null),
     realistic: options.realistic ?? env.MOCK_REALISTIC === '1',
-    updateVersion: options.updateVersion ?? (env.MOCK_UPDATE_VERSION || null)
+    updateVersion: options.updateVersion ?? (env.MOCK_UPDATE_VERSION || null),
+    /** False simulates a server without Spotify app credentials (status.configured: false). */
+    spotifyConfigured: options.spotifyConfigured ?? env.MOCK_SPOTIFY_CONFIGURED !== '0',
+    /** Lifetime of a fake Spotify connection (the real one lasts ~180 days). */
+    spotifyTokenDays: options.spotifyTokenDays ?? envInt(env, 'MOCK_SPOTIFY_TOKEN_DAYS', 180, 1, 3650)
   }
 }
 
@@ -204,6 +209,59 @@ export function createMockServer(options = {}) {
     return null
   }
 
+  // ---- User playlists ----
+  // Seeded/imported playlists are shared and read-only. Playlists created through POST /v1/playlists
+  // live in the same `catalog.playlists` list (so artwork and admin track deletes keep working) with an
+  // `ownerId`; only their owner can see and edit them.
+  let playlistCounter = 0
+  const visiblePlaylist = (p, user) => Boolean(p) && (!p.ownerId || p.ownerId === user.id)
+  const visiblePlaylists = (user) => catalog.playlists.filter((p) => visiblePlaylist(p, user))
+  function userPlaylistJson(ctx, p, user) {
+    const base = playlistJson(ctx, p)
+    if (!p.ownerId) return { ...base, editable: false }
+    const owner = auth.userById(p.ownerId)
+    return { ...base, description: p.description || undefined, owner: { id: p.ownerId, name: owner?.displayName ?? 'You' }, editable: p.ownerId === user.id }
+  }
+  function userPlaylistDetailJson(ctx, p, user) {
+    return { ...playlistDetailJson(ctx, p), ...userPlaylistJson(ctx, p, user) }
+  }
+  /** The playlist the current user may edit, or 404 (not visible) / 403 (shared, not theirs). */
+  function ownPlaylist(id, user) {
+    const p = catalog.playlistById.get(id)
+    if (!visiblePlaylist(p, user)) throw new HttpError(404, 'Playlist not found.')
+    if (p.ownerId !== user.id) throw new HttpError(403, "You can't change this playlist.")
+    return p
+  }
+  function playlistText(body, field, max, { required }) {
+    const v = body[field]
+    if (v === undefined && !required) return undefined
+    if (typeof v !== 'string') throw new HttpError(400, `"${field}" must be a string.`)
+    const t = v.trim()
+    if (required && !t) throw new HttpError(400, `"${field}" is required.`)
+    if (t.length > max) throw new HttpError(400, `"${field}" can be at most ${max} characters.`)
+    return t
+  }
+  function trackIdList(body, { required }) {
+    const v = body.trackIds
+    if (v === undefined && !required) return []
+    if (!Array.isArray(v) || v.length > 2000 || v.some((id) => typeof id !== 'string')) throw new HttpError(400, '"trackIds" must be an array of track ids.')
+    for (const id of v) if (!catalog.trackById.has(id)) throw new HttpError(400, `Unknown track "${id}".`)
+    return v
+  }
+
+  /** Creates a playlist owned by `user` (also used by the Spotify import). */
+  function addUserPlaylist(user, name, description, trackIds) {
+    let id
+    do id = `upl-${(++playlistCounter).toString(36)}-${randomBytes(3).toString('hex')}`
+    while (catalog.playlistById.has(id))
+    const p = { id, name, description, trackIds, ownerId: user.id, createdSeq: playlistCounter, search: fold(`${name} ${description}`) }
+    catalog.playlists.push(p)
+    catalog.playlistById.set(id, p)
+    return p
+  }
+
+  const spotify = createSpotify({ opt, catalog, originOf: (req) => originOf(req), addUserPlaylist })
+
   // ---- Handlers. Each returns undefined after sending a response itself. ----
 
   const handlers = {
@@ -212,7 +270,7 @@ export function createMockServer(options = {}) {
         name: 'Nocturne Mock',
         version: MOCK_VERSION,
         apiVersion: 1,
-        capabilities: { lyrics: true, likes: true, scrobble: true, admin: true, sources: ['spotify', 'youtube'], uploadMaxBytes: opt.uploadMaxBytes }
+        capabilities: { lyrics: true, likes: true, scrobble: true, admin: true, sources: ['spotify', 'youtube'], uploadMaxBytes: opt.uploadMaxBytes, playlists: true, spotifyImport: true }
       })
     },
 
@@ -286,7 +344,7 @@ export function createMockServer(options = {}) {
           { id: 'recent', title: 'Recently played', kind: 'tracks', items: recentIds.map((id) => trackJson(ctx, catalog.trackById.get(id))) },
           { id: 'albums', title: 'Your albums', kind: 'albums', items: catalog.defaults.libraryAlbumIds.map((id) => albumJson(ctx, catalog.albumById.get(id))) },
           { id: 'artists', title: 'Artists you love', kind: 'artists', items: catalog.defaults.libraryArtistIds.map((id) => artistJson(ctx, catalog.artistById.get(id))) },
-          { id: 'made-for-you', title: 'Made for you', kind: 'playlists', items: catalog.playlists.map((p) => playlistJson(ctx, p)) },
+          { id: 'made-for-you', title: 'Made for you', kind: 'playlists', items: catalog.playlists.filter((p) => !p.ownerId).map((p) => userPlaylistJson(ctx, p, user)) },
           { id: 'new-releases', title: 'New releases', kind: 'albums', items: newest.map((a) => albumJson(ctx, a)) }
         ]
       })
@@ -314,7 +372,7 @@ export function createMockServer(options = {}) {
         tracks: run('track', catalog.tracks, (t) => t.title, (t) => trackJson(ctx, t)),
         albums: run('album', catalog.albums, (a) => a.title, (a) => albumJson(ctx, a)),
         artists: run('artist', catalog.artists, (a) => a.name, (a) => artistJson(ctx, a)),
-        playlists: run('playlist', catalog.playlists, (p) => p.name, (p) => playlistJson(ctx, p))
+        playlists: run('playlist', visiblePlaylists(user), (p) => p.name, (p) => userPlaylistJson(ctx, p, user))
       })
     },
 
@@ -337,7 +395,10 @@ export function createMockServer(options = {}) {
     },
     libraryPlaylists({ req, res, user, query }) {
       const ctx = ctxFor(req, user)
-      sendJson(res, 200, page(catalog.defaults.libraryPlaylistIds, query, (id) => playlistJson(ctx, catalog.playlistById.get(id))))
+      // The user's own playlists (newest first), then the shared ones.
+      const own = catalog.playlists.filter((p) => p.ownerId === user.id).sort((a, b) => b.createdSeq - a.createdSeq).map((p) => p.id)
+      const shared = catalog.defaults.libraryPlaylistIds.filter((id) => catalog.playlistById.has(id))
+      sendJson(res, 200, page([...own, ...shared], query, (id) => userPlaylistJson(ctx, catalog.playlistById.get(id), user)))
     },
 
     album({ req, res, user, params }) {
@@ -352,8 +413,72 @@ export function createMockServer(options = {}) {
     },
     playlist({ req, res, user, params }) {
       const p = catalog.playlistById.get(params[0])
-      if (!p) throw new HttpError(404, 'Playlist not found.')
-      sendJson(res, 200, playlistDetailJson(ctxFor(req, user), p))
+      if (!visiblePlaylist(p, user)) throw new HttpError(404, 'Playlist not found.')
+      sendJson(res, 200, userPlaylistDetailJson(ctxFor(req, user), p, user))
+    },
+
+    /** POST /v1/playlists {name, description?, trackIds?} → 201 PlaylistDetail */
+    async createPlaylist({ req, res, user }) {
+      const body = await readJson(req, { required: true })
+      const name = playlistText(body, 'name', 100, { required: true })
+      const description = playlistText(body, 'description', 300, { required: false }) ?? ''
+      const trackIds = [...new Set(trackIdList(body, { required: false }))]
+      const p = addUserPlaylist(user, name, description, trackIds)
+      sendJson(res, 201, userPlaylistDetailJson(ctxFor(req, user), p, user))
+    },
+    /** PATCH /v1/playlists/:id {name?, description?} → Playlist */
+    async updatePlaylist({ req, res, user, params }) {
+      const p = ownPlaylist(params[0], user)
+      const body = await readJson(req, { required: true })
+      const name = playlistText(body, 'name', 100, { required: false })
+      const description = playlistText(body, 'description', 300, { required: false })
+      if (name === '') throw new HttpError(400, '"name" cannot be empty.')
+      if (name !== undefined) p.name = name
+      if (description !== undefined) p.description = description
+      p.search = fold(`${p.name} ${p.description}`)
+      sendJson(res, 200, userPlaylistJson(ctxFor(req, user), p, user))
+    },
+    /** DELETE /v1/playlists/:id → 204 */
+    deletePlaylist({ res, user, params }) {
+      const p = ownPlaylist(params[0], user)
+      catalog.playlists.splice(catalog.playlists.indexOf(p), 1)
+      catalog.playlistById.delete(p.id)
+      sendNoContent(res)
+    },
+    /** POST /v1/playlists/:id/tracks {trackIds} → {added, skipped, playlist}; songs already present are skipped. */
+    async addPlaylistTracks({ req, res, user, params }) {
+      const p = ownPlaylist(params[0], user)
+      const body = await readJson(req, { required: true })
+      const ids = trackIdList(body, { required: true })
+      if (ids.length === 0) throw new HttpError(400, '"trackIds" must not be empty.')
+      const skipped = []
+      let added = 0
+      for (const id of ids) {
+        if (p.trackIds.includes(id)) skipped.push(id)
+        else {
+          p.trackIds.push(id)
+          added++
+        }
+      }
+      sendJson(res, 200, { added, skipped, playlist: userPlaylistJson(ctxFor(req, user), p, user) })
+    },
+    /** DELETE /v1/playlists/:id/tracks/:trackId → 204 */
+    removePlaylistTrack({ res, user, params }) {
+      const p = ownPlaylist(params[0], user)
+      if (!p.trackIds.includes(params[1])) throw new HttpError(404, 'That song is not in this playlist.')
+      p.trackIds = p.trackIds.filter((id) => id !== params[1])
+      sendNoContent(res)
+    },
+    /** PUT /v1/playlists/:id/tracks {trackIds} (a permutation of the current songs) → PlaylistDetail */
+    async reorderPlaylist({ req, res, user, params }) {
+      const p = ownPlaylist(params[0], user)
+      const body = await readJson(req, { required: true })
+      const ids = trackIdList(body, { required: true })
+      const a = [...ids].sort()
+      const b = [...p.trackIds].sort()
+      if (a.length !== b.length || a.some((x, i) => x !== b[i])) throw new HttpError(400, '"trackIds" must contain exactly the songs already in the playlist.')
+      p.trackIds = [...ids]
+      sendJson(res, 200, userPlaylistDetailJson(ctxFor(req, user), p, user))
     },
 
     like({ res, user, params }) {
@@ -469,6 +594,8 @@ export function createMockServer(options = {}) {
         } catch {
           label = null
         }
+      } else if (kind === 'spotify') {
+        label = spotify.artLabel(id)
       } else if (kind === 'user') {
         const u = auth.userById(id)
         if (u) label = { title: u.displayName }
@@ -522,12 +649,18 @@ export function createMockServer(options = {}) {
     [['DELETE'], /^\/v1\/library\/tracks\/([^/]+)$/, handlers.unlike, true],
     [['GET'], /^\/v1\/albums\/([^/]+)$/, handlers.album, true],
     [['GET'], /^\/v1\/artists\/([^/]+)$/, handlers.artist, true],
+    [['POST'], /^\/v1\/playlists$/, handlers.createPlaylist, true],
     [['GET'], /^\/v1\/playlists\/([^/]+)$/, handlers.playlist, true],
+    [['PATCH'], /^\/v1\/playlists\/([^/]+)$/, handlers.updatePlaylist, true],
+    [['DELETE'], /^\/v1\/playlists\/([^/]+)$/, handlers.deletePlaylist, true],
+    [['POST', 'PUT'], /^\/v1\/playlists\/([^/]+)\/tracks$/, (c) => (c.req.method === 'PUT' ? handlers.reorderPlaylist(c) : handlers.addPlaylistTracks(c)), true],
+    [['DELETE'], /^\/v1\/playlists\/([^/]+)\/tracks\/([^/]+)$/, handlers.removePlaylistTrack, true],
     [['GET'], /^\/v1\/tracks\/([^/]+)\/stream$/, handlers.stream, true],
     [['GET'], /^\/v1\/tracks\/([^/]+)\/lyrics$/, handlers.lyrics, true],
     [['POST'], /^\/v1\/tracks\/([^/]+)\/played$/, handlers.played, true],
     [['GET'], /^\/media\/([^/]+)$/, handlers.media, false],
-    [['GET'], /^\/art\/(album|artist|playlist|user|source)\/([^/]+)\.svg$/, handlers.art, false],
+    [['GET'], /^\/art\/(album|artist|playlist|user|source|spotify)\/([^/]+)\.svg$/, handlers.art, false],
+    ...spotify.routes,
     ...admin.routes.map(([methods, re, handler]) => [methods, re, handler, 'admin'])
   ]
 
@@ -631,8 +764,14 @@ export function createMockServer(options = {}) {
     advanceJobs(n = 1) {
       for (let i = 0; i < n; i++) jobs.tick()
     },
+    /** Runs `n` Spotify import steps synchronously (useful with jobTickMs: 0). */
+    advanceSpotify(n = 1) {
+      for (let i = 0; i < n; i++) spotify.tick()
+    },
+    spotify,
     close() {
       jobs.stop()
+      spotify.stop()
       return new Promise((resolve) => {
         if (!server.listening) return resolve()
         server.close(() => resolve())

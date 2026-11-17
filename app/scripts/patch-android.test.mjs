@@ -12,6 +12,11 @@ import {
   MEDIA_PLUGIN_REGISTER,
   MEDIA_SERVICE_MARKER,
   ensureMediaPluginRegistered,
+  ensureAppPluginsRegistered,
+  ensurePluginRegistered,
+  UPDATES_PLUGIN_IMPORT,
+  UPDATES_PLUGIN_REGISTER,
+  WORK_VERSION,
   ensureMediaService,
   ensureStyleItems,
   iconPlan,
@@ -171,6 +176,21 @@ test('gradle: Media3 dependencies added inside dependencies {}, once, version ke
   assert.equal(patchBuildGradle(old), out)
 })
 
+test('gradle: WorkManager dependency added once, after Media3, version kept current', () => {
+  const out = patchBuildGradle(GRADLE)
+  const deps = out.slice(out.indexOf('dependencies {'))
+  assert.match(deps, new RegExp(`implementation "androidx\\.work:work-runtime:${WORK_VERSION.replace(/\./g, '\\.')}"`))
+  assert.equal(out.split('nocturne:work-begin').length - 1, 1)
+  assert.ok(out.indexOf('nocturne:media3-end') < out.indexOf('nocturne:work-begin'))
+  assert.equal(patchBuildGradle(out), out)
+  const old = out.replace(`work-runtime:${WORK_VERSION}`, 'work-runtime:2.0.0')
+  assert.equal(patchBuildGradle(old), out)
+  // A project patched before WorkManager existed (Media3 block only) gains the block once.
+  const legacy = out.replace(/[ \t]*\/\/ nocturne:work-begin[\s\S]*?\/\/ nocturne:work-end\n/, '')
+  assert.doesNotMatch(legacy, /work-runtime/)
+  assert.equal(patchBuildGradle(legacy), out)
+})
+
 test('gradle: adds minifyEnabled false when missing', () => {
   const out = patchBuildGradle(GRADLE.replace('minifyEnabled true\n', ''))
   assert.match(out, /minifyEnabled false/)
@@ -241,6 +261,33 @@ test('MainActivity: NocturneMedia plugin registered before super.onCreate', () =
   assert.equal(ensureMediaPluginRegistered(noCreate), noCreate)
 })
 
+test('MainActivity: NocturneUpdates plugin registered after NocturneMedia, before super.onCreate', () => {
+  const stock = 'package es.alexcloudweb.nocturne;\n\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {}\n'
+  // Fresh template, a legacy marker activity, and one already carrying only the media plugin.
+  const mediaOnly = ensureMediaPluginRegistered(LEGACY_ACTIVITY)
+  assert.doesNotMatch(mediaOnly, /NocturneUpdatesPlugin/)
+  for (const out of [patchMainActivity(stock), patchMainActivity(LEGACY_ACTIVITY), patchMainActivity(mediaOnly)]) {
+    assert.equal(out.split(UPDATES_PLUGIN_REGISTER).length - 1, 1)
+    assert.equal(out.split(UPDATES_PLUGIN_IMPORT).length - 1, 1)
+    assert.ok(out.indexOf(MEDIA_PLUGIN_REGISTER) < out.indexOf(UPDATES_PLUGIN_REGISTER))
+    assert.ok(out.indexOf(UPDATES_PLUGIN_REGISTER) < out.indexOf('super.onCreate(savedInstanceState);'))
+    assert.ok(out.indexOf(MEDIA_PLUGIN_IMPORT) < out.indexOf(UPDATES_PLUGIN_IMPORT))
+    assert.ok(out.indexOf(UPDATES_PLUGIN_IMPORT) < out.indexOf('public class MainActivity'))
+    assert.equal(patchMainActivity(out), out)
+  }
+  // Patching the previous generation of the template yields exactly the current template.
+  const previous = mainActivityJava().replace(`${UPDATES_PLUGIN_IMPORT}\n`, '').replace(`        ${UPDATES_PLUGIN_REGISTER}\n`, '')
+  assert.doesNotMatch(previous, /NocturneUpdatesPlugin/)
+  assert.equal(patchMainActivity(previous), mainActivityJava())
+  // No onCreate(super): untouched. No imports at all: the import goes after the package line.
+  const noCreate = LEGACY_ACTIVITY.replace(/\n    @Override[\s\S]*?\n    }\n/, '\n')
+  assert.equal(ensureAppPluginsRegistered(noCreate), noCreate)
+  const bare = 'package a.b;\npublic class M { void onCreate(Bundle savedInstanceState) {\n    super.onCreate(savedInstanceState);\n} }\n'
+  const reg = ensurePluginRegistered(bare, { importLine: 'import x.Y;', register: 'registerPlugin(Y.class);' })
+  assert.match(reg, /^package a\.b;\n\nimport x\.Y;\n/)
+  assert.match(reg, /registerPlugin\(Y\.class\);\n    super\.onCreate/)
+})
+
 test('launcher background colour', () => {
   assert.match(patchLauncherBackground('<color name="ic_launcher_background">#FFFFFF</color>'), />#0e0e12</)
 })
@@ -275,6 +322,9 @@ test('patchProject applies to a project copy and is idempotent', async (t) => {
     assert.match(manifest, /NocturneMediaService/)
     const gradle = await readFile(join(dir, 'app/build.gradle'), 'utf8')
     assert.match(gradle, /androidx\.media3:media3-session/)
+    assert.match(gradle, /androidx\.work:work-runtime:/)
+    const activity = await readFile(join(dir, 'app/src/main/java/es/alexcloudweb/nocturne/MainActivity.java'), 'utf8')
+    assert.ok(activity.includes(UPDATES_PLUGIN_REGISTER))
     const lan = await patchProject({ androidDir: dir, env: { NOCTURNE_LAN_HOSTS: '10.0.0.5' } })
     assert.ok(lan.changed.some((f) => f.endsWith('network_security_config.xml')))
   } finally {

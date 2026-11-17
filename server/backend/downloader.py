@@ -587,6 +587,14 @@ class DownloadManager:
                 except Exception as exc:
                     logger.warning("cover lookup not started for %s: %s", file_path, exc)
 
+                # Synced lyrics from LRCLIB (cleans messy YouTube titles). Non-fatal,
+                # background thread, stored in nocturne.db (v1_lyrics_auto).
+                try:
+                    from nocturne_api import lyrics_auto
+                    lyrics_auto.auto_fetch_async(track, raw_artist=job.get("artist"))
+                except Exception as exc:
+                    logger.warning("lyrics lookup not started for %s: %s", file_path, exc)
+
                 # Auto mood analysis (runs in this thread, won't block main loop)
                 try:
                     ma.analyze_track_mood(track["id"])

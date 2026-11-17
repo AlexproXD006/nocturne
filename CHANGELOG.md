@@ -2,6 +2,23 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.0.6 — 2026-11-17
+
+**Playlists, importar de Spotify y letras automáticas** · web, android, windows, linux
+
+### Novedades
+
+- Crea tus propias playlists: añade canciones desde cualquier lista, el reproductor o un álbum entero; renombra, reordena y quita canciones.
+- Importa tus playlists de Spotify: conecta tu cuenta, elige la playlist y Nocturne reconoce las canciones que ya tienes y descarga las que faltan, en el mismo orden.
+- Letras sincronizadas automáticas también para canciones con títulos de YouTube (unas 400 canciones de la biblioteca ganan letra).
+- Aviso de nueva versión con notificación del sistema en Android (aunque la app esté cerrada) y en escritorio.
+- Instalador de Windows y versiones para Linux (AppImage, .deb y .rpm) publicados en GitHub.
+
+### Correcciones
+
+- El servidor ya anuncia correctamente la integración con Spotify.
+- Las listas de la app se actualizan solas al crear o editar playlists.
+
 ## 1.0.5 — 2026-11-17
 
 **Firma de release para Android** · web, android

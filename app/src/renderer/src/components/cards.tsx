@@ -79,9 +79,10 @@ export function MediaCard({ card }: { card: CardItem }): ReactNode {
   )
 }
 
-export function CardGrid({ cards }: { cards: CardItem[] }): ReactNode {
+export function CardGrid({ cards, leading }: { cards: CardItem[]; leading?: ReactNode }): ReactNode {
   return (
     <div className="-mx-2.5 grid grid-cols-2 gap-x-1 gap-y-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+      {leading}
       {cards.map((c) => (
         <MediaCard key={`${c.kind}:${c.item.id}`} card={c} />
       ))}

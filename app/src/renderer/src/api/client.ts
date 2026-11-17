@@ -9,6 +9,9 @@ import type {
   Page,
   Playlist,
   PlaylistDetail,
+  AddToPlaylistResult,
+  CreatePlaylistInput,
+  UpdatePlaylistInput,
   AdminJob,
   AdminSource,
   AdminStats,
@@ -24,6 +27,10 @@ import type {
   SearchType,
   SetLyricsInput,
   SourceResult,
+  SpotifyImport,
+  SpotifyPlaylist,
+  SpotifyStatus,
+  StartSpotifyImportInput,
   UpdateUserInput,
   ServerInfo,
   ServerLyrics,
@@ -201,6 +208,12 @@ export const ServerApi = {
   }
 }
 
+/** Accepts either a bare array or a `Page`-like `{ items }` body. */
+function listOf<T>(body: T[] | { items?: T[] } | null | undefined): T[] {
+  if (Array.isArray(body)) return body
+  return Array.isArray(body?.items) ? body.items : []
+}
+
 export class ApiClient {
   private readonly fetchImpl: typeof fetch
   private readonly timeoutMs: number
@@ -369,6 +382,41 @@ export class ApiClient {
     return this.request('GET', `/v1/playlists/${encodeURIComponent(id)}`, { signal })
   }
 
+  // ---- Playlist editing (capabilities.playlists) ------------------------
+
+  /** Creates a playlist owned by the current user (201 → the new playlist with its tracks). */
+  createPlaylist(input: CreatePlaylistInput): Promise<PlaylistDetail> {
+    return this.request('POST', '/v1/playlists', { body: input })
+  }
+
+  updatePlaylist(id: string, input: UpdatePlaylistInput): Promise<Playlist> {
+    return this.request('PATCH', `/v1/playlists/${encodeURIComponent(id)}`, { body: input })
+  }
+
+  deletePlaylist(id: string): Promise<void> {
+    return this.request('DELETE', `/v1/playlists/${encodeURIComponent(id)}`)
+  }
+
+  /** Appends songs; ones already in the playlist come back in `skipped`. */
+  async addToPlaylist(id: string, trackIds: string[]): Promise<AddToPlaylistResult> {
+    const r = await this.request<Omit<AddToPlaylistResult, 'added'> & { added: number | string[] }>(
+      'POST',
+      `/v1/playlists/${encodeURIComponent(id)}/tracks`,
+      { body: { trackIds } }
+    )
+    // Servers report `added` either as a count or as the list of added ids.
+    return { ...r, added: Array.isArray(r.added) ? r.added.length : r.added }
+  }
+
+  removeFromPlaylist(id: string, trackId: string): Promise<void> {
+    return this.request('DELETE', `/v1/playlists/${encodeURIComponent(id)}/tracks/${encodeURIComponent(trackId)}`)
+  }
+
+  /** Replaces the order; `trackIds` must be a permutation of the playlist's current songs. */
+  reorderPlaylist(id: string, trackIds: string[]): Promise<PlaylistDetail> {
+    return this.request('PUT', `/v1/playlists/${encodeURIComponent(id)}/tracks`, { body: { trackIds } })
+  }
+
   stream(trackId: string, signal?: AbortSignal): Promise<StreamInfo> {
     return this.request('GET', `/v1/tracks/${encodeURIComponent(trackId)}/stream`, { signal })
   }
@@ -421,6 +469,53 @@ export class ApiClient {
     return buildUrl(session.serverUrl, `/v1/connect/sessions/${encodeURIComponent(id)}/events`, {
       access_token: session.accessToken
     })
+  }
+
+  // ---- Spotify import (capabilities.spotifyImport) ----------------------
+
+  spotifyStatus(signal?: AbortSignal): Promise<SpotifyStatus> {
+    return this.request('GET', '/v1/spotify/status', { signal })
+  }
+
+  /** Starts the Spotify login; open the returned `url` in the system browser. */
+  async spotifyAuthorize(): Promise<{ url: string }> {
+    const res = await this.request<{ url?: unknown }>('POST', '/v1/spotify/authorize')
+    const url = typeof res?.url === 'string' ? res.url : ''
+    let ok = false
+    try {
+      const parsed = new URL(url)
+      ok = parsed.protocol === 'https:' || parsed.protocol === 'http:'
+    } catch {
+      ok = false
+    }
+    if (!ok) throw new ApiError('bad_response', 'The server sent an invalid Spotify login link.')
+    return { url }
+  }
+
+  spotifyDisconnect(): Promise<void> {
+    return this.request('DELETE', '/v1/spotify/connection')
+  }
+
+  async spotifyPlaylists(signal?: AbortSignal): Promise<SpotifyPlaylist[]> {
+    return listOf(await this.request<SpotifyPlaylist[] | { items?: SpotifyPlaylist[] }>('GET', '/v1/spotify/playlists', { signal }))
+  }
+
+  /** 202 → the queued import. */
+  spotifyStartImport(input: StartSpotifyImportInput): Promise<SpotifyImport> {
+    return this.request('POST', '/v1/spotify/imports', { body: input })
+  }
+
+  /** Newest first. */
+  async spotifyImports(signal?: AbortSignal): Promise<SpotifyImport[]> {
+    return listOf(await this.request<SpotifyImport[] | { items?: SpotifyImport[] }>('GET', '/v1/spotify/imports', { signal }))
+  }
+
+  spotifyImport(id: string, signal?: AbortSignal): Promise<SpotifyImport> {
+    return this.request('GET', `/v1/spotify/imports/${encodeURIComponent(id)}`, { signal })
+  }
+
+  spotifyCancelImport(id: string): Promise<void> {
+    return this.request('DELETE', `/v1/spotify/imports/${encodeURIComponent(id)}`)
   }
 
   // ---- Admin ------------------------------------------------------------

@@ -25,10 +25,8 @@ router = APIRouter(tags=["home"])
 
 @router.get("/info")
 async def server_info():
-    import os
-    has_spotify = bool(
-        os.getenv("SPOTIFY_CLIENT_ID") and os.getenv("SPOTIFY_CLIENT_SECRET")
-    )
+    # SPOTIPY_* (what spotipy/spotdl read) or the older SPOTIFY_* alias.
+    has_spotify = bool(config.SPOTIFY_CLIENT_ID and config.SPOTIFY_CLIENT_SECRET)
     sources = []
     if has_spotify:
         sources.append("spotify")
@@ -44,6 +42,8 @@ async def server_info():
             "scrobble": True,
             "admin": True,
             "connect": True,
+            "playlists": True,
+            "spotifyImport": has_spotify,
             "sources": sources,
             "uploadMaxBytes": config.UPLOAD_MAX_BYTES,
         },
@@ -60,7 +60,9 @@ async def home(account: dict = Depends(require_user)):
     top_tracks = nova_db.get_top_tracks(limit=20)
     unplayed = nova_db.get_unplayed_tracks(limit=20)
     recent = nova_db.get_recently_played_tracks(limit=20)
-    playlists = nova_db.get_playlists()[:10]
+    # Only playlists this user may see (own + shared), already in wire format.
+    from . import playlists as _pl
+    playlists, _ = _pl.list_wire(account, 0, 10)
 
     sections = []
 
@@ -101,7 +103,7 @@ async def home(account: dict = Depends(require_user)):
             "id": "playlists",
             "title": "Playlists",
             "kind": "playlists",
-            "items": [playlist_to_wire(p) for p in playlists],
+            "items": playlists,
         })
 
     return {"sections": sections}

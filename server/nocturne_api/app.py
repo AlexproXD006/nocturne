@@ -30,6 +30,8 @@ from .media import router as media_router
 from .admin.routes import router as admin_router
 from .routes_connect import router as connect_router
 from .routes_updates import router as updates_router
+from .routes_playlists import router as playlists_router
+from .routes_spotify import router as spotify_router
 
 logger = logging.getLogger("nocturne")
 
@@ -121,6 +123,8 @@ v1_app.include_router(media_router)
 v1_app.include_router(admin_router)
 v1_app.include_router(connect_router)
 v1_app.include_router(updates_router)
+v1_app.include_router(playlists_router)
+v1_app.include_router(spotify_router)
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +147,15 @@ def setup_nocturne(main_app: Any, mount_web: bool = True) -> None:
 
     # Create the first admin account if none exists
     _ensure_first_admin()
+
+    # Spotify imports don't survive a restart: mark interrupted ones as failed.
+    try:
+        from .spotify_import import recover_interrupted
+        n = recover_interrupted()
+        if n:
+            logger.info("Nocturne: marked %d interrupted Spotify import(s) as failed", n)
+    except Exception as e:
+        logger.error("Nocturne: Spotify import recovery failed: %s", e)
 
     # Mount /v1 sub-application
     main_app.mount("/v1", v1_app)

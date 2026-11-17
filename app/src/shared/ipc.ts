@@ -9,7 +9,8 @@ export const IPC = {
   windowSetFullscreen: 'window:set-fullscreen',
   windowState: 'window:state',
   appInfo: 'app:info',
-  openExternal: 'shell:open-external'
+  openExternal: 'shell:open-external',
+  notifyUpdate: 'app:notify-update'
 } as const
 
 export interface WindowState {
@@ -42,6 +43,12 @@ export interface NocturneBridge {
   app: {
     info(): Promise<AppInfo>
     openExternal(url: string): Promise<void>
+    /**
+     * Native "Nocturne <version> available" notification; clicking it focuses the window and
+     * opens `url` (http/https only). Resolves false when the OS has no notification support.
+     * Optional so older preloads / test fakes stay valid.
+     */
+    notifyUpdate?(info: { version: string; url: string }): Promise<boolean>
   }
 }
 
