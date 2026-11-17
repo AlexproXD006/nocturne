@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Descargar Nocturne</title>
+<style>
+  :root {
+    --bg: #08080b;
+    --card: #141419;
+    --line: #26262e;
+    --fg: #f2f2f5;
+    --muted: #9a9aa6;
+    --subtle: #6b6b76;
+    --accent: #7c6cff;
+    --accent-ink: #08080b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1717241a, #17172400), var(--bg);
+    background-color: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 16px;
+    line-height: 1.5;
+  }
+  .wrap { width: 100%; max-width: 760px; }
+  .head { text-align: center; margin-bottom: 28px; }
+  .logo {
+    width: 64px; height: 64px;
+    border-radius: 16px;
+    background: linear-gradient(145deg, var(--accent), #4c3ce0);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 18px;
+    box-shadow: 0 8px 24px -6px rgba(124,108,255,0.5);
+  }
+  .logo svg { width: 34px; height: 34px; }
+  h1 { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 0.95rem; margin-top: 8px; }
+  .grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 26px 24px;
+    display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px -24px rgba(0,0,0,0.6);
+  }
+  .ic { width: 44px; height: 44px; border-radius: 12px; background: rgba(124,108,255,0.14); color: var(--accent); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+  .ic svg { width: 24px; height: 24px; }
+  h2 { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.01em; }
+  .meta { display: flex; gap: 12px; margin: 8px 0 18px; font-size: 0.78rem; color: var(--subtle); flex-wrap: wrap; }
+  .meta span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--subtle); }
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700; font-size: 0.98rem;
+    border: none; border-radius: 12px;
+    padding: 14px; text-decoration: none;
+    transition: transform 0.12s, filter 0.12s;
+    margin-top: auto;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { transform: scale(0.98); }
+  .btn svg { width: 19px; height: 19px; }
+  .steps { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 18px; }
+  .steps h3 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--subtle); margin-bottom: 12px; }
+  ol { list-style: none; counter-reset: step; display: flex; flex-direction: column; gap: 10px; }
+  ol li { counter-increment: step; display: flex; gap: 11px; font-size: 0.86rem; color: var(--muted); }
+  ol li::before {
+    content: counter(step); flex-shrink: 0;
+    width: 22px; height: 22px;
+    background: rgba(124,108,255,0.14); color: var(--accent);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 0.74rem; font-weight: 700;
+  }
+  ol li b { color: var(--fg); font-weight: 600; }
+  .hash { margin-top: 14px; font-size: 0.64rem; color: var(--subtle); word-break: break-all; font-family: ui-monospace, monospace; }
+  .note { margin-top: 10px; font-size: 0.78rem; color: var(--subtle); }
+  .card.beta { border-color: rgba(250,189,47,0.35); background: linear-gradient(180deg, rgba(250,189,47,0.06), rgba(250,189,47,0) 40%), var(--card); }
+  .badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.08em; vertical-align: middle; background: rgba(250,189,47,0.16); color: #fabd2f; }
+  .btn.beta-btn { background: #fabd2f; }
+  .warn { margin: 0 0 16px; padding: 10px 12px; border-radius: 10px; background: rgba(250,189,47,0.08); color: #e8d6a8; font-size: 0.8rem; }
+  .warn b { color: #fabd2f; }
+  /* Channel switch */
+  .channels { display: flex; justify-content: center; gap: 4px; margin: 0 auto 10px; padding: 4px; width: max-content; max-width: 100%; border-radius: 999px; background: var(--card); border: 1px solid var(--line); }
+  .channels button { appearance: none; border: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 0.9rem; font-weight: 700; transition: background .15s, color .15s; }
+  .channels button:hover { color: var(--fg); }
+  .channels button[aria-selected="true"] { background: var(--fg); color: var(--bg); }
+  .channels button[data-ch="beta"][aria-selected="true"] { background: #fabd2f; color: #1b1400; }
+  .channels .pill { font-size: 0.66rem; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: rgba(250,189,47,0.16); color: #fabd2f; }
+  .channels button[aria-selected="true"] .pill { background: rgba(0,0,0,0.14); color: inherit; }
+  .channel-hint { text-align: center; color: var(--subtle); font-size: 0.84rem; margin: 0 0 22px; }
+  body[data-channel="stable"] [data-show="beta"], body[data-channel="beta"] [data-show="stable"] { display: none !important; }
+  body[data-channel="beta"] .grid { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; }
+  /* Version history */
+  .history { margin-top: 40px; }
+  .history > h2 { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 4px; }
+  .history > .sub { text-align: left; margin: 0 0 16px; font-size: 0.86rem; }
+  .rel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; margin-bottom: 10px; overflow: hidden; }
+  .rel summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 16px 18px; }
+  .rel summary::-webkit-details-marker { display: none; }
+  .rel summary::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-right: 2px solid var(--subtle); border-bottom: 2px solid var(--subtle); transform: rotate(45deg); transition: transform .2s; }
+  .rel[open] summary::after { transform: rotate(-135deg); }
+  .rel .v { font-weight: 800; font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .rel .tag { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 999px; background: rgba(124,108,255,0.16); color: var(--accent); }
+  .rel .tag.beta { background: rgba(250,189,47,0.16); color: #fabd2f; }
+  .rel .tag.latest { background: rgba(74,222,128,0.14); color: #4ade80; }
+  .rel .t { color: var(--muted); font-size: 0.9rem; flex-basis: 100%; }
+  .rel .d { color: var(--subtle); font-size: 0.78rem; }
+  .rel .plat { color: var(--subtle); font-size: 0.72rem; }
+  .rel .body { padding: 0 18px 16px; border-top: 1px solid var(--line); }
+  .rel h4 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--subtle); margin: 14px 0 8px; }
+  .rel ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 0.86rem; display: flex; flex-direction: column; gap: 6px; }
+  .rel ul.fix li::marker { color: #4ade80; }
+  .rel ul.add li::marker { color: var(--accent); }
+  .back { display: block; text-align: center; margin-top: 28px; color: var(--subtle); font-size: 0.85rem; text-decoration: none; }
+  .back:hover { color: var(--muted); }
+  /* Secondary download links, wide card, GitHub link */
+  .alt { display: block; margin-top: 10px; text-align: center; color: var(--muted); font-size: 0.84rem; text-decoration: none; }
+  .alt:hover { color: var(--fg); }
+  .alt b { color: var(--fg); font-weight: 600; }
+  .alts { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; }
+  .alts .alt { margin-top: 10px; }
+  [hidden] { display: none !important; }
+  @media (min-width: 640px) { .card.wide { grid-column: 1 / -1; } }
+  .gh { display: inline-flex; align-items: center; gap: 8px; margin: 18px auto 0; color: var(--muted); font-size: 0.88rem; text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; background: var(--card); }
+  .gh:hover { color: var(--fg); }
+  .gh svg { width: 16px; height: 16px; }
+  .gh-wrap { text-align: center; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+        </svg>
+      </div>
+      <h1>Descargar Nocturne</h1>
+      <p class="sub">Tu música, en todos tus dispositivos. Controla la reproducción entre ellos.</p>
+    </div>
+
+    <div class="channels" role="tablist" aria-label="Canal de versiones" hidden>
+      <button type="button" role="tab" data-ch="stable" aria-selected="true">Estable</button>
+      <button type="button" role="tab" data-ch="beta" aria-selected="false">Beta</button>
+    </div>
+    <p class="channel-hint" data-show="stable">Versiones probadas, recomendadas para el día a día.</p>
+    <p class="channel-hint" data-show="beta">Prueba antes que nadie lo que viene. Puede tener fallos, y desde la beta recibirás también la siguiente estable.</p>
+
+    <div class="grid">
+      <!-- Android -->
+      <section class="card" data-show="stable" id="card-android">
+        <div class="ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/>
+          </svg>
+        </div>
+        <h2>Android</h2>
+        <div class="meta"><span data-f="version">v1.0.5</span><span class="dot"></span><span data-f="size">5,3 MB</span><span class="dot"></span><span>Android 7+</span></div>
+        <p class="warn" id="reinstalar"><b>¿Ya tenías Nocturne instalado?</b> Desde la 1.0.5 la app usa la firma oficial, así que esta vez hay que <b>desinstalar la versión anterior</b> antes de instalar la nueva (solo una vez). Tu biblioteca, likes y playlists están en el servidor: no se pierden, solo tendrás que volver a iniciar sesión.</p>
+        <a class="btn" data-f="href" href="/descargar/android">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Descargar APK
+        </a>
+        <div class="steps">
+          <h3>Cómo instalar</h3>
+          <ol>
+            <li>Si ya tenías Nocturne, <b>desinstálalo</b> primero (mantén pulsado el icono → Desinstalar). Solo hace falta esta vez.</li>
+            <li>Descarga el <b>APK</b> con el botón.</li>
+            <li>Android pedirá permitir <b>instalar apps de orígenes desconocidos</b>. Acéptalo.</li>
+            <li>Pulsa <b>Instalar</b> y abre Nocturne.</li>
+            <li>Pon el servidor <b class="srv">de esta página</b> e inicia sesión.</li>
+          </ol>
+        </div>
+        <p class="hash" data-f="sha">SHA-256: 5232144f9f0266d71f4231e773fd6452fd711ff7da494d8699897464f0f652da</p>
+      </section>
+
+      <!-- Android Beta -->
+      <section class="card beta" data-show="beta" id="card-beta">
+        <div class="ic" aria-hidden="true" style="background: rgba(250,189,47,0.14); color: #fabd2f;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/>
+          </svg>
+        </div>
+        <h2>Android <span class="badge">BETA</span></h2>
+        <div data-beta="none">
+          <p class="warn"><b>Ahora mismo no hay beta activa.</b> El canal beta está al día con la versión estable<span data-f="stable-version"></span>. Si tienes una beta instalada, la app te avisará para actualizar a la estable.</p>
+          <div class="steps">
+            <h3>Canal beta</h3>
+            <ol>
+              <li>Cuando salga una beta nueva aparecerá aquí.</li>
+              <li>Desde una beta recibes avisos de nuevas betas y de la siguiente estable.</li>
+            </ol>
+          </div>
+        </div>
+        <div data-beta="active" hidden>
+          <div class="meta"><span data-f="version"></span><span class="dot"></span><span data-f="size"></span><span class="dot"></span><span>Android 7+</span></div>
+          <p class="warn"><b>Versión de pruebas.</b> Puede tener fallos. Se instala encima de la estable y desde ella recibirás nuevas betas y la siguiente estable.</p>
+          <a class="btn beta-btn" data-f="href" href="/descargar/android-beta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Descargar APK beta
+          </a>
+          <a class="alt" data-f="notes" href="#" hidden>Ver novedades de esta beta</a>
+          <p class="hash" data-f="sha"></p>
+        </div>
+      </section>
+
+      <!-- Windows -->
+      <section class="card" data-show="stable" id="card-windows">
+        <div class="ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="12" rx="1"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/>
+          </svg>
+        </div>
+        <h2>Windows</h2>
+        <div class="meta"><span data-f="version">v1.0.0</span><span class="dot"></span><span data-f="size">152 MB</span><span class="dot"></span><span data-f="kind">64-bit · portable</span></div>
+        <a class="btn" data-f="href" href="/descargar/windows">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span data-f="label">Descargar ZIP</span>
+        </a>
+        <a class="alt" data-f="portable" href="/descargar/windows-portable" hidden>¿Sin instalar? Descarga la versión <b>portable</b> (.exe)</a>
+        <div class="steps" data-win="zip">
+          <h3>Cómo usar</h3>
+          <ol>
+            <li>Descarga y <b>descomprime</b> el ZIP en una carpeta.</li>
+            <li>Entra en la carpeta y ejecuta <b>Nocturne.exe</b>.</li>
+            <li>Windows SmartScreen puede avisar: pulsa <b>Más información → Ejecutar de todas formas</b>.</li>
+            <li>Pon el servidor <b class="srv">de esta página</b> e inicia sesión.</li>
+          </ol>
+        </div>
+        <div class="steps" data-win="setup" hidden>
+          <h3>Cómo instalar</h3>
+          <ol>
+            <li>Descarga el <b>instalador</b> y ábrelo.</li>
+            <li>Windows SmartScreen puede avisar: pulsa <b>Más información → Ejecutar de todas formas</b>.</li>
+            <li>Elige la carpeta y termina la instalación. No requiere permisos de administrador.</li>
+            <li>Pon el servidor <b class="srv">de esta página</b> e inicia sesión.</li>
+          </ol>
+        </div>
+        <p class="note" data-win="zip">Versión portable (sin instalador). No requiere permisos de administrador.</p>
+        <p class="hash" data-f="sha">SHA-256: 6d2a9414d7af7dbee83645da9dabb8b44aab29b28dc743c73e67cc90ab1f98ee</p>
+      </section>
+
+      <!-- Linux -->
+      <section class="card wide" data-show="stable" id="card-linux">
+        <div class="ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+        </div>
+        <h2>Linux</h2>
+        <div class="meta"><span data-f="version">AppImage</span><span class="dot"></span><span data-f="size">x86_64</span><span class="dot"></span><span>también .deb y .rpm</span></div>
+        <p class="warn" data-linux="none" hidden><b>Todavía no hay versión para Linux.</b> Aparecerá aquí con la próxima versión publicada en GitHub.</p>
+        <a class="btn" data-f="href" href="/descargar/linux">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Descargar AppImage
+        </a>
+        <p class="alts" data-linux="pkgs">
+          <a class="alt" data-f="deb" href="/descargar/linux-deb">Paquete <b>.deb</b> (Debian, Ubuntu)</a>
+          <a class="alt" data-f="rpm" href="/descargar/linux-rpm">Paquete <b>.rpm</b> (Fedora, openSUSE)</a>
+        </p>
+        <div class="steps">
+          <h3>Cómo usar</h3>
+          <ol>
+            <li>Descarga el <b>AppImage</b>, dale permiso de ejecución (<b>chmod +x</b>) y ábrelo. O instala el <b>.deb</b>/<b>.rpm</b> de tu distribución.</li>
+            <li>Pon el servidor <b class="srv">de esta página</b> e inicia sesión.</li>
+          </ol>
+        </div>
+        <p class="hash" data-f="sha"></p>
+      </section>
+    </div>
+
+    <section class="history" aria-labelledby="hist-title">
+      <h2 id="hist-title">Historial de versiones</h2>
+      <p class="sub">Novedades y correcciones de cada versión.</p>
+      <div id="history"><p class="note">Cargando historial…</p></div>
+    </section>
+
+    <div class="gh-wrap">
+      <a class="gh" data-f="releases" href="https://github.com/AlexproXD006/nocturne/releases" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Ver todas las versiones en GitHub
+      </a>
+    </div>
+
+    <a class="back" href="/">&larr; Volver a Nocturne web</a>
+  </div>
+
+  <script>
+  (function () {
+    var body = document.body;
+    var tabs = document.querySelector('.channels');
+    var buttons = tabs ? tabs.querySelectorAll('button[data-ch]') : [];
+    function setChannel(ch, push) {
+      if (ch !== 'beta') ch = 'stable';
+      body.setAttribute('data-channel', ch);
+      for (var i = 0; i < buttons.length; i++) buttons[i].setAttribute('aria-selected', String(buttons[i].getAttribute('data-ch') === ch));
+      if (push) history.replaceState(null, '', ch === 'beta' ? '#beta' : location.pathname);
+    }
+    if (tabs) {
+      tabs.hidden = false;
+      for (var i = 0; i < buttons.length; i++) buttons[i].addEventListener('click', function () { setChannel(this.getAttribute('data-ch'), true); });
+    }
+    setChannel(location.hash === '#beta' ? 'beta' : 'stable', false);
+    window.addEventListener('hashchange', function () { setChannel(location.hash === '#beta' ? 'beta' : 'stable', false); });
+
+    var PLAT = { android: 'Android', web: 'Web', windows: 'Windows', desktop: 'Escritorio' };
+    function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+    function list(title, items, cls) {
+      var frag = document.createDocumentFragment();
+      if (!items || !items.length) return frag;
+      frag.appendChild(el('h4', null, title));
+      var ul = el('ul', cls);
+      items.forEach(function (t) { ul.appendChild(el('li', null, t)); });
+      frag.appendChild(ul);
+      return frag;
+    }
+    function fmtDate(d) {
+      try { return new Date(d + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return d; }
+    }
+    var host = document.getElementById('history');
+    fetch('/changelog.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (data) {
+      host.textContent = '';
+      var latestStable = null;
+      (data.releases || []).forEach(function (r) { if (!latestStable && r.channel !== 'beta') latestStable = r.version; });
+      (data.releases || []).forEach(function (r, idx) {
+        var d = el('details', 'rel');
+        if (idx < 2) d.open = true;
+        var s = el('summary');
+        s.appendChild(el('span', 'v', 'v' + r.version));
+        if (r.channel === 'beta') s.appendChild(el('span', 'tag beta', 'BETA'));
+        else if (r.version === latestStable) s.appendChild(el('span', 'tag latest', 'ACTUAL'));
+        else s.appendChild(el('span', 'tag', 'ESTABLE'));
+        s.appendChild(el('span', 'd', fmtDate(r.date)));
+        if (r.platforms && r.platforms.length) s.appendChild(el('span', 'plat', '· ' + r.platforms.map(function (p) { return PLAT[p] || p; }).join(', ')));
+        if (r.title) s.appendChild(el('span', 't', r.title));
+        d.appendChild(s);
+        var b = el('div', 'body');
+        b.appendChild(list('Novedades', r.added, 'add'));
+        b.appendChild(list('Correcciones', r.fixed, 'fix'));
+        d.appendChild(b);
+        host.appendChild(d);
+      });
+    }).catch(function () { host.innerHTML = '<p class="note">No se pudo cargar el historial.</p>'; });
+
+    // ── Versions, sizes, SHA-256 and links from /v1/downloads ──
+    // The static HTML above is the fallback if this request fails.
+    var srv = location.host;
+    if (srv) document.querySelectorAll('.srv').forEach(function (n) { n.textContent = srv; });
+
+    function fmtSize(bytes) {
+      if (typeof bytes !== 'number' || !isFinite(bytes) || bytes <= 0) return '';
+      var mb = bytes / (1024 * 1024);
+      return (mb >= 100 ? Math.round(mb).toString() : mb.toFixed(1).replace('.', ',')) + ' MB';
+    }
+    function localPath(u) { return typeof u === 'string' && /^\/(?!\/)/.test(u) ? u : null; }
+    function webUrl(u) { return typeof u === 'string' && /^https:\/\//.test(u) ? u : null; }
+    function field(card, name) { return card ? card.querySelector('[data-f="' + name + '"]') : null; }
+    function setText(card, name, text) { var n = field(card, name); if (n && text) n.textContent = text; }
+    function setHref(node, url) { var u = localPath(url); if (node && u) node.setAttribute('href', u); return !!u; }
+    function setSha(card, sha) {
+      var n = field(card, 'sha');
+      if (!n) return;
+      if (typeof sha === 'string' && /^[0-9a-f]{64}$/i.test(sha)) { n.textContent = 'SHA-256: ' + sha; n.hidden = false; }
+      else { n.textContent = ''; n.hidden = true; }
+    }
+    function fillAsset(card, a, fallbackVersion) {
+      if (!card || !a) return false;
+      setText(card, 'version', 'v' + (a.version || fallbackVersion || ''));
+      setText(card, 'size', fmtSize(a.size));
+      setHref(field(card, 'href'), a.url);
+      setSha(card, a.sha256);
+      return true;
+    }
+    function showAll(card, selector, show) {
+      if (!card) return;
+      card.querySelectorAll(selector).forEach(function (n) { n.hidden = !show; });
+    }
+
+    fetch('/v1/downloads', { cache: 'no-cache' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      var gh = webUrl(d.releases_url);
+      if (gh) document.querySelectorAll('[data-f="releases"]').forEach(function (n) { n.setAttribute('href', gh); n.hidden = false; });
+
+      var st = d.stable || {};
+      var assets = st.assets || {};
+
+      // Android (stable)
+      fillAsset(document.getElementById('card-android'), assets.android, st.version);
+
+      // Windows: installer first, portable as a secondary link
+      var win = document.getElementById('card-windows');
+      var w = assets.windows;
+      if (w && fillAsset(win, w, st.version)) {
+        var isZip = w.source === 'local' || /\.zip$/i.test(w.name || '');
+        setText(win, 'label', isZip ? 'Descargar ZIP' : 'Descargar instalador');
+        setText(win, 'kind', isZip ? '64-bit · portable' : '64-bit · instalador');
+        showAll(win, '[data-win="zip"]', isZip);
+        showAll(win, '[data-win="setup"]', !isZip);
+      }
+      var p = assets['windows-portable'];
+      var pl = field(win, 'portable');
+      if (pl) pl.hidden = !(p && setHref(pl, p.url));
+
+      // Linux: AppImage primary, .deb / .rpm secondary
+      var lin = document.getElementById('card-linux');
+      var l = assets.linux, deb = assets['linux-deb'], rpm = assets['linux-rpm'];
+      if (l) {
+        fillAsset(lin, l, st.version);
+        setText(lin, 'size', fmtSize(l.size) || 'x86_64');
+      }
+      var dl = field(lin, 'deb'), rl = field(lin, 'rpm');
+      if (dl) dl.hidden = !(deb && setHref(dl, deb.url));
+      if (rl) rl.hidden = !(rpm && setHref(rl, rpm.url));
+      var anyLinux = !!(l || deb || rpm);
+      showAll(lin, '[data-linux="none"]', !anyLinux);
+      var lb = field(lin, 'href');
+      if (lb) lb.hidden = !l;
+      showAll(lin, '[data-linux="pkgs"]', !!(deb || rpm));
+      if (!anyLinux) { setText(lin, 'version', 'Próximamente'); setText(lin, 'size', 'x86_64'); setSha(lin, null); }
+
+      // Beta: only when there is a pre-release newer than the stable one
+      var betaCard = document.getElementById('card-beta');
+      var b = d.beta;
+      var ba = b && b.assets && b.assets.android;
+      var active = !!(b && ba && b.version && b.version !== st.version);
+      showAll(betaCard, '[data-beta="none"]', !active);
+      showAll(betaCard, '[data-beta="active"]', active);
+      var sv = field(betaCard, 'stable-version');
+      if (sv) sv.textContent = st.version ? ' ' + st.version : '';
+      if (active) {
+        fillAsset(betaCard, ba, b.version);
+        var nl = field(betaCard, 'notes');
+        var nu = webUrl(b.notes_url);
+        if (nl) { nl.hidden = !nu; if (nu) nl.setAttribute('href', nu); }
+      }
+    }).catch(function () { /* keep the static fallback */ });
+  })();
+  </script>
+</body>
+</html>

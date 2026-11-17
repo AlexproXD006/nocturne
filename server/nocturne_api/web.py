@@ -10,10 +10,10 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import config
+from . import config, releases
 
 router = APIRouter(tags=["web"])
 
@@ -88,6 +88,48 @@ def mount_downloads(app) -> None:
         resp = FileResponse(str(page_path), media_type="text/html")
         resp.headers["Cache-Control"] = "no-cache"
         return _add_security(resp)
+
+    # /descargar/<target> -> 302 to the GitHub release asset (see releases.py).
+    # target: (GitHub channel, asset key, local fallback path or None)
+    redirect_targets = {
+        "android": ("stable", "android", "/nocturne.apk"),
+        "android-beta": ("beta", "android", "/nocturne.apk"),
+        "windows": ("stable", "windows", "/nocturne-windows-x64.zip"),
+        "windows-portable": ("stable", "windows-portable", None),
+        "linux": ("stable", "linux", None),
+        "linux-deb": ("stable", "linux-deb", None),
+        "linux-rpm": ("stable", "linux-rpm", None),
+    }
+
+    def _make_redirect(channel: str, asset_key: str, fallback):
+        async def _redirect():
+            gh = await releases.get_releases()
+            rel = (gh or {}).get(channel) or {}
+            asset = (rel.get("assets") or {}).get(asset_key)
+            if asset and asset.get("url"):
+                target = asset["url"]
+            elif fallback:
+                target = fallback
+            else:
+                resp = Response(
+                    content="This download is not available right now.",
+                    media_type="text/plain",
+                    status_code=404,
+                )
+                resp.headers["Cache-Control"] = "no-cache"
+                return _add_security(resp)
+            resp = RedirectResponse(target, status_code=302)
+            resp.headers["Cache-Control"] = "no-cache"
+            return _add_security(resp)
+        return _redirect
+
+    for _name, (_channel, _key, _fallback) in redirect_targets.items():
+        app.add_api_route(
+            f"/descargar/{_name}",
+            _make_redirect(_channel, _key, _fallback),
+            methods=["GET", "HEAD"],
+            include_in_schema=False,
+        )
 
     @app.api_route("/nocturne.apk", methods=["GET", "HEAD"], include_in_schema=False)
     async def _download_apk():

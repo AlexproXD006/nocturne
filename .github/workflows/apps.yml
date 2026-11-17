@@ -174,4 +174,6 @@ jobs:
         with:
           files: artifacts/*
           generate_release_notes: true
+          # vX.Y.Z-beta.N tags are pre-releases (beta channel), never "Latest".
+          prerelease: ${{ contains(github.ref_name, '-') }}
           fail_on_unmatched_files: true

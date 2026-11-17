@@ -23,6 +23,8 @@ os.environ["NOCTURNE_DB_PATH"]    = str(Path(_data_tmpdir) / "test_nocturne.db")
 os.environ["NOCTURNE_WEB_DIR"]    = "/nonexistent_web_dir"
 os.environ["NOCTURNE_DATA_DIR"]   = _data_tmpdir
 os.environ["MUSIC_DIR"]           = _music_tmpdir
+# No GitHub Releases lookups in tests (tests that need them mock HTTP).
+os.environ["NOCTURNE_RELEASES_REPO"] = ""
 # Avoid reading real NOVA DB
 os.environ["NOCTURNE_CORS_ORIGINS"] = "http://testserver"
 

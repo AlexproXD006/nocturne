@@ -69,6 +69,11 @@ WEB_DIR: str = _optional("NOCTURNE_WEB_DIR", "/opt/nocturne/web")
 # feed latest.json. Kept outside WEB_DIR so they survive web-release cutovers.
 DOWNLOADS_DIR: str = _optional("NOCTURNE_DOWNLOADS_DIR", "/opt/nocturne/downloads")
 
+# ── App releases (GitHub) ──────────────────────────────────────────────────────
+# "owner/name" whose GitHub Releases provide app downloads and the in-app
+# update feed. Empty string disables GitHub (local downloads/latest.json only).
+RELEASES_REPO: str = os.getenv("NOCTURNE_RELEASES_REPO", "AlexproXD006/nocturne").strip()
+
 # ── Upload ─────────────────────────────────────────────────────────────────────
 UPLOAD_MAX_MB: int = int(_optional("NOCTURNE_UPLOAD_MAX_MB", "200"))
 UPLOAD_MAX_BYTES: int = UPLOAD_MAX_MB * 1024 * 1024

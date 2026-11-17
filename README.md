@@ -108,6 +108,7 @@ All settings are environment variables; [`.env.example`](.env.example) documents
 | `NOCTURNE_DATA_DIR` | `<MUSIC_DIR>/.nocturne_data` | Nocturne data (artwork cache). |
 | `NOCTURNE_WEB_DIR` | image: `/app/web` (code: `/opt/nocturne/web`) | Hosted web app served at `/`. |
 | `NOCTURNE_DOWNLOADS_DIR` | image: `/downloads` (code: `/opt/nocturne/downloads`) | App downloads (`/nocturne.apk`, `/nocturne-beta.apk`, `/nocturne-windows-x64.zip`, `/descargar`) and the in-app update feed `latest.json`. |
+| `NOCTURNE_RELEASES_REPO` | `AlexproXD006/nocturne` | GitHub repository (`owner/name`) whose Releases provide app downloads (`/descargar/<platform>` redirects) and the in-app update feed. Public API, no token. Empty = disabled (local files + `latest.json` only). |
 | `NOVA_LEGACY_API` | `off` | Legacy unauthenticated NOVA API (`/api/*`, `/ws/*`, `/docs`): `off`, `internal` (loopback only) or `on`. |
 | `NOCTURNE_ANDROID_KEYSTORE` / `NOCTURNE_ANDROID_KEY_ALIAS` / `NOCTURNE_ANDROID_KEYSTORE_PASS` | – / `nocturne` / – | Optional: lets an admin download a backup of your Android signing keystore. |
 
@@ -126,6 +127,27 @@ The apps ask `GET /v1/updates/{android|android-beta|windows|desktop}`, which rea
 
 Mount a folder with that file and the builds at `/downloads` (see `docker-compose.yml`). Without it the
 feed answers `503` and the apps simply report that no update information is available.
+
+**GitHub Releases.** When `NOCTURNE_RELEASES_REPO` (default `AlexproXD006/nocturne`) has published
+releases, they take precedence: the server reads the public GitHub API (cached 10 minutes; failures
+are retried after 2 minutes while the last good answer keeps being served) and picks the newest stable
+release (`vX.Y.Z`) and the newest beta (`vX.Y.Z-beta.N` / GitHub "pre-release", or the stable one if it
+is newer). The feed then answers e.g. `{"version": "1.0.6", "url": "/descargar/android", ...}`. The
+`url` stays server-relative; `/descargar/<platform>` 302-redirects to the release asset:
+
+| Route | Asset | Fallback without GitHub |
+| --- | --- | --- |
+| `/descargar/android`, `/descargar/android-beta` | `Nocturne-<ver>-android-release.apk` | `/nocturne.apk` |
+| `/descargar/windows` | `Nocturne-Setup-<ver>-x64.exe` | `/nocturne-windows-x64.zip` |
+| `/descargar/windows-portable` | `Nocturne-Portable-<ver>-x64.exe` | 404 |
+| `/descargar/linux`, `/descargar/linux-deb`, `/descargar/linux-rpm` | `.AppImage`, `.deb`, `.rpm` (x86_64) | 404 |
+
+If `latest.json` has an entry for a platform with the **same version** and a `url`, that `url` (and its
+`notes`) wins, which allows one-off exceptions such as pointing a release at an instructions page.
+If `latest.json` is newer than GitHub, or GitHub has nothing, `latest.json` is served as before.
+`GET /v1/downloads` returns a summary (versions, sizes, SHA-256, links) used by the download page
+[`server/download-page/descargar.html`](server/download-page/descargar.html); copy it into the downloads
+folder to serve it at `/descargar`.
 
 ## Building the apps
 
