@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Clock, Play, Search as SearchIcon, X } from 'lucide-react'
-import { api, usePlayer } from '../services'
+import { api, playback } from '../services'
 import type { SearchResults } from '../api/types'
 import { describeError, isAbort } from '../api/errors'
 import { readJson, writeJson } from '../lib/storage'
@@ -148,7 +148,7 @@ export function SearchPage({ initial }: { initial?: string }): ReactNode {
 
 function Results({ results, filter, query }: { results: SearchResults; filter: Filter; query: string }): ReactNode {
   const go = useNav((s) => s.go)
-  const playTracks = usePlayer((s) => s.playTracks)
+  const playTracks = playback.playTracks
   const ctx = useMemo(() => ({ type: 'search' as const, id: query, name: `“${query}”` }), [query])
   const albums = results.albums.map((item) => ({ kind: 'album' as const, item }))
   const artists = results.artists.map((item) => ({ kind: 'artist' as const, item }))

@@ -19,7 +19,14 @@ export const playlistKey = (id: string): string => `playlist:${id}`
 
 export type PlaylistApi = Pick<
   ApiClient,
-  'libraryPlaylists' | 'createPlaylist' | 'updatePlaylist' | 'deletePlaylist' | 'addToPlaylist' | 'removeFromPlaylist' | 'reorderPlaylist'
+  | 'libraryPlaylists'
+  | 'createPlaylist'
+  | 'updatePlaylist'
+  | 'deletePlaylist'
+  | 'addToPlaylist'
+  | 'removeFromPlaylist'
+  | 'removePlaylistEntry'
+  | 'reorderPlaylist'
 >
 
 const PAGE = 50
@@ -49,6 +56,10 @@ export function invalidatePlaylists(id?: string, cache: ResourceCache = resource
 export interface AddOutcome {
   added: number
   skipped: number
+  /** Ids the server skipped because they were already in the playlist (candidates for "Add again"). */
+  skippedIds: string[]
+  /** The playlist's name as the server reported it (falls back to the one passed in). */
+  name: string
   /** Ready-made toast text. */
   message: string
 }
@@ -56,18 +67,29 @@ export interface AddOutcome {
 export function describeAdd(name: string, requested: number, added: number, skipped: number): string {
   if (requested <= 1) return added > 0 ? `Added to ${name}` : `Already in ${name}`
   if (added === 0) return `All ${requested} songs are already in ${name}`
-  if (skipped > 0) return `Added ${added} ${added === 1 ? 'song' : 'songs'} to ${name} (${skipped} already there)`
+  if (skipped > 0) return `Added ${added} ${added === 1 ? 'song' : 'songs'} to ${name}, ${skipped} already there`
   return `Added ${added} songs to ${name}`
 }
 
-/** Appends songs to a playlist and refreshes cached views of it. Duplicates in `tracks` are dropped. */
-export async function addTracks(api: Pick<PlaylistApi, 'addToPlaylist'>, playlist: Pick<Playlist, 'id' | 'name'>, tracks: Track[], cache: ResourceCache = resources): Promise<AddOutcome> {
+/**
+ * Appends songs to a playlist and refreshes cached views of it. Duplicates in `tracks` are dropped.
+ * With `allowDuplicates`, songs already in the playlist are appended again (on servers that support it).
+ */
+export async function addTracks(
+  api: Pick<PlaylistApi, 'addToPlaylist'>,
+  playlist: Pick<Playlist, 'id' | 'name'>,
+  tracks: ReadonlyArray<Pick<Track, 'id'>>,
+  cache: ResourceCache = resources,
+  opts: { allowDuplicates?: boolean } = {}
+): Promise<AddOutcome> {
   const ids = [...new Set(tracks.map((t) => t.id))]
-  const res = await api.addToPlaylist(playlist.id, ids)
+  const res = opts.allowDuplicates ? await api.addToPlaylist(playlist.id, ids, { allowDuplicates: true }) : await api.addToPlaylist(playlist.id, ids)
   const added = Number.isFinite(res?.added) ? res.added : ids.length
+  const skippedIds = Array.isArray(res?.skipped) ? res.skipped.filter((x): x is string => typeof x === 'string') : []
   const skipped = Array.isArray(res?.skipped) ? res.skipped.length : 0
   invalidatePlaylists(playlist.id, cache)
-  return { added, skipped, message: describeAdd(res?.playlist?.name || playlist.name, ids.length, added, skipped) }
+  const name = res?.playlist?.name || playlist.name
+  return { added, skipped, skippedIds, name, message: describeAdd(name, ids.length, added, skipped) }
 }
 
 /** Creates a playlist (optionally with songs), seeds its page cache and refreshes the lists. */

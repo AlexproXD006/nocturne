@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+from typing import Optional
+
 import os
 import sys
 # NOVA backend modules (database, downloader, ...) live in <server root>/backend.
@@ -183,27 +185,38 @@ async def get_lyrics(track_id: str, account: dict = Depends(require_user)):
         elif fmt == "lrc":
             return {"synced": content, "plain": None, "ttml": None}
 
-    # Fall back to .lrc file next to audio
-    file_path = row.get("file_path", "")
-    if file_path:
-        lrc_path = Path(file_path).with_suffix(".lrc")
-        if lrc_path.exists():
-            try:
-                lrc = lrc_path.read_text(encoding="utf-8")
-                return {"synced": lrc, "plain": None, "ttml": None}
-            except Exception:
-                pass
+    # .lrc next to the audio: a real (user-provided) one keeps priority. NOVA-made
+    # ones (invented 10-s grid / NOVA header) rank below the LRCLIB lyrics and are
+    # only used when nothing better exists - a fake grid as plain text.
+    from . import lyrics_auto
+    lrc = lyrics_auto.read_lrc(row.get("file_path") or "")
+    if lrc and lrc[0] == lyrics_auto.LRC_USER:
+        return {"synced": lrc[1], "plain": None, "ttml": None}
+
+    def _lrc_fallback() -> Optional[dict]:
+        if not lrc:
+            return None
+        if lrc[0] == lyrics_auto.LRC_NOVA_SYNCED:
+            return {"synced": lrc[1], "plain": None, "ttml": None}
+        plain = lyrics_auto.lrc_plain_text(lrc[1])
+        return {"synced": None, "plain": plain, "ttml": None} if plain else None
 
     # Automatic lyrics from LRCLIB (v1_lyrics_auto), lazily looked up on first request.
-    from . import lyrics_auto
     try:
         auto = lyrics_auto.get_auto(track_id)
     except Exception:
         auto = None
     if auto and lyrics_auto.is_fresh(auto):
-        return lyrics_auto.response_from_row(auto)
-    res = await lyrics_auto.lookup_for_request(row)
-    if res is not None:
-        return res.response()
+        resp = lyrics_auto.response_from_row(auto)
+    else:
+        res = await lyrics_auto.lookup_for_request(row)
+        resp = res.response() if res is not None else None
+    if resp and (resp.get("synced") or resp.get("plain")):
+        return resp
+    fb = _lrc_fallback()
+    if fb:
+        return fb
+    if resp:
+        return resp
 
     return {"synced": None, "plain": None, "ttml": None}

@@ -16,10 +16,11 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/hooks/useLyrics', () => ({ useLyrics: () => h.lyricsState }))
 vi.mock('@/hooks/useClock', () => ({ readPosition: () => h.pos, useFrame: vi.fn() }))
-vi.mock('@/services', () => {
+vi.mock('@/services', async () => {
   const state = { seek: h.seek, status: 'paused', duration: 200, position: 0 }
   const usePlayer = Object.assign((sel: (s: typeof state) => unknown) => sel(state), { getState: () => state })
-  return { usePlayer, getEngine: () => null }
+  const { connectMocks } = await import('../helpers/services-mock')
+  return { usePlayer, getEngine: () => null, ...connectMocks(usePlayer) }
 })
 
 const NS = 'xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" itunes:timing="Word"'

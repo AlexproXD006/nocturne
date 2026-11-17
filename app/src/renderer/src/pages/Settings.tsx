@@ -10,6 +10,8 @@ import { Logo } from '../components/Shell'
 import { Page } from './Page'
 import { SpotifySettings, useSpotifyImportEnabled } from '../components/Spotify'
 import { isPrerelease } from '../lib/version'
+import { Row, Segmented, Toggle } from './SettingsControls'
+import { AdaptiveSettingsPanel } from './AdaptiveSettings'
 
 function Section({ title, children }: { title: string; children: ReactNode }): ReactNode {
   return (
@@ -17,73 +19,6 @@ function Section({ title, children }: { title: string; children: ReactNode }): R
       <h2 className="mb-4 text-lg font-bold tracking-tight">{title}</h2>
       <div className="space-y-5">{children}</div>
     </section>
-  )
-}
-
-function Row({ label, hint, children, htmlFor }: { label: string; hint?: ReactNode; children?: ReactNode; htmlFor?: string }): ReactNode {
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-      <div className="min-w-0">
-        <label htmlFor={htmlFor} className="block text-[15px] font-medium">
-          {label}
-        </label>
-        {hint && <div className="mt-0.5 text-[13px] text-fg-muted">{hint}</div>}
-      </div>
-      {children && <div className="shrink-0">{children}</div>}
-    </div>
-  )
-}
-
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }): ReactNode {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={cx('relative h-7 w-12 rounded-full transition-colors duration-200', checked ? 'bg-accent' : 'bg-white/15')}
-    >
-      <span
-        aria-hidden
-        className={cx(
-          'absolute top-1 left-1 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ease-[var(--ease-out-soft)]',
-          checked && 'translate-x-5'
-        )}
-      />
-    </button>
-  )
-}
-
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-  label
-}: {
-  value: T
-  options: { id: T; label: string }[]
-  onChange: (v: T) => void
-  label: string
-}): ReactNode {
-  return (
-    <div role="radiogroup" aria-label={label} className="inline-flex rounded-full bg-white/[0.07] p-1">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          role="radio"
-          aria-checked={value === o.id}
-          onClick={() => onChange(o.id)}
-          className={cx(
-            'rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
-            value === o.id ? 'bg-fg text-ink-950' : 'text-fg-muted hover:text-fg'
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
   )
 }
 
@@ -358,10 +293,13 @@ export function SettingsPage(): ReactNode {
             />
           </Row>
           {theme === 'adaptive' ? (
-            <Row
-              label="Accent"
-              hint="Adaptive picks the dominant colour of the current cover and builds the background around it."
-            />
+            <>
+              <Row
+                label="Accent"
+                hint="Adaptive picks a colour from the current cover and builds the background around it."
+              />
+              <AdaptiveSettingsPanel />
+            </>
           ) : (
             <Row label="Accent" hint="Highlight colour for controls and emphasis. Adaptive follows the current cover.">
               <AccentPicker value={accent} onChange={(id) => update({ accent: id })} />

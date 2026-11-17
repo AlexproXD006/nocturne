@@ -17,6 +17,7 @@ import { lyricsFor } from './lyrics.mjs'
 import { withRealisticCatalog } from './realistic.mjs'
 import { itemFromResultId } from './sources.mjs'
 import { createSpotify } from './spotify.mjs'
+import { createConnect } from './connect.mjs'
 import { isApiPath, resolveStaticDir, serveStatic } from './static.mjs'
 import { plainFromLrc, plainFromTtml } from './ttml.mjs'
 import { userJson } from './userjson.mjs'
@@ -223,7 +224,43 @@ export function createMockServer(options = {}) {
     return { ...base, description: p.description || undefined, owner: { id: p.ownerId, name: owner?.displayName ?? 'You' }, editable: p.ownerId === user.id }
   }
   function userPlaylistDetailJson(ctx, p, user) {
-    return { ...playlistDetailJson(ctx, p), ...userPlaylistJson(ctx, p, user) }
+    const detail = playlistDetailJson(ctx, p)
+    const entries = entryIdsOf(p)
+    return { ...detail, ...userPlaylistJson(ctx, p, user), tracks: detail.tracks.map((t, i) => ({ ...t, entryId: entries[i] })) }
+  }
+
+  // ---- Playlist entries ----
+  // A playlist may hold the same song more than once; each occurrence gets an `entryId`, kept in
+  // `p.entryIds` parallel to `p.trackIds`. Other modules (admin track delete, Spotify import) only
+  // touch `p.trackIds`, so the ids are re-paired lazily: surviving occurrences keep their entry id
+  // (matched per song, in order) and new ones get a fresh id.
+  let entryCounter = 0
+  const newEntryId = () => `e${(++entryCounter).toString(36)}${randomBytes(2).toString('hex')}`
+  function entryIdsOf(p) {
+    const prevTracks = p.entryTrackIds ?? []
+    const prevEntries = p.entryIds ?? []
+    const same = prevTracks.length === p.trackIds.length && prevTracks.every((id, i) => id === p.trackIds[i])
+    if (!same || prevEntries.length !== p.trackIds.length) {
+      const pool = new Map()
+      prevTracks.forEach((id, i) => {
+        if (!prevEntries[i]) return
+        if (!pool.has(id)) pool.set(id, [])
+        pool.get(id).push(prevEntries[i])
+      })
+      p.entryIds = p.trackIds.map((id) => pool.get(id)?.shift() ?? newEntryId())
+      p.entryTrackIds = [...p.trackIds]
+    }
+    return p.entryIds
+  }
+  /** Replaces the playlist's contents with `entries` ([{trackId, entryId}], in order). */
+  function setEntries(p, entries) {
+    p.trackIds = entries.map((e) => e.trackId)
+    p.entryIds = entries.map((e) => e.entryId)
+    p.entryTrackIds = [...p.trackIds]
+  }
+  function entriesOf(p) {
+    const ids = entryIdsOf(p)
+    return p.trackIds.map((trackId, i) => ({ trackId, entryId: ids[i] }))
   }
   /** The playlist the current user may edit, or 404 (not visible) / 403 (shared, not theirs). */
   function ownPlaylist(id, user) {
@@ -261,6 +298,7 @@ export function createMockServer(options = {}) {
   }
 
   const spotify = createSpotify({ opt, catalog, originOf: (req) => originOf(req), addUserPlaylist })
+  const connectSvc = createConnect({ opt, auth })
 
   // ---- Handlers. Each returns undefined after sending a response itself. ----
 
@@ -270,7 +308,7 @@ export function createMockServer(options = {}) {
         name: 'Nocturne Mock',
         version: MOCK_VERSION,
         apiVersion: 1,
-        capabilities: { lyrics: true, likes: true, scrobble: true, admin: true, sources: ['spotify', 'youtube'], uploadMaxBytes: opt.uploadMaxBytes, playlists: true, spotifyImport: true }
+        capabilities: { lyrics: true, likes: true, scrobble: true, admin: true, sources: ['spotify', 'youtube'], uploadMaxBytes: opt.uploadMaxBytes, playlists: true, spotifyImport: true, connect: true }
       })
     },
 
@@ -445,42 +483,86 @@ export function createMockServer(options = {}) {
       catalog.playlistById.delete(p.id)
       sendNoContent(res)
     },
-    /** POST /v1/playlists/:id/tracks {trackIds} → {added, skipped, playlist}; songs already present are skipped. */
+    /**
+     * POST /v1/playlists/:id/tracks {trackIds, allowDuplicates?} → {added, skipped, playlist}.
+     * Without `allowDuplicates`, songs already present (or repeated in the request) are skipped;
+     * with it, every id is appended as a new entry.
+     */
     async addPlaylistTracks({ req, res, user, params }) {
       const p = ownPlaylist(params[0], user)
       const body = await readJson(req, { required: true })
       const ids = trackIdList(body, { required: true })
       if (ids.length === 0) throw new HttpError(400, '"trackIds" must not be empty.')
+      if (body.allowDuplicates !== undefined && typeof body.allowDuplicates !== 'boolean') throw new HttpError(400, '"allowDuplicates" must be a boolean.')
+      const allow = body.allowDuplicates === true
+      const entries = entriesOf(p)
       const skipped = []
       let added = 0
       for (const id of ids) {
-        if (p.trackIds.includes(id)) skipped.push(id)
+        if (!allow && entries.some((e) => e.trackId === id)) skipped.push(id)
         else {
-          p.trackIds.push(id)
+          entries.push({ trackId: id, entryId: newEntryId() })
           added++
         }
       }
+      setEntries(p, entries)
       sendJson(res, 200, { added, skipped, playlist: userPlaylistJson(ctxFor(req, user), p, user) })
     },
-    /** DELETE /v1/playlists/:id/tracks/:trackId → 204 */
+    /** DELETE /v1/playlists/:id/tracks/:trackId → 204; removes every occurrence of the song. */
     removePlaylistTrack({ res, user, params }) {
       const p = ownPlaylist(params[0], user)
       if (!p.trackIds.includes(params[1])) throw new HttpError(404, 'That song is not in this playlist.')
-      p.trackIds = p.trackIds.filter((id) => id !== params[1])
+      setEntries(p, entriesOf(p).filter((e) => e.trackId !== params[1]))
       sendNoContent(res)
     },
-    /** PUT /v1/playlists/:id/tracks {trackIds} (a permutation of the current songs) → PlaylistDetail */
+    /** DELETE /v1/playlists/:id/entries/:entryId → 204; removes that one occurrence. */
+    removePlaylistEntry({ res, user, params }) {
+      const p = ownPlaylist(params[0], user)
+      const entries = entriesOf(p)
+      const i = entries.findIndex((e) => e.entryId === params[1])
+      if (i < 0) throw new HttpError(404, 'That entry is not in this playlist.')
+      entries.splice(i, 1)
+      setEntries(p, entries)
+      sendNoContent(res)
+    },
+    /**
+     * PUT /v1/playlists/:id/tracks → PlaylistDetail. Body is either {entryIds} (a permutation of the
+     * current entry ids) or the legacy {trackIds} (a permutation of the current songs, duplicates
+     * included; occurrences of the same song keep their relative order).
+     */
     async reorderPlaylist({ req, res, user, params }) {
       const p = ownPlaylist(params[0], user)
       const body = await readJson(req, { required: true })
-      const ids = trackIdList(body, { required: true })
-      const a = [...ids].sort()
-      const b = [...p.trackIds].sort()
-      if (a.length !== b.length || a.some((x, i) => x !== b[i])) throw new HttpError(400, '"trackIds" must contain exactly the songs already in the playlist.')
-      p.trackIds = [...ids]
+      const entries = entriesOf(p)
+      if (body.entryIds !== undefined) {
+        const v = body.entryIds
+        if (!Array.isArray(v) || v.length > 5000 || v.some((id) => typeof id !== 'string')) throw new HttpError(400, '"entryIds" must be an array of entry ids.')
+        const byId = new Map(entries.map((e) => [e.entryId, e]))
+        if (v.length !== entries.length || new Set(v).size !== v.length || v.some((id) => !byId.has(id))) {
+          throw new HttpError(400, '"entryIds" must contain exactly the entries already in the playlist.')
+        }
+        setEntries(p, v.map((id) => byId.get(id)))
+      } else {
+        const ids = trackIdList(body, { required: true })
+        const a = [...ids].sort()
+        const b = [...p.trackIds].sort()
+        if (a.length !== b.length || a.some((x, i) => x !== b[i])) throw new HttpError(400, '"trackIds" must contain exactly the songs already in the playlist.')
+        const pool = new Map()
+        for (const e of entries) {
+          if (!pool.has(e.trackId)) pool.set(e.trackId, [])
+          pool.get(e.trackId).push(e)
+        }
+        setEntries(p, ids.map((id) => pool.get(id).shift()))
+      }
       sendJson(res, 200, userPlaylistDetailJson(ctxFor(req, user), p, user))
     },
 
+    /** GET /v1/library/tracks/{id}: one track (used by Connect receivers to resolve ids). */
+    track({ req, res, user, params }) {
+      const t = catalog.trackById.get(params[0])
+      if (!t) throw new HttpError(404, 'Track not found.')
+      sendJson(res, 200, trackJson(ctxFor(req, user), t))
+    },
     like({ res, user, params }) {
       if (!catalog.trackById.has(params[0])) throw new HttpError(404, 'Track not found.')
       const s = stateFor(user.id)
@@ -645,6 +727,7 @@ export function createMockServer(options = {}) {
     [['GET'], /^\/v1\/library\/albums$/, handlers.libraryAlbums, true],
     [['GET'], /^\/v1\/library\/artists$/, handlers.libraryArtists, true],
     [['GET'], /^\/v1\/library\/playlists$/, handlers.libraryPlaylists, true],
+    [['GET'], /^\/v1\/library\/tracks\/([^/]+)$/, handlers.track, true],
     [['PUT'], /^\/v1\/library\/tracks\/([^/]+)$/, handlers.like, true],
     [['DELETE'], /^\/v1\/library\/tracks\/([^/]+)$/, handlers.unlike, true],
     [['GET'], /^\/v1\/albums\/([^/]+)$/, handlers.album, true],
@@ -655,12 +738,14 @@ export function createMockServer(options = {}) {
     [['DELETE'], /^\/v1\/playlists\/([^/]+)$/, handlers.deletePlaylist, true],
     [['POST', 'PUT'], /^\/v1\/playlists\/([^/]+)\/tracks$/, (c) => (c.req.method === 'PUT' ? handlers.reorderPlaylist(c) : handlers.addPlaylistTracks(c)), true],
     [['DELETE'], /^\/v1\/playlists\/([^/]+)\/tracks\/([^/]+)$/, handlers.removePlaylistTrack, true],
+    [['DELETE'], /^\/v1\/playlists\/([^/]+)\/entries\/([^/]+)$/, handlers.removePlaylistEntry, true],
     [['GET'], /^\/v1\/tracks\/([^/]+)\/stream$/, handlers.stream, true],
     [['GET'], /^\/v1\/tracks\/([^/]+)\/lyrics$/, handlers.lyrics, true],
     [['POST'], /^\/v1\/tracks\/([^/]+)\/played$/, handlers.played, true],
     [['GET'], /^\/media\/([^/]+)$/, handlers.media, false],
     [['GET'], /^\/art\/(album|artist|playlist|user|source|spotify)\/([^/]+)\.svg$/, handlers.art, false],
     ...spotify.routes,
+    ...connectSvc.routes,
     ...admin.routes.map(([methods, re, handler]) => [methods, re, handler, 'admin'])
   ]
 
@@ -769,9 +854,11 @@ export function createMockServer(options = {}) {
       for (let i = 0; i < n; i++) spotify.tick()
     },
     spotify,
+    connect: connectSvc,
     close() {
       jobs.stop()
       spotify.stop()
+      connectSvc.stop()
       return new Promise((resolve) => {
         if (!server.listening) return resolve()
         server.close(() => resolve())

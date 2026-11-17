@@ -3,7 +3,8 @@ Playlist service: ownership/visibility rules on top of NOVA's playlists tables.
 
 Storage
   * NOVA library.db  playlists(id, name, created_at)
-                     playlist_tracks(playlist_id, track_id, position)
+                     playlist_tracks(entry_id, playlist_id, track_id, position, added_at)
+                     -- one row per occurrence: a track may appear several times
   * Nocturne db      v1_playlist_meta(playlist_id, owner_id, description, ...)
 
 Rules
@@ -127,17 +128,14 @@ def can_edit(account: dict, meta: Optional[dict]) -> bool:
 # NOVA track helpers (bulk, one backup per call)
 # ---------------------------------------------------------------------------
 
+def playlist_entries(playlist_id: str) -> list[tuple[str, str]]:
+    """[(entry_id, track_id)] in playlist order (a track id may repeat)."""
+    return nova_db.get_playlist_entries(playlist_id)
+
+
 def playlist_track_ids(playlist_id: str) -> list[str]:
-    conn = nova_db.connect()
-    try:
-        rows = conn.execute(
-            "SELECT pt.track_id FROM playlist_tracks pt JOIN tracks t ON t.id = pt.track_id"
-            " WHERE pt.playlist_id=? ORDER BY pt.position, t.title",
-            (playlist_id,),
-        ).fetchall()
-    finally:
-        conn.close()
-    return [r[0] for r in rows]
+    """Track ids in playlist order, one per entry (may contain repeats)."""
+    return [t for _, t in playlist_entries(playlist_id)]
 
 
 def existing_track_ids(ids: Iterable[str]) -> set[str]:
@@ -158,40 +156,104 @@ def existing_track_ids(ids: Iterable[str]) -> set[str]:
     return found
 
 
-def append_tracks(playlist_id: str, track_ids: list[str]) -> tuple[list[str], list[str]]:
-    """Append tracks in the given order. Returns (added, skipped). Existing,
-    unknown and repeated ids are skipped. One NOVA backup for the whole batch."""
-    current = set(playlist_track_ids(playlist_id))
+def _insert_entries(playlist_id: str, track_ids: list[str]) -> list[str]:
+    """Append one entry per id (no checks). One NOVA backup per call. Returns entry ids."""
+    if not track_ids:
+        return []
+    nova_db._backup_before_write()
+    now = _now()
+    entry_ids = [nova_db.new_entry_id() for _ in track_ids]
+    conn = nova_db.connect()
+    try:
+        with conn:
+            max_pos = conn.execute(
+                "SELECT COALESCE(MAX(position), -1) FROM playlist_tracks WHERE playlist_id=?",
+                (playlist_id,),
+            ).fetchone()[0]
+            conn.executemany(
+                "INSERT INTO playlist_tracks(entry_id, playlist_id, track_id, position, added_at)"
+                " VALUES (?,?,?,?,?)",
+                [(e, playlist_id, tid, max_pos + 1 + i, now)
+                 for i, (e, tid) in enumerate(zip(entry_ids, track_ids))],
+            )
+    finally:
+        conn.close()
+    return entry_ids
+
+
+def append_tracks(playlist_id: str, track_ids: list[str],
+                  allow_duplicates: bool = False) -> tuple[list[str], list[str]]:
+    """Append tracks in the given order. Returns (added, skipped).
+    Unknown ids are always skipped. Without `allow_duplicates`, ids already in the
+    playlist (or repeated in the request) are skipped too; with it they are appended
+    again as extra occurrences. One NOVA backup for the whole batch."""
+    current = set(playlist_track_ids(playlist_id)) if not allow_duplicates else set()
     known = existing_track_ids(track_ids)
     added: list[str] = []
     skipped: list[str] = []
     seen: set[str] = set()
     for tid in track_ids:
-        if tid in current or tid in seen or tid not in known:
+        if tid not in known or (not allow_duplicates and (tid in current or tid in seen)):
             skipped.append(tid)
             continue
         seen.add(tid)
         added.append(tid)
-    if added:
-        nova_db._backup_before_write()
-        conn = nova_db.connect()
-        try:
-            with conn:
-                max_pos = conn.execute(
-                    "SELECT COALESCE(MAX(position), -1) FROM playlist_tracks WHERE playlist_id=?",
-                    (playlist_id,),
-                ).fetchone()[0]
-                conn.executemany(
-                    "INSERT OR IGNORE INTO playlist_tracks(playlist_id, track_id, position) VALUES (?,?,?)",
-                    [(playlist_id, tid, max_pos + 1 + i) for i, tid in enumerate(added)],
-                )
-        finally:
-            conn.close()
+    _insert_entries(playlist_id, added)
     return added, skipped
 
 
 def set_order(playlist_id: str, ordered_ids: list[str]) -> None:
+    """Order by track ids (n-th occurrence of an id -> n-th entry of that track)."""
     nova_db.reorder_playlist_tracks(playlist_id, ordered_ids)
+
+
+def set_entry_order(playlist_id: str, entry_ids: list[str]) -> None:
+    nova_db.reorder_playlist_entries(playlist_id, entry_ids)
+
+
+def remove_entry(playlist_id: str, entry_id: str) -> bool:
+    return nova_db.remove_playlist_entry(playlist_id, entry_id)
+
+
+def sync_sequence(playlist_id: str, desired: list[str], *, add_missing: bool = True) -> dict:
+    """
+    Make the playlist start with exactly the track sequence `desired` (repeats
+    allowed), reusing existing entries: the n-th occurrence of a track in `desired`
+    takes the n-th existing entry of that track; missing occurrences are appended
+    (when `add_missing`) and every entry not used by `desired` (e.g. tracks the user
+    added by hand) keeps its relative order after them. Nothing is ever removed.
+    Returns {"added": n, "reordered": bool}.
+    """
+    desired = [t for t in desired if t]
+    current = playlist_entries(playlist_id)
+    have: dict[str, int] = {}
+    for _, t in current:
+        have[t] = have.get(t, 0) + 1
+    need: dict[str, int] = {}
+    missing: list[str] = []
+    for t in desired:
+        need[t] = need.get(t, 0) + 1
+        if need[t] > have.get(t, 0):
+            missing.append(t)
+    added = 0
+    if missing and add_missing:
+        missing = [t for t in missing if t in existing_track_ids(missing)]
+        _insert_entries(playlist_id, missing)
+        added = len(missing)
+        current = playlist_entries(playlist_id)
+    pool: dict[str, list[str]] = {}
+    for e, t in current:
+        pool.setdefault(t, []).append(e)
+    ordered: list[str] = []
+    for t in desired:
+        if pool.get(t):
+            ordered.append(pool[t].pop(0))
+    used = set(ordered)
+    ordered += [e for e, _ in current if e not in used]
+    reordered = ordered != [e for e, _ in current]
+    if reordered:
+        set_entry_order(playlist_id, ordered)
+    return {"added": added, "reordered": reordered}
 
 
 def rename(playlist_id: str, name: str) -> None:

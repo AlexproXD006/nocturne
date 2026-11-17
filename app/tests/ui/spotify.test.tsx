@@ -41,12 +41,14 @@ vi.mock('@/services', async () => {
     toggle: () => undefined,
     playTracks: async () => undefined
   }))
+  const { connectMocks } = await import('../helpers/services-mock')
   return {
     api: h.api,
     platform: { kind: 'web', hostedOrigin: null, openExternal: h.openExternal, secureAtRest: async () => false, window: null },
     getEngine: () => null,
     useSession,
-    usePlayer
+    usePlayer,
+    ...connectMocks(usePlayer)
   }
 })
 

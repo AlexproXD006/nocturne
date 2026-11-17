@@ -50,7 +50,9 @@ DECISION_APPLY = "apply"
 DECISION_REVIEW = "review"
 DECISION_NO_MATCH = "no_match"
 
-_ALLOWED_HOST_SUFFIXES = ("itunes.apple.com", ".mzstatic.com", "api.deezer.com", ".dzcdn.net")
+# i.scdn.co / *.spotifycdn.com: Spotify album images (Spotify import fallback covers).
+_ALLOWED_HOST_SUFFIXES = ("itunes.apple.com", ".mzstatic.com", "api.deezer.com", ".dzcdn.net",
+                          "i.scdn.co", ".spotifycdn.com")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

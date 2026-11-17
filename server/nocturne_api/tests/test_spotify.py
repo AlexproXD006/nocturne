@@ -431,8 +431,8 @@ async def test_full_import(client, fake_spotify, monkeypatch):
     await _wait_worker()
     d = (await client.get(f"/spotify/imports/{imp['id']}", headers=h)).json()
     assert d["status"] == "done", d
-    assert d["total"] == 7                    # 5 unique tracks + episode + local file
-    assert d["matched"] == 2 and d["downloaded"] == 2 and d["failed"] == 3 and d["pending"] == 0
+    assert d["total"] == 8                    # 6 track entries (Reloj twice) + episode + local file
+    assert d["matched"] == 3 and d["downloaded"] == 2 and d["failed"] == 3 and d["pending"] == 0
     reasons = {f["title"]: f["reason"] for f in d["failures"]}
     assert "Sin Resultado" in reasons and "YouTube" in reasons["Sin Resultado"]
     assert any("Episodio" in f["reason"] for f in d["failures"])
@@ -445,7 +445,9 @@ async def test_full_import(client, fake_spotify, monkeypatch):
     p = (await client.get(f"/playlists/{d['playlistId']}", headers=h)).json()
     assert p["name"] == "Favs 2.0" and p["description"] == "Importada de Spotify"
     assert p["owner"]["id"] == uid and p["editable"] is True
-    assert [t["id"] for t in p["tracks"]] == ["lib_hitboy", "yt_good1", "lib_reloj", "yt_good2"]
+    # the repeated Spotify entry is a second occurrence at its Spotify position
+    assert [t["id"] for t in p["tracks"]] == ["lib_hitboy", "yt_good1", "lib_reloj", "yt_good2", "lib_reloj"]
+    assert len({t["entryId"] for t in p["tracks"]}) == 5
 
     lst = (await client.get("/spotify/imports", headers=h)).json()
     assert lst["items"][0]["id"] == imp["id"]
@@ -456,8 +458,10 @@ async def test_full_import(client, fake_spotify, monkeypatch):
     await _wait_worker()
     d2 = (await client.get(f"/spotify/imports/{r.json()['id']}", headers=h)).json()
     assert d2["playlistId"] == d["playlistId"]
-    assert d2["matched"] == 4 and d2["downloaded"] == 0
+    assert d2["matched"] == 5 and d2["downloaded"] == 0
     assert dm.downloads == []
+    p2 = (await client.get(f"/playlists/{d['playlistId']}", headers=h)).json()
+    assert [t["id"] for t in p2["tracks"]] == ["lib_hitboy", "yt_good1", "lib_reloj", "yt_good2", "lib_reloj"]
 
     # other users can't see the import
     h2, _ = await _login(client, "sp_other")

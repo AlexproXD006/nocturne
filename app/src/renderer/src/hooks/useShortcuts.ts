@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { usePlayer } from '../services'
+import { playback } from '../services'
 import { useUi } from '../store/ui'
 import { useNav } from '../store/nav'
 
@@ -22,7 +22,7 @@ export function useShortcuts(): void {
         return
       }
       if (isTyping(e.target) || e.altKey || mod) return
-      const p = usePlayer.getState()
+      const p = playback
       const ui = useUi.getState()
       switch (e.key) {
         case ' ':
@@ -33,20 +33,20 @@ export function useShortcuts(): void {
         case 'ArrowRight':
           e.preventDefault()
           if (e.shiftKey) void p.next()
-          else p.seek(p.position + 5)
+          else p.seek(p.position() + 5)
           break
         case 'ArrowLeft':
           e.preventDefault()
           if (e.shiftKey) void p.previous()
-          else p.seek(Math.max(0, p.position - 5))
+          else p.seek(Math.max(0, p.position() - 5))
           break
         case 'ArrowUp':
           e.preventDefault()
-          p.setVolume(p.volume + 0.05)
+          p.setVolume(p.volume() + 0.05)
           break
         case 'ArrowDown':
           e.preventDefault()
-          p.setVolume(p.volume - 0.05)
+          p.setVolume(p.volume() - 0.05)
           break
         case 'm':
         case 'M':
@@ -62,11 +62,11 @@ export function useShortcuts(): void {
           break
         case 'f':
         case 'F':
-          if (p.queue.items.length) ui.setFullscreen(!ui.fullscreen)
+          if (p.hasItem()) ui.setFullscreen(!ui.fullscreen)
           break
         case 's':
         case 'S':
-          p.setShuffle(!p.queue.shuffle)
+          p.setShuffle(!p.shuffle())
           break
         case 'r':
         case 'R':

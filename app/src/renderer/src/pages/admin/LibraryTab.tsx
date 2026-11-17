@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { FileText, Loader2, Music, Play, Search, Trash2, X } from 'lucide-react'
 import type { AdminTrack } from '../../api/types'
 import { describeError } from '../../api/errors'
-import { api, usePlayer } from '../../services'
+import { api, playback } from '../../services'
 import { useUi } from '../../store/ui'
 import { useNav } from '../../store/nav'
 import { usePaged } from '../../hooks/usePaged'
@@ -14,7 +14,7 @@ import { formatBytes, relativeTime } from './format'
 import { Card, Chip, inputClass, useDebounced, useTick } from './ui'
 
 function TrackRow({ t, now, onDelete }: { t: AdminTrack; now: number; onDelete: () => void }): ReactNode {
-  const play = (): void => void usePlayer.getState().playTracks([t], 0, { type: 'tracks', name: 'Admin library' })
+  const play = (): void => void playback.playTracks([t], 0, { type: 'tracks', name: 'Admin library' })
   return (
     <li className="flex items-center gap-3 rounded-xl p-2 hover:bg-white/[0.04]">
       <button

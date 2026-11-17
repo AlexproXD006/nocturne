@@ -5,7 +5,8 @@ import { useLyrics } from '../hooks/useLyrics'
 import { readPosition, useFrame } from '../hooks/useClock'
 import { findActiveLine, lineProgress, type LyricLine, type LyricWord } from '../lyrics/lrc'
 import { computeGaps, findActiveWord, findGap, wordProgress } from '../lyrics/timing'
-import { usePlayer } from '../services'
+import { playback } from '../services'
+import { useNowDuration, useNowPositionTick, useNowStatus } from '../hooks/useNowPlaying'
 import { prefersReducedMotion, useSettings } from '../store/settings'
 import { pickImage } from '../lib/url'
 import { ExternalLink, Spinner, cx } from './common'
@@ -51,9 +52,10 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
   const motion = useSettings((s) => s.motion)
   const reduced = prefersReducedMotion(motion)
   const state = useLyrics(track, enabled)
-  const seek = usePlayer((s) => s.seek)
-  const playing = usePlayer((s) => s.status === 'playing' || s.status === 'buffering')
-  const duration = usePlayer((s) => s.duration)
+  const seek = playback.seek
+  const nowStatus = useNowStatus()
+  const playing = nowStatus === 'playing' || nowStatus === 'buffering'
+  const duration = useNowDuration()
   const containerRef = useRef<HTMLDivElement>(null)
   const lineRefs = useRef<Array<HTMLElement | null>>([])
   const gapRefs = useRef<Array<HTMLElement | null>>([])
@@ -174,7 +176,7 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
   }
   useFrame(tick, Boolean(synced) && playing)
   // Also update after seeks while paused.
-  usePlayer((s) => s.position)
+  useNowPositionTick()
   useEffect(() => {
     if (!playing) tick()
   })

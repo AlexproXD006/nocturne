@@ -10,6 +10,8 @@ import type {
   Playlist,
   PlaylistDetail,
   AddToPlaylistResult,
+  AddToPlaylistOptions,
+  PlaylistTrack,
   CreatePlaylistInput,
   UpdatePlaylistInput,
   AdminJob,
@@ -370,6 +372,11 @@ export class ApiClient {
     return this.request('GET', '/v1/library/playlists', { signal, query: { offset, limit } })
   }
 
+  /** A single track by id (GET /v1/library/tracks/{id}). */
+  track(id: string, signal?: AbortSignal): Promise<Track> {
+    return this.request('GET', `/v1/library/tracks/${encodeURIComponent(id)}`, { signal })
+  }
+
   album(id: string, signal?: AbortSignal): Promise<AlbumDetail> {
     return this.request('GET', `/v1/albums/${encodeURIComponent(id)}`, { signal })
   }
@@ -397,24 +404,40 @@ export class ApiClient {
     return this.request('DELETE', `/v1/playlists/${encodeURIComponent(id)}`)
   }
 
-  /** Appends songs; ones already in the playlist come back in `skipped`. */
-  async addToPlaylist(id: string, trackIds: string[]): Promise<AddToPlaylistResult> {
+  /**
+   * Appends songs. Ones already in the playlist come back in `skipped`, unless `allowDuplicates` is
+   * set (servers that support duplicates then append them again; older ones ignore the flag).
+   */
+  async addToPlaylist(id: string, trackIds: string[], opts: AddToPlaylistOptions = {}): Promise<AddToPlaylistResult> {
     const r = await this.request<Omit<AddToPlaylistResult, 'added'> & { added: number | string[] }>(
       'POST',
       `/v1/playlists/${encodeURIComponent(id)}/tracks`,
-      { body: { trackIds } }
+      { body: opts.allowDuplicates ? { trackIds, allowDuplicates: true } : { trackIds } }
     )
     // Servers report `added` either as a count or as the list of added ids.
     return { ...r, added: Array.isArray(r.added) ? r.added.length : r.added }
   }
 
+  /** Removes every occurrence of a song (works on servers without entry ids). */
   removeFromPlaylist(id: string, trackId: string): Promise<void> {
     return this.request('DELETE', `/v1/playlists/${encodeURIComponent(id)}/tracks/${encodeURIComponent(trackId)}`)
   }
 
-  /** Replaces the order; `trackIds` must be a permutation of the playlist's current songs. */
-  reorderPlaylist(id: string, trackIds: string[]): Promise<PlaylistDetail> {
-    return this.request('PUT', `/v1/playlists/${encodeURIComponent(id)}/tracks`, { body: { trackIds } })
+  /** Removes one occurrence of a song, by its `entryId`. */
+  removePlaylistEntry(id: string, entryId: string): Promise<void> {
+    return this.request('DELETE', `/v1/playlists/${encodeURIComponent(id)}/entries/${encodeURIComponent(entryId)}`)
+  }
+
+  /**
+   * Replaces the order. Given the playlist's tracks in their new order, sends `{entryIds}` when every
+   * track has an `entryId`, else the legacy `{trackIds}`. A plain id list is always sent as `trackIds`.
+   * Either way it must be a permutation of the playlist's current contents.
+   */
+  reorderPlaylist(id: string, order: ReadonlyArray<string | Pick<PlaylistTrack, 'id' | 'entryId'>>): Promise<PlaylistDetail> {
+    const items = order.map((x) => (typeof x === 'string' ? { id: x, entryId: undefined } : x))
+    const byEntry = items.length > 0 && items.every((t) => typeof t.entryId === 'string' && t.entryId !== '')
+    const body = byEntry ? { entryIds: items.map((t) => t.entryId as string) } : { trackIds: items.map((t) => t.id) }
+    return this.request('PUT', `/v1/playlists/${encodeURIComponent(id)}/tracks`, { body })
   }
 
   stream(trackId: string, signal?: AbortSignal): Promise<StreamInfo> {
@@ -447,6 +470,11 @@ export class ApiClient {
 
   connectUnregister(id: string): Promise<void> {
     return this.request('DELETE', `/v1/connect/sessions/${encodeURIComponent(id)}`)
+  }
+
+  /** Renames a session (PATCH; servers without it answer 404/405, which callers ignore). */
+  connectRename(id: string, name: string): Promise<void> {
+    return this.request('PATCH', `/v1/connect/sessions/${encodeURIComponent(id)}`, { body: { name } })
   }
 
   connectPutState(id: string, state: ConnectPlaybackState): Promise<void> {

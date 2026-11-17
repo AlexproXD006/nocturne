@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { getEngine, usePlayer } from '../services'
+import { getEngine, useConnect, usePlayer } from '../services'
 
-/** Current playback position in seconds, read straight from the engine (sub-frame accurate). */
+/** Current playback position in seconds: read straight from the engine (sub-frame accurate),
+ *  or interpolated from the controlled Connect device's last reported state. */
 export function readPosition(): number {
+  const c = useConnect.getState()
+  if (c.remote) return c.remotePosition()
   return getEngine()?.currentTime ?? usePlayer.getState().position
 }
 

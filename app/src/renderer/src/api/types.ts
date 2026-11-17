@@ -70,9 +70,17 @@ export interface Playlist {
   editable?: boolean
 }
 
+/**
+ * A song as it appears in a playlist. The same song may appear more than once; servers that support
+ * that give every occurrence its own `entryId` (unique within the playlist). Older servers omit it.
+ */
+export interface PlaylistTrack extends Track {
+  entryId?: string
+}
+
 export interface PlaylistDetail extends Playlist {
-  /** In playlist order. */
-  tracks: Track[]
+  /** In playlist order. May contain the same song more than once. */
+  tracks: PlaylistTrack[]
 }
 
 export interface CreatePlaylistInput {
@@ -84,12 +92,20 @@ export interface CreatePlaylistInput {
   trackIds?: string[]
 }
 
+export interface AddToPlaylistOptions {
+  /** Append songs even when they are already in the playlist (another occurrence). */
+  allowDuplicates?: boolean
+}
+
 export interface UpdatePlaylistInput {
   name?: string
   description?: string
 }
 
-/** Response of POST /v1/playlists/:id/tracks. Songs already in the playlist are skipped, not duplicated. */
+/**
+ * Response of POST /v1/playlists/:id/tracks. Unless `allowDuplicates` was sent, songs already in the
+ * playlist are skipped (listed in `skipped`), not duplicated.
+ */
 export interface AddToPlaylistResult {
   added: number
   skipped: string[]
@@ -219,9 +235,42 @@ export interface ConnectPlaybackState {
   duration?: number
   shuffle?: boolean
   repeat?: 'off' | 'all' | 'one'
+  /** 0..1 */
   volume?: number
   muted?: boolean
   queueLength?: number
+  /** What the queue was started from (album, playlist…), when known. */
+  context?: ConnectContext | null
+  /** "Next from <context>": ids of the next few context tracks (≤ CONNECT_UP_NEXT). */
+  upNext?: string[]
+  /** "Next in queue": ids of the user-queued tracks, in play order (≤ CONNECT_UP_NEXT). */
+  userQueue?: string[]
+  /** Sender clock (ms since epoch) when this snapshot was taken. Informational only. */
+  updatedAt?: number
+}
+
+export interface ConnectContext {
+  type: 'album' | 'playlist' | 'artist' | 'search' | 'library' | 'home' | 'tracks'
+  id?: string
+  name?: string
+}
+
+/** Most track ids a playContext / addToQueue / playNext command may carry (server-enforced). */
+export const CONNECT_MAX_TRACK_IDS = 5000
+/** Upcoming ids included in a reported state. */
+export const CONNECT_UP_NEXT = 50
+
+/** Payload of the `playContext` command: the receiving player loads these tracks and starts at `startIndex`. */
+export interface ConnectPlayContextPayload {
+  context: ConnectContext
+  trackIds: string[]
+  startIndex: number
+  shuffle?: boolean
+}
+
+/** Payload of `addToQueue` / `playNext`. */
+export interface ConnectTrackIdsPayload {
+  trackIds: string[]
 }
 
 export interface ConnectSession {
@@ -241,6 +290,7 @@ export interface ConnectSessionList {
 export type ConnectCommandKind =
   | 'play' | 'pause' | 'toggle' | 'next' | 'previous'
   | 'seek' | 'setShuffle' | 'setRepeat' | 'setVolume' | 'stop' | 'transferTo'
+  | 'playContext' | 'addToQueue' | 'playNext'
 
 export interface ConnectCommand {
   kind: ConnectCommandKind
@@ -250,7 +300,8 @@ export interface ConnectCommand {
 /** Events pushed down the SSE stream. */
 export type ConnectEvent =
   | { type: 'command'; kind: ConnectCommandKind; payload: Record<string, unknown> }
-  | { type: 'state'; state: ConnectPlaybackState }
+  /** `sessionId` names the session whose state changed (absent on older servers: then it is our own). */
+  | { type: 'state'; sessionId?: string; state: ConnectPlaybackState }
   | { type: 'closed' }
 
 export interface Page<T> {

@@ -1,21 +1,20 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { ListMusic, Maximize2, Mic2, Pause, Play } from 'lucide-react'
-import { usePlayer } from '../services'
-import { currentItem } from '../player/queue'
+import { ListMusic, Maximize2, Mic2, MonitorSpeaker, Pause, Play } from 'lucide-react'
+import { playback, useConnect } from '../services'
 import { useUi } from '../store/ui'
+import { useHasNowPlaying, useIsRemote, useNowDuration, useNowStatus, useNowTrack } from '../hooks/useNowPlaying'
 import { useNav } from '../store/nav'
 import { readPosition, useFrame } from '../hooks/useClock'
-import { Artwork, IconButton, LikeButton } from './common'
+import { Artwork, IconButton, LikeButton, cx } from './common'
 import { SeekBar, TransportControls, VolumeControl } from './controls'
-import { DevicesButton } from './Devices'
+import { DevicesButton, ListeningBar, RemoteSuggestion, openDevices } from './Devices'
 import { AddToPlaylistButton } from './Playlists'
 
 function NowPlayingInfo(): ReactNode {
-  const item = usePlayer((s) => currentItem(s.queue))
+  const t = useNowTrack()
   const go = useNav((s) => s.go)
   const setFullscreen = useUi((s) => s.setFullscreen)
-  if (!item) return <div className="min-w-0 flex-1" />
-  const t = item.track
+  if (!t) return <div className="min-w-0 flex-1" />
   return (
     <div className="flex min-w-0 flex-1 items-center gap-3">
       <button type="button" aria-label="Open now playing" onClick={() => setFullscreen(true)} className="group relative shrink-0">
@@ -54,10 +53,11 @@ export function PlayerBar(): ReactNode {
   const panel = useUi((s) => s.panel)
   const togglePanel = useUi((s) => s.togglePanel)
   const setFullscreen = useUi((s) => s.setFullscreen)
-  const hasItem = usePlayer((s) => s.queue.items.length > 0)
+  const hasItem = useHasNowPlaying()
 
   return (
-    <footer className="app-chrome hidden h-[84px] shrink-0 items-center gap-6 border-t border-line bg-ink-950 px-4 md:flex" aria-label="Player">
+    <div className="app-chrome hidden shrink-0 flex-col md:flex">
+    <footer className="flex h-[84px] shrink-0 items-center gap-6 border-t border-line bg-ink-950 px-4" aria-label="Player">
       <NowPlayingInfo />
       <div className="flex w-[min(42vw,640px)] flex-col items-center gap-1">
         <TransportControls />
@@ -77,15 +77,19 @@ export function PlayerBar(): ReactNode {
         </IconButton>
       </div>
     </footer>
+    <ListeningBar className="h-6 justify-end" />
+    </div>
   )
 }
 
 /** Mobile mini player that sits above the tab bar. Tap to open fullscreen. */
 export function MiniPlayer(): ReactNode {
-  const item = usePlayer((s) => currentItem(s.queue))
-  const status = usePlayer((s) => s.status)
-  const duration = usePlayer((s) => s.duration)
-  const toggle = usePlayer((s) => s.toggle)
+  const t = useNowTrack()
+  const status = useNowStatus()
+  const duration = useNowDuration()
+  const remote = useIsRemote()
+  const connectActive = useConnect((s) => s.active)
+  const toggle = playback.toggle
   const setFullscreen = useUi((s) => s.setFullscreen)
   const barRef = useRef<HTMLDivElement>(null)
   const playing = status === 'playing' || status === 'buffering' || status === 'loading'
@@ -96,22 +100,39 @@ export function MiniPlayer(): ReactNode {
   useFrame(paint, status === 'playing')
   useEffect(paint)
 
-  if (!item) return null
-  const t = item.track
+  if (!t) {
+    // Controlling a device that has nothing loaded: still show where we are listening.
+    if (remote) return <div className="px-2 md:hidden"><ListeningBar className="h-9 rounded-xl" /></div>
+    return connectActive ? <div className="px-2 md:hidden"><RemoteSuggestion /></div> : null
+  }
   return (
     <div className="px-2 md:hidden">
+      <div className={cx('overflow-hidden rounded-xl shadow-xl shadow-black/40', remote && 'ring-1 ring-accent/40')}>
       <div
         role="button"
         tabIndex={0}
         onClick={() => setFullscreen(true)}
         onKeyDown={(e) => e.key === 'Enter' && setFullscreen(true)}
-        className="relative flex items-center gap-3 overflow-hidden rounded-xl bg-ink-700/90 p-2 pr-3 shadow-xl shadow-black/40 backdrop-blur-xl"
+        className={cx('relative flex items-center gap-3 overflow-hidden bg-ink-700/90 p-2 pr-3 backdrop-blur-xl', !remote && 'rounded-xl')}
       >
         <Artwork images={t.artwork} size={44} className="h-11 w-11 shrink-0" rounded="rounded-md" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{t.title}</p>
           <p className="truncate text-xs text-fg-muted">{t.artists.map((a) => a.name).join(', ')}</p>
         </div>
+        {connectActive && (
+          <button
+            type="button"
+            aria-label="Devices"
+            onClick={(e) => {
+              e.stopPropagation()
+              openDevices()
+            }}
+            className={cx('flex h-9 w-9 items-center justify-center rounded-full active:scale-90', remote ? 'text-accent' : 'text-fg-muted')}
+          >
+            <MonitorSpeaker className="h-5 w-5" />
+          </button>
+        )}
         <LikeButton trackId={t.id} serverValue={t.liked} />
         <button
           type="button"
@@ -127,6 +148,8 @@ export function MiniPlayer(): ReactNode {
         <div className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-white/15">
           <div ref={barRef} className="h-full origin-left rounded-full bg-fg" style={{ transform: 'scaleX(0)' }} />
         </div>
+      </div>
+      <ListeningBar className="h-7" />
       </div>
     </div>
   )

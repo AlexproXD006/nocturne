@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS, prefersReducedMotion, sanitizeSettings, useSettings } from '@/store/settings'
+import { DEFAULT_ADAPTIVE } from '@/lib/adaptive'
 
 const KEY = 'nocturne.settings.v1'
 
@@ -19,8 +20,8 @@ describe('sanitizeSettings', () => {
   })
 
   it('keeps valid values', () => {
-    const valid = { crossfade: 5, visualizer: 'spectrum', motion: 'reduced', lyrics: false, volume: 0.25, muted: true, theme: 'nord', accent: 'blue' }
-    expect(sanitizeSettings(valid)).toEqual(valid)
+    const valid = { crossfade: 5, visualizer: 'spectrum', motion: 'reduced', lyrics: false, volume: 0.25, muted: true, theme: 'nord', accent: 'blue', deviceName: 'Living room' }
+    expect(sanitizeSettings(valid)).toEqual({ ...valid, adaptive: DEFAULT_SETTINGS.adaptive })
   })
 
   it('clamps and rounds crossfade into 0..12', () => {
@@ -141,6 +142,42 @@ describe('useSettings', () => {
       const mod = await import('@/store/settings')
       expect(mod.useSettings.getState()).toMatchObject(mod.DEFAULT_SETTINGS)
     })
+  })
+})
+
+describe('adaptive settings', () => {
+  it('defaults are nested under `adaptive` and persisted with the rest', () => {
+    expect(DEFAULT_SETTINGS.adaptive).toEqual(DEFAULT_ADAPTIVE)
+    useSettings.getState().updateAdaptive({ blur: 20 })
+    const saved = JSON.parse(localStorage.getItem(KEY)!)
+    expect(saved.adaptive).toMatchObject({ blur: 20, preset: 'custom' })
+    expect(useSettings.getState().adaptive.blur).toBe(20)
+  })
+
+  it('sanitizes the nested object (garbage → defaults, values clamped)', () => {
+    expect(sanitizeSettings({ adaptive: 'nope' }).adaptive).toEqual(DEFAULT_ADAPTIVE)
+    expect(sanitizeSettings({ adaptive: { blur: 999, motion: 'spin' } }).adaptive).toMatchObject({ blur: 80, motion: 'spin', style: 'cover' })
+  })
+
+  it('updateAdaptive applies presets and marks hand edits as custom', () => {
+    useSettings.getState().updateAdaptive({ preset: 'concert' })
+    expect(useSettings.getState().adaptive).toMatchObject({ preset: 'concert', motion: 'pulse', style: 'aurora' })
+    useSettings.getState().updateAdaptive({ glow: 10 })
+    expect(useSettings.getState().adaptive).toMatchObject({ preset: 'custom', glow: 10, motion: 'pulse' })
+  })
+
+  it('reset restores the default adaptive options', () => {
+    useSettings.getState().updateAdaptive({ preset: 'vinyl' })
+    useSettings.getState().reset()
+    expect(useSettings.getState().adaptive).toEqual(DEFAULT_ADAPTIVE)
+  })
+
+  it('hydrates adaptive options from older saves without them', async () => {
+    localStorage.setItem(KEY, JSON.stringify({ theme: 'adaptive' }))
+    vi.resetModules()
+    const mod = await import('@/store/settings')
+    expect(mod.useSettings.getState().adaptive).toEqual(DEFAULT_ADAPTIVE)
+    vi.resetModules()
   })
 })
 

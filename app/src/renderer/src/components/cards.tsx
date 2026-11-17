@@ -4,7 +4,7 @@ import type { Album, Artist, Playlist } from '../api/types'
 import { Artwork, cx } from './common'
 import { artistNames } from '../lib/format'
 import { useNav } from '../store/nav'
-import { api, usePlayer } from '../services'
+import { api, playback } from '../services'
 import { useUi } from '../store/ui'
 import { describeError } from '../api/errors'
 
@@ -17,13 +17,13 @@ async function playCollection(card: CardItem): Promise<void> {
   try {
     if (card.kind === 'album') {
       const a = await api.album(card.item.id)
-      await usePlayer.getState().playTracks(a.tracks, 0, { type: 'album', id: a.id, name: a.title })
+      await playback.playTracks(a.tracks, 0, { type: 'album', id: a.id, name: a.title })
     } else if (card.kind === 'playlist') {
       const p = await api.playlist(card.item.id)
-      await usePlayer.getState().playTracks(p.tracks, 0, { type: 'playlist', id: p.id, name: p.name })
+      await playback.playTracks(p.tracks, 0, { type: 'playlist', id: p.id, name: p.name })
     } else {
       const ar = await api.artist(card.item.id)
-      await usePlayer.getState().playTracks(ar.topTracks, 0, { type: 'artist', id: ar.id, name: ar.name })
+      await playback.playTracks(ar.topTracks, 0, { type: 'artist', id: ar.id, name: ar.name })
     }
   } catch (err) {
     useUi.getState().toast(describeError(err), 'error')

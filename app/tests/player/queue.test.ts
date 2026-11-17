@@ -259,14 +259,13 @@ describe('insertNext', () => {
     expect(orderedIds(q)).toEqual(['n0', 'n1'])
   })
 
-  it('keeps `ordered` in sync while shuffled: inserted after the current item in the original order', () => {
+  it('while shuffled: goes to the front of the user queue and leaves the context order alone', () => {
     const base = mk(5, 2, { shuffle: true, rng: rng0 }) // current = t2
     const q = Q.insertNext(base, tracks(2, 'n'), counter('x'))
     expect(q.items.slice(1, 3).map((i) => i.track.id)).toEqual(['n0', 'n1'])
+    expect(q.items.slice(1, 3).every((i) => i.queued)).toBe(true)
     expect(q.index).toBe(0)
-    expect(orderedIds(q)).toEqual(['t0', 't1', 't2', 'n0', 'n1', 't3', 't4'])
-    // both lists hold the same set of items
-    expect(new Set(q.items.map((i) => i.uid))).toEqual(new Set(q.ordered!.map((i) => i.uid)))
+    expect(orderedIds(q)).toEqual(['t0', 't1', 't2', 't3', 't4'])
   })
 
   it('does not mutate the original queue', () => {
@@ -283,9 +282,9 @@ describe('insertNext', () => {
 })
 
 describe('append', () => {
-  it('adds to the end', () => {
+  it('adds to the end of the user queue, before the rest of the context', () => {
     const q = Q.append(mk(2, 0), tracks(2, 'n'))
-    expect(ids(q)).toEqual(['t0', 't1', 'n0', 'n1'])
+    expect(ids(q)).toEqual(['t0', 'n0', 'n1', 't1'])
     expect(q.index).toBe(0)
   })
 
@@ -305,11 +304,11 @@ describe('append', () => {
     expect(orderedIds(q)).toEqual(['n0'])
   })
 
-  it('keeps `ordered` in sync while shuffled', () => {
+  it('while shuffled: queues after the current item and never enters `ordered`', () => {
     const base = mk(4, 1, { shuffle: true, rng: rng0 })
     const q = Q.append(base, tracks(2, 'n'))
-    expect(ids(q).slice(-2)).toEqual(['n0', 'n1'])
-    expect(orderedIds(q)).toEqual(['t0', 't1', 't2', 't3', 'n0', 'n1'])
+    expect(ids(q).slice(1, 3)).toEqual(['n0', 'n1'])
+    expect(orderedIds(q)).toEqual(['t0', 't1', 't2', 't3'])
   })
 })
 
@@ -514,7 +513,8 @@ describe('setShuffle', () => {
     q = Q.append(q, tracks(1, 'n'))
     q = Q.insertNext(q, tracks(1, 'm'))
     const off = Q.setShuffle(q, false)
-    expect(ids(off)).toEqual(['t0', 'm0', 't1', 't2', 'n0'])
+    // The user queue (play next m0, then queued n0) stays right after the current song.
+    expect(ids(off)).toEqual(['t0', 'm0', 'n0', 't1', 't2'])
     expect(cur(off)).toBe('t0')
   })
 
@@ -573,5 +573,124 @@ describe('upcoming', () => {
   it('is empty at the end and for an empty queue', () => {
     expect(Q.upcoming(mk(3, 2))).toEqual([])
     expect(Q.upcoming(Q.emptyQueue)).toEqual([])
+  })
+})
+
+describe('two-tier queue (user queue + context)', () => {
+  const userIds = (q: Q.QueueState): string[] => Q.userUpcoming(q).map((i) => i.track.id)
+  const ctxIds = (q: Q.QueueState): string[] => Q.contextUpcoming(q).map((i) => i.track.id)
+  /** Plays to the end (manual next), returning the order of track ids played after the current one. */
+  const playOrder = (q: Q.QueueState): string[] => {
+    const out: string[] = []
+    let x: Q.QueueState | null = q
+    while ((x = Q.advance(x, false))) out.push(cur(x)!)
+    return out
+  }
+
+  it('play next goes to the front, add to queue to the end of the user queue', () => {
+    let q = mk(4, 0)
+    q = Q.append(q, [track('a')])
+    q = Q.append(q, [track('b')])
+    q = Q.insertNext(q, [track('n')])
+    expect(userIds(q)).toEqual(['n', 'a', 'b'])
+    expect(ctxIds(q)).toEqual(['t1', 't2', 't3'])
+  })
+
+  it('the user queue plays before the context, then the context continues (shuffle off)', () => {
+    const q = Q.append(Q.insertNext(mk(3, 0), [track('n')]), [track('a')])
+    expect(playOrder(q)).toEqual(['n', 'a', 't1', 't2'])
+  })
+
+  it('with shuffle on, the user queue plays in order first and then the shuffled context', () => {
+    let q = mk(5, 0, { shuffle: true, rng: rng0 })
+    const shuffledCtx = ctxIds(q)
+    q = Q.append(q, [track('a')])
+    q = Q.append(q, [track('b')])
+    expect(playOrder(q)).toEqual(['a', 'b', ...shuffledCtx])
+  })
+
+  it('toggling shuffle reorders only the context and never the user queue', () => {
+    let q = Q.append(Q.append(mk(6, 1), [track('a')]), [track('b')])
+    q = Q.setShuffle(q, true, seq([0.9, 0.3, 0.6, 0.1]))
+    expect(cur(q)).toBe('t1')
+    expect(userIds(q)).toEqual(['a', 'b'])
+    expect([...ctxIds(q)].sort()).toEqual(['t0', 't2', 't3', 't4', 't5'])
+    expect(orderedIds(q)).toEqual(['t0', 't1', 't2', 't3', 't4', 't5'])
+    q = Q.setShuffle(q, false)
+    expect(userIds(q)).toEqual(['a', 'b'])
+    expect(ctxIds(q)).toEqual(['t2', 't3', 't4', 't5'])
+    expect(cur(q)).toBe('t1')
+  })
+
+  it('unshuffling while a queued song plays resumes the context after the last context song', () => {
+    let q = mk(5, 0, { shuffle: true, rng: rng0 })
+    const firstCtx = Q.advance(q, false)! // play one shuffled context song
+    const ctxSong = cur(firstCtx)!
+    q = Q.append(Q.append(firstCtx, [track('a')]), [track('b')])
+    q = Q.advance(q, false)! // now playing queued "a"
+    expect(cur(q)).toBe('a')
+    const off = Q.setShuffle(q, false)
+    expect(cur(off)).toBe('a')
+    expect(userIds(off)).toEqual(['b'])
+    const ordered = ['t0', 't1', 't2', 't3', 't4']
+    expect(ctxIds(off)).toEqual(ordered.slice(ordered.indexOf(ctxSong) + 1))
+  })
+
+  it('when the user queue is exhausted playback falls back to the context in its shuffle mode', () => {
+    let q = mk(4, 0, { shuffle: true, rng: rng0 })
+    const ctx = ctxIds(q)
+    q = Q.append(q, [track('a')])
+    q = Q.advance(q, false)!
+    expect(cur(q)).toBe('a')
+    expect(userIds(q)).toEqual([])
+    expect(ctxIds(q)).toEqual(ctx)
+  })
+
+  it('a song can be in both tiers (distinct uids) and removing one copy keeps the other', () => {
+    let q = mk(3, 0)
+    q = Q.append(q, [track('t2')])
+    expect(userIds(q)).toEqual(['t2'])
+    expect(ctxIds(q)).toEqual(['t1', 't2'])
+    q = Q.remove(q, Q.userUpcoming(q)[0]!.uid).queue
+    expect(userIds(q)).toEqual([])
+    expect(ctxIds(q)).toEqual(['t1', 't2'])
+  })
+
+  it('moveInSection reorders within a section only', () => {
+    let q = Q.append(Q.append(mk(4, 0), [track('a')]), [track('b')])
+    q = Q.moveInSection(q, 'user', 1, 0)
+    expect(userIds(q)).toEqual(['b', 'a'])
+    q = Q.moveInSection(q, 'context', 0, 2)
+    expect(ctxIds(q)).toEqual(['t2', 't3', 't1'])
+    expect(Q.moveInSection(q, 'user', 0, 5)).toBe(q)
+  })
+
+  it('clearUserQueue / clearContextUpcoming clear only their section', () => {
+    const q = Q.append(mk(4, 0), [track('a')])
+    expect(userIds(Q.clearUserQueue(q))).toEqual([])
+    expect(ctxIds(Q.clearUserQueue(q))).toEqual(['t1', 't2', 't3'])
+    expect(userIds(Q.clearContextUpcoming(q))).toEqual(['a'])
+    expect(ctxIds(Q.clearContextUpcoming(q))).toEqual([])
+    expect(Q.clearUserQueue(mk(2))).toEqual(mk(2))
+  })
+
+  it('previous keeps the pending user queue right after the new current song', () => {
+    let q = Q.advance(mk(3, 0), false)! // t1
+    q = Q.append(q, [track('a')])
+    q = Q.previous(q)
+    expect(cur(q)).toBe('t0')
+    expect(userIds(q)).toEqual(['a'])
+    expect(ctxIds(q)).toEqual(['t1', 't2'])
+  })
+
+  it('jumping ahead in the context keeps the user queue pending; jumping into it drops skipped songs', () => {
+    let q = Q.append(Q.append(mk(5, 0), [track('a')]), [track('b')])
+    const t3 = q.items.find((i) => i.track.id === 't3')!
+    const jumped = Q.jumpTo(q, t3.uid)
+    expect(cur(jumped)).toBe('t3')
+    expect(userIds(jumped)).toEqual(['a', 'b'])
+    q = Q.jumpTo(q, Q.userUpcoming(q)[1]!.uid)
+    expect(cur(q)).toBe('b')
+    expect(q.items.some((i) => i.track.id === 'a')).toBe(false)
   })
 })

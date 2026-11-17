@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Play, Shuffle } from 'lucide-react'
 import type { Image, Track } from '../api/types'
 import type { QueueContext } from '../player/queue'
-import { usePlayer } from '../services'
+import { playback } from '../services'
 import { useAccent } from '../hooks/useAccent'
 import { pickImage } from '../lib/url'
 import { rgbString } from '../lib/color'
@@ -38,7 +38,7 @@ export function Page({ children, header, tint }: { children: ReactNode; header?:
 }
 
 export function PlayButtons({ tracks, context, children }: { tracks: Track[]; context: QueueContext; children?: ReactNode }): ReactNode {
-  const playTracks = usePlayer((s) => s.playTracks)
+  const playTracks = playback.playTracks
   const disabled = tracks.length === 0
   return (
     <div className="my-6 flex items-center gap-3">

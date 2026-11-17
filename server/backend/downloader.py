@@ -100,16 +100,11 @@ def save_lyrics_file(file_path: str, artist: str, title: str, lyrics: str) -> st
             # Already synced, just add headers
             lrc_content = f"[ti:{title}]\n[ar:{artist}]\n[al:]\n[by:NOVA Music Server]\n\n{lyrics}"
         else:
-            # Create LRC content with generated timestamps
-            lrc_content = f"[ti:{title}]\n[ar:{artist}]\n[al:]\n[by:NOVA Music Server]\n\n"
-            lines = lyrics.split('\n')
-            timestamp = 0
-            for line in lines:
-                if line.strip():
-                    minutes = timestamp // 60
-                    seconds = timestamp % 60
-                    lrc_content += f"[{minutes:02d}:{seconds:02d}] {line}\n"
-                    timestamp += 10
+            # Unsynced lyrics: do NOT invent timestamps (this used to write a fake
+            # 10-second grid that clients showed as "synced" and that beat the real
+            # LRCLIB sync). Nocturne looks lyrics up itself (v1_lyrics_auto).
+            logger.info("Unsynced lyrics for %s - %s not written as .lrc", artist, title)
+            return None
         
         with open(lrc_path, 'w', encoding='utf-8') as f:
             f.write(lrc_content)
@@ -129,6 +124,34 @@ def save_lyrics_file(file_path: str, artist: str, title: str, lyrics: str) -> st
 def _stable_id(file_path: str) -> str:
     """Generate a deterministic ID from the file path."""
     return hashlib.sha1(file_path.encode()).hexdigest()
+
+
+def _is_final_audio(file_path: str) -> bool:
+    """Audio file that is not a yt-dlp/ffmpeg intermediate ("X.temp.opus", "X.part", ...)."""
+    name = Path(file_path).name.lower()
+    if Path(name).suffix not in AUDIO_EXTENSIONS:
+        return False
+    return not (".temp." in name or name.endswith((".part", ".ytdl")) or ".part-" in name
+                or name.startswith("."))
+
+
+def _music_path(file_path: str) -> str:
+    """Spell a path inside MUSIC_DIR exactly like _snapshot_files() does (stable ids)."""
+    root = os.path.abspath(MUSIC_DIR)
+    ap = os.path.abspath(file_path)
+    if ap == root or not ap.startswith(root + os.sep):
+        return ap
+    return os.path.join(str(Path(MUSIC_DIR).resolve()), os.path.relpath(ap, root))
+
+
+def _yt_output_files(info: dict | None) -> list[str]:
+    """Final file(s) yt-dlp produced for THIS download (after FFmpegExtractAudio)."""
+    out: list[str] = []
+    for d in (info or {}).get("requested_downloads") or []:
+        fp = d.get("filepath") or d.get("_filename")
+        if fp:
+            out.append(_music_path(fp))
+    return [f for f in dict.fromkeys(out) if os.path.isfile(f) and _is_final_audio(f)]
 
 
 def _read_tags(file_path: str) -> dict:
@@ -553,18 +576,46 @@ class DownloadManager:
             
             ydl_opts["postprocessors"] = postprocessors
 
+            expected_stem = None
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 if info:
                     job["title"]  = info.get("title") or title or "Unknown"
                     job["artist"] = info.get("channel") or info.get("uploader") or artist or ""
+                    try:
+                        expected_stem = Path(ydl.prepare_filename(info)).stem
+                    except Exception:
+                        expected_stem = None
 
             _update("downloading", 88)
 
-            files_after = self._snapshot_files()
-            new_files   = files_after - files_before
+            # Only THIS job's file. Several downloads run in parallel: a plain
+            # before/after snapshot diff also picked up other jobs' files, even
+            # half-written intermediates ("X.temp.opus", "X.webm"), which created
+            # ghost rows, ran cover/lyrics/mood hooks once per job (the same
+            # "official cover set" line logged up to 8 times) and made the Spotify
+            # importer miss its own track.
+            own_files = _yt_output_files(info)
+            if not own_files:
+                files_after = self._snapshot_files()
+                own_files = sorted(
+                    f for f in files_after - files_before
+                    if _is_final_audio(f) and (expected_stem is None or Path(f).stem == expected_stem)
+                )
+            if not own_files:
+                raise RuntimeError("yt-dlp finished but its output file was not found")
 
-            for file_path in new_files:
+            job["file_path"] = own_files[0]
+            job["track_id"] = _stable_id(own_files[0])
+            job["track_ids"] = [_stable_id(f) for f in own_files]
+
+            for file_path in own_files:
+                existing = db.get_track(_stable_id(file_path))
+                if file_path in files_before and existing is not None:
+                    # Same video downloaded again: the file and its row already exist.
+                    # Keep the row (and its metadata/cover) untouched, run no hooks.
+                    logger.info("YT download reused existing file: %s", file_path)
+                    continue
                 tags       = _read_tags(file_path)
                 cover_path = _resolve_cover_path(file_path)
                 track = {
@@ -700,7 +751,7 @@ class DownloadManager:
 
             # ── Scan for new files and add to DB ─────────────────────────
             files_after = self._snapshot_files()
-            new_files   = files_after - files_before
+            new_files   = {f for f in files_after - files_before if _is_final_audio(f)}
 
             for file_path in new_files:
                 tags       = _read_tags(file_path)

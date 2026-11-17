@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ChevronDown, ChevronUp, ListMusic, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
 import { api } from '../services'
 import { useResource } from '../hooks/useResource'
-import type { PlaylistDetail, Track } from '../api/types'
+import type { PlaylistDetail, PlaylistTrack } from '../api/types'
 import { describeError } from '../api/errors'
 import { resources } from '../lib/resource'
 import { useNav } from '../store/nav'
@@ -17,13 +17,23 @@ import { artistNames, formatTotal, plural } from '../lib/format'
 import { HeroHeader, Page, PlayButtons, useTint } from './Page'
 import { PageSkeleton } from './Album'
 
-/** Stable React keys for a track list that may (in imported playlists) contain the same song twice. */
-function rowKeys(tracks: Track[]): string[] {
+/**
+ * Stable React keys, one per playlist row. A playlist may contain the same song more than once:
+ * servers that support that give every occurrence an `entryId`; for older ones (whose imported
+ * playlists can still contain repeats) the key is the song id plus its occurrence number.
+ */
+function rowKeys(tracks: readonly PlaylistTrack[]): string[] {
   const seen = new Map<string, number>()
-  return tracks.map((t) => {
+  const used = new Set<string>()
+  return tracks.map((t, i) => {
+    if (t.entryId && !used.has(`e:${t.entryId}`)) {
+      used.add(`e:${t.entryId}`)
+      return `e:${t.entryId}`
+    }
     const n = seen.get(t.id) ?? 0
     seen.set(t.id, n + 1)
-    return n === 0 ? t.id : `${t.id}#${n}`
+    const key = n === 0 ? `t:${t.id}` : `t:${t.id}#${n}`
+    return used.has(key) ? `i:${i}` : (used.add(key), key)
   })
 }
 
@@ -36,11 +46,11 @@ function PlaylistEditList({
   onMove,
   onRemove
 }: {
-  tracks: Track[]
+  tracks: PlaylistTrack[]
   onMove: (from: number, to: number) => void
   onRemove: (index: number) => void
 }): ReactNode {
-  const keys = rowKeys(tracks)
+  const keys = useMemo(() => rowKeys(tracks), [tracks])
   const listRef = useRef<HTMLOListElement>(null)
   const pendingFocus = useRef<{ key: string; dir: 'up' | 'down' } | null>(null)
   const [announce, setAnnounce] = useState('')
@@ -139,7 +149,11 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
    * newer edit was made meanwhile, the page reloads from the server) and an error toast is shown.
    */
   const applyTracks = useCallback(
-    async (compute: (tracks: Track[]) => Track[] | null, send: (next: Track[]) => Promise<PlaylistDetail | void>, done?: string): Promise<void> => {
+    async (
+      compute: (tracks: PlaylistTrack[]) => PlaylistTrack[] | null,
+      send: (next: PlaylistTrack[]) => Promise<PlaylistDetail | void>,
+      done?: string
+    ): Promise<void> => {
       const before = resources.peek<PlaylistDetail>(key)
       if (!before) return
       const next = compute(before.tracks)
@@ -160,10 +174,20 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
     [key]
   )
 
+  /** Removes the row at `index`: just that occurrence when the server gave it an entry id, else every copy of the song. */
   const remove = useCallback(
     (index: number) => {
       const t = resources.peek<PlaylistDetail>(key)?.tracks[index]
       if (!t) return
+      const entryId = t.entryId
+      if (entryId) {
+        void applyTracks(
+          (tracks) => tracks.filter((x) => x.entryId !== entryId),
+          () => api.removePlaylistEntry(id, entryId),
+          `Removed “${t.title}”`
+        )
+        return
+      }
       void applyTracks(
         (tracks) => tracks.filter((x) => x.id !== t.id),
         () => api.removeFromPlaylist(id, t.id),
@@ -173,15 +197,18 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
     [applyTracks, id, key]
   )
 
+  // `reorderPlaylist` sends entry ids when every row has one (duplicates stay distinct), else song ids.
   const move = useCallback(
     (from: number, to: number) => {
       void applyTracks(
         (tracks) => (from === to || !tracks[from] || !tracks[to] ? null : moveItem(tracks, from, to)),
-        (next) => api.reorderPlaylist(id, next.map((t) => t.id))
+        (next) => api.reorderPlaylist(id, next)
       )
     },
     [applyTracks, id]
   )
+
+  const keys = useMemo(() => rowKeys(pl?.tracks ?? []), [pl?.tracks])
 
   // Leaving edit mode when the playlist turns out not to be editable (e.g. after a reload).
   useEffect(() => {
@@ -257,7 +284,7 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
       ) : canEdit && editing ? (
         <PlaylistEditList tracks={pl.tracks} onMove={move} onRemove={remove} />
       ) : (
-        <TrackList tracks={pl.tracks} context={context} onRemove={canEdit ? remove : undefined} onMove={canEdit ? move : undefined} />
+        <TrackList tracks={pl.tracks} rowKeys={keys} context={context} onRemove={canEdit ? remove : undefined} onMove={canEdit ? move : undefined} />
       )}
 
       {menu && (

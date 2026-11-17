@@ -2,6 +2,26 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.0.7 — 2026-11-17
+
+**Nocturne Connect, Spotify-style queue and adaptive themes** · web, android, windows, linux
+
+### Added
+
+- Nocturne Connect remote control: play songs, albums and playlists on another device, change its volume remotely, with a "Listening on" bar and a device panel.
+- Spotify-style queue: your queue stays in order regardless of shuffle, then continues with the playlist.
+- Quick "Add to queue" button on every song, with Undo.
+- Configurable Adaptive theme with presets: Classic, Subtle, Immersive, Vinyl, Concert and Reading.
+- Duplicate songs are now allowed in playlists ("Add again").
+- Clean Spotify titles and artists for imported songs.
+- Official covers for imported songs.
+
+### Fixed
+
+- Lyrics out of sync: fake generated .lrc files are ignored and real synced lyrics are looked up again.
+- Missing lyrics on imported songs.
+- Duplicated download logging.
+
 ## 1.0.6 — 2026-11-17
 
 **Playlists, importar de Spotify y letras automáticas** · web, android, windows, linux

@@ -45,7 +45,7 @@ describe('describeAdd', () => {
     expect(describeAdd('Mix', 1, 1, 0)).toBe('Added to Mix')
     expect(describeAdd('Mix', 1, 0, 1)).toBe('Already in Mix')
     expect(describeAdd('Mix', 3, 3, 0)).toBe('Added 3 songs to Mix')
-    expect(describeAdd('Mix', 3, 1, 2)).toBe('Added 1 song to Mix (2 already there)')
+    expect(describeAdd('Mix', 3, 1, 2)).toBe('Added 1 song to Mix, 2 already there')
     expect(describeAdd('Mix', 3, 0, 3)).toBe('All 3 songs are already in Mix')
   })
 })
@@ -58,7 +58,16 @@ describe('addTracks / createPlaylist', () => {
     const out = await addTracks({ addToPlaylist } as never, { id: 'p1', name: 'P p1' }, [track('t0'), track('t0')], cache)
     expect(addToPlaylist).toHaveBeenCalledWith('p1', ['t0'])
     expect(out.message).toBe('Already in P p1')
+    expect(out.skippedIds).toEqual(['t0'])
     expect(cache.isFresh('playlist:p1')).toBe(false)
+  })
+
+  it('passes allowDuplicates only when asked to', async () => {
+    const cache = new ResourceCache()
+    const addToPlaylist = vi.fn().mockResolvedValue({ added: 2, skipped: [], playlist: { ...pl('p1'), name: 'Server name' } })
+    const out = await addTracks({ addToPlaylist } as never, { id: 'p1', name: 'P p1' }, [{ id: 'a' }, { id: 'b' }], cache, { allowDuplicates: true })
+    expect(addToPlaylist).toHaveBeenCalledWith('p1', ['a', 'b'], { allowDuplicates: true })
+    expect(out).toMatchObject({ added: 2, skipped: 0, skippedIds: [], name: 'Server name', message: 'Added 2 songs to Server name' })
   })
 
   it('creates with trimmed fields and trackIds, and seeds the new page', async () => {

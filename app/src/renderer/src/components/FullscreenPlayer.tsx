@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ListMusic, Mic2, Sparkles, Waves, CircleDot } from 'lucide-react'
-import { platform, usePlayer } from '../services'
-import { currentItem } from '../player/queue'
+import { platform } from '../services'
+import { useIsRemote, useNowContext, useNowStatus, useNowTrack } from '../hooks/useNowPlaying'
+import { DevicesButton, ListeningBar, useDevicesUi } from './Devices'
 import { useUi } from '../store/ui'
 import { prefersReducedMotion, useSettings, type VisualizerStyle } from '../store/settings'
-import { useAccent } from '../hooks/useAccent'
+import { usePalette } from '../hooks/useAccent'
 import { pickImage } from '../lib/url'
-import { rgbString } from '../lib/color'
+import { FALLBACK_ACCENT, paletteAccent, rgbString } from '../lib/color'
+import { showFullscreenBackdrop } from '../lib/adaptive'
+import { AdaptiveBackdrop } from './AdaptiveBackdrop'
 import { useNav } from '../store/nav'
 import { Artwork, IconButton, LikeButton, cx } from './common'
 import { SeekBar, TransportControls, VolumeControl } from './controls'
@@ -24,17 +27,21 @@ const STYLES: { id: VisualizerStyle; label: string; icon: ReactNode }[] = [
 type MobileTab = 'player' | 'lyrics' | 'queue'
 
 export function FullscreenPlayer(): ReactNode {
-  const item = usePlayer((s) => currentItem(s.queue))
+  const track = useNowTrack()
+  const remote = useIsRemote()
   const setFullscreen = useUi((s) => s.setFullscreen)
   const visualizer = useSettings((s) => s.visualizer)
   const motion = useSettings((s) => s.motion)
   const lyricsOn = useSettings((s) => s.lyrics)
   const update = useSettings((s) => s.update)
-  const status = usePlayer((s) => s.status)
-  const contextName = usePlayer((s) => s.queue.context?.name)
+  const status = useNowStatus()
+  const contextName = useNowContext()?.name
   const go = useNav((s) => s.go)
-  const track = item?.track ?? null
-  const accent = useAccent(pickImage(track?.artwork, 300))
+  const theme = useSettings((s) => s.theme)
+  const accentSource = useSettings((s) => s.adaptive.accentSource)
+  const adaptive = showFullscreenBackdrop(theme)
+  // Always the artwork colour here; the Adaptive theme's accent source picks which one.
+  const accent = paletteAccent(usePalette(pickImage(track?.artwork, 120)), adaptive ? accentSource : 'dominant') ?? FALLBACK_ACCENT
   const reduced = prefersReducedMotion(motion)
   const [idle, setIdle] = useState(false)
   const [tab, setTab] = useState<MobileTab>('player')
@@ -48,8 +55,8 @@ export function FullscreenPlayer(): ReactNode {
   }, [])
 
   useEffect(() => {
-    if (!item) setFullscreen(false)
-  }, [item, setFullscreen])
+    if (!track) setFullscreen(false)
+  }, [track, setFullscreen])
 
   const wake = (): void => {
     setIdle(false)
@@ -78,8 +85,14 @@ export function FullscreenPlayer(): ReactNode {
     >
       {/* Backdrop: blurred cover + reactive visuals */}
       <div className="absolute inset-0">
-        <Artwork images={track.artwork} size={160} className="absolute inset-0 h-full w-full scale-125 opacity-30 blur-3xl" rounded="" />
-        <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 30% 20%, ${rgbString(accent, 0.18)}, transparent 60%)` }} />
+        {adaptive ? (
+          <AdaptiveBackdrop variant="embedded" />
+        ) : (
+          <>
+            <Artwork images={track.artwork} size={160} className="absolute inset-0 h-full w-full scale-125 opacity-30 blur-3xl" rounded="" />
+            <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 30% 20%, ${rgbString(accent, 0.18)}, transparent 60%)` }} />
+          </>
+        )}
         <Visualizer accent={accent} style={visualizer} reduced={reduced} anchor={coverRef} />
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-black/60" />
       </div>
@@ -98,6 +111,7 @@ export function FullscreenPlayer(): ReactNode {
           {contextName ?? 'Now playing'}
         </p>
         <div className="no-drag flex items-center gap-1">
+          <DevicesButton onClick={() => useDevicesUi.getState().show('sheet')} />
           {STYLES.map((s) => (
             <IconButton key={s.id} label={`Visualizer: ${s.label}`} active={visualizer === s.id} onClick={() => update({ visualizer: s.id })} size="sm">
               {s.icon}
@@ -156,9 +170,11 @@ export function FullscreenPlayer(): ReactNode {
             <div className="mt-3 flex justify-center">
               <TransportControls size="lg" />
             </div>
-            <div className="mt-4 hidden justify-center md:flex">
-              <VolumeControl />
+            {/* Phones only get a slider while controlling another device (hardware keys set the local volume). */}
+            <div className={cx('mt-4 justify-center', remote ? 'flex' : 'hidden md:flex')}>
+              <VolumeControl width={remote ? 'w-40' : 'w-24'} />
             </div>
+            {remote && <ListeningBar className="mx-auto mt-4 h-8 max-w-xs" rounded="rounded-full" />}
           </div>
         </section>
 

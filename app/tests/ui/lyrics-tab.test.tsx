@@ -11,14 +11,19 @@ const h = vi.hoisted(() => ({
   playTracks: vi.fn()
 }))
 
-vi.mock('@/services', () => ({
-  api: h.api,
-  platform: {},
-  getEngine: () => null,
-  lrclib: { find: vi.fn() },
-  useSession: Object.assign((sel: (s: unknown) => unknown) => sel({ server: null }), { getState: () => ({}) }),
-  usePlayer: Object.assign(() => undefined, { getState: () => ({ playTracks: h.playTracks }) })
-}))
+vi.mock('@/services', async () => {
+  const usePlayer = Object.assign(() => undefined, { getState: () => ({ playTracks: h.playTracks }) })
+  const { connectMocks } = await import('../helpers/services-mock')
+  return {
+    api: h.api,
+    platform: {},
+    getEngine: () => null,
+    lrclib: { find: vi.fn() },
+    useSession: Object.assign((sel: (s: unknown) => unknown) => sel({ server: null }), { getState: () => ({}) }),
+    usePlayer,
+    ...connectMocks(usePlayer)
+  }
+})
 
 const song = (id: string, title: string, artist: string, over: Partial<AdminTrack> = {}): AdminTrack => ({
   ...track(id, { title, artists: [{ id: `a-${id}`, name: artist }], duration: 192 }),

@@ -50,6 +50,12 @@ export interface PlayerState {
   removeFromQueue(uid: string): void
   moveInQueue(from: number, to: number): void
   clearUpcoming(): void
+  /** Empties "Next in queue" (the user queue). */
+  clearUserQueue(): void
+  /** Empties "Next from <context>", keeping the user queue. */
+  clearContextUpcoming(): void
+  /** Reorders within one upcoming section (indices inside that section). */
+  moveInSection(section: Q.QueueSection, from: number, to: number): void
   stop(): void
 }
 
@@ -381,6 +387,18 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
 
     clearUpcoming() {
       set({ queue: Q.clearUpcoming(get().queue) })
+    },
+
+    clearUserQueue() {
+      set({ queue: Q.clearUserQueue(get().queue) })
+    },
+
+    clearContextUpcoming() {
+      set({ queue: Q.clearContextUpcoming(get().queue) })
+    },
+
+    moveInSection(section, from, to) {
+      set({ queue: Q.moveInSection(get().queue, section, from, to) })
     },
 
     stop() {

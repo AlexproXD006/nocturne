@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { extractAccent, FALLBACK_ACCENT, type Rgb } from '../lib/color'
+import { cachedPalette, extractAccent, extractPalette, FALLBACK_ACCENT, type ImagePalette, type Rgb } from '../lib/color'
 
 /** Accent color extracted from artwork, with the app default as fallback. */
 export function useAccent(url: string | undefined): Rgb {
@@ -18,4 +18,30 @@ export function useAccent(url: string | undefined): Rgb {
     }
   }, [url])
   return accent
+}
+
+/**
+ * Palette (dominant / vibrant / muted) + luminance of an artwork, sampled once
+ * per URL (shared cache with useAccent). Null until loaded or when unreadable.
+ */
+export function usePalette(url: string | undefined): ImagePalette | null {
+  const [state, setState] = useState<{ url: string | undefined; palette: ImagePalette | null }>(() => ({
+    url,
+    palette: url ? (cachedPalette(url) ?? null) : null
+  }))
+  useEffect(() => {
+    if (!url) {
+      setState({ url, palette: null })
+      return
+    }
+    let alive = true
+    void extractPalette(url).then((palette) => {
+      if (alive) setState({ url, palette })
+    })
+    return () => {
+      alive = false
+    }
+  }, [url])
+  // Keep showing the previous cover's palette until the new one is ready (no flash to fallback).
+  return state.palette
 }

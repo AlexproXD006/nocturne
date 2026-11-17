@@ -14,6 +14,7 @@ class FakeEventSource {
   emit(data: unknown): void { this.onmessage?.({ data: JSON.stringify(data) } as MessageEvent) }
 }
 
+let lastPlay: unknown[] = []
 function fakePlayer(initial?: Partial<QueueState>) {
   const calls: string[] = []
   const subs = new Set<(...a: never[]) => void>()
@@ -34,7 +35,9 @@ function fakePlayer(initial?: Partial<QueueState>) {
     setRepeat: (m: string) => calls.push(`repeat:${m}`),
     setVolume: (v: number) => calls.push(`volume:${v}`),
     stop: () => calls.push('stop'),
-    playTracks: async () => { calls.push('playTracks') }
+    playTracks: async (...a: unknown[]) => { calls.push('playTracks'); lastPlay = a },
+    addToQueue: (t: { id: string }[]) => calls.push(`addToQueue:${t.map((x) => x.id).join(',')}`),
+    addNext: (t: { id: string }[]) => calls.push(`addNext:${t.map((x) => x.id).join(',')}`)
   }
   return {
     calls,
@@ -44,6 +47,7 @@ function fakePlayer(initial?: Partial<QueueState>) {
   }
 }
 
+const volumes: number[] = []
 function fakeApi(sessions: ConnectSession[] = []) {
   const log: string[] = []
   const api: ConnectApi & { log: string[]; sessions: ConnectSession[] } = {
@@ -57,7 +61,7 @@ function fakeApi(sessions: ConnectSession[] = []) {
     async connectUnregister(id) { log.push(`unregister:${id}`) },
     async connectPutState() { log.push('putState') },
     async connectHeartbeat() { log.push('heartbeat') },
-    async connectCommand(id, kind) { log.push(`command:${id}:${kind}`) },
+    async connectCommand(id, kind, payload) { log.push(`command:${id}:${kind}`); if (kind === 'setVolume') volumes.push((payload as { volume?: number }).volume ?? NaN) },
     async connectEventsUrl() { return 'https://x/events?access_token=t' }
   }
   return api
@@ -154,5 +158,48 @@ describe('connect store', () => {
     })
     expect(store.getState().active).toBe(false)
     expect(store.getState().selfId).toBeNull()
+  })
+
+  it('playContext resolves ids and plays them locally; queue commands add to the user queue', async () => {
+    const resolveTracks = async (ids: string[]) => ids.map((id) => track(id))
+    const player = fakePlayer()
+    const store = createConnectStore({
+      api: fakeApi(), player, deviceName: 'X', platform: 'web', resolveTracks,
+      makeEventSource: (u) => new FakeEventSource(u) as unknown as EventSource
+    })
+    await store.getState().start()
+    const es = FakeEventSource.instances[0]!
+    es.emit({ type: 'command', kind: 'playContext', payload: { context: { type: 'album', id: 'a1', name: 'A' }, trackIds: ['x', 'y', 'z'], startIndex: 1, shuffle: true } })
+    await vi.waitFor(() => expect(player.calls).toContain('playTracks'))
+    expect((lastPlay[0] as { id: string }[]).map((t) => t.id)).toEqual(['x', 'y', 'z'])
+    expect(lastPlay[1]).toBe(1)
+    expect(lastPlay[3]).toEqual({ shuffle: true })
+    es.emit({ type: 'command', kind: 'addToQueue', payload: { trackIds: ['q1', 'q2'] } })
+    es.emit({ type: 'command', kind: 'playNext', payload: { trackIds: ['n1'] } })
+    await vi.waitFor(() => expect(player.calls).toContain('addNext:n1'))
+    expect(player.calls).toContain('addToQueue:q1,q2')
+    es.emit({ type: 'command', kind: 'addToQueue', payload: { trackIds: 'bad' } })
+    await Promise.resolve()
+    expect(player.calls.filter((c) => c.startsWith('addToQueue'))).toHaveLength(1)
+    await store.getState().stop()
+  })
+
+  it('setRemoteVolume updates the UI at once and throttles the commands', async () => {
+    vi.useFakeTimers()
+    volumes.length = 0
+    const api = fakeApi([session({ id: 'cs_pc', state: { status: 'playing', track: track('r'), volume: 1 } })])
+    const store = createConnectStore({
+      api, player: fakePlayer(), deviceName: 'X', platform: 'web', volumeThrottleMs: 100,
+      makeEventSource: (u) => new FakeEventSource(u) as unknown as EventSource
+    })
+    await store.getState().start()
+    await store.getState().refresh()
+    await store.getState().control('cs_pc')
+    for (const v of [0.9, 0.8, 0.7, 0.6, 0.5]) store.getState().setRemoteVolume(v)
+    expect(store.getState().remote!.state.volume).toBe(0.5)
+    expect(volumes.length).toBeLessThan(5)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(volumes.at(-1)).toBe(0.5)
+    await store.getState().stop()
   })
 })

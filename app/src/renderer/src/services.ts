@@ -7,27 +7,19 @@ import { AudioEngine } from './player/engine'
 import { LrclibClient } from './lyrics/lrclib'
 import { useSettings } from './store/settings'
 import { useUi } from './store/ui'
+import { defaultDeviceName } from './lib/deviceName'
+import { resolveTracks } from './player/resolveTracks'
+import { createPlayback } from './player/playback'
 
 export { platform }
 
 /** A human label for this device, used as the Connect session name. */
+export function autoDeviceName(): string {
+  return defaultDeviceName(platform.kind, typeof navigator !== 'undefined' ? navigator.userAgent : '')
+}
+
 function deviceName(): string {
-  if (platform.kind === 'desktop') return 'Nocturne Desktop'
-  if (platform.kind === 'android') return 'Nocturne Android'
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
-  const browser = /Edg\//.test(ua) ? 'Edge'
-    : /OPR\//.test(ua) ? 'Opera'
-    : /Firefox\//.test(ua) ? 'Firefox'
-    : /Chrome\//.test(ua) ? 'Chrome'
-    : /Safari\//.test(ua) ? 'Safari'
-    : 'Browser'
-  const os = /Windows/.test(ua) ? 'Windows'
-    : /Mac OS X|Macintosh/.test(ua) ? 'macOS'
-    : /Android/.test(ua) ? 'Android'
-    : /Linux/.test(ua) ? 'Linux'
-    : /iPhone|iPad/.test(ua) ? 'iOS'
-    : ''
-  return os ? `${browser} on ${os}` : browser
+  return useSettings.getState().deviceName || autoDeviceName()
 }
 
 export const { useSession, api } = createSessionStore({
@@ -62,7 +54,17 @@ export const useConnect = createConnectStore({
   api,
   player: usePlayer,
   deviceName: deviceName(),
-  platform: platform.kind
+  platform: platform.kind,
+  resolveTracks: (ids, context, known) => resolveTracks(ids, api, { context, known }),
+  notify: (message, tone) => useUi.getState().toast(message, tone)
+})
+
+/** Routes play / transport actions to the local player or the controlled Connect device. */
+export const playback = createPlayback({ player: usePlayer, connect: useConnect })
+
+// Renaming this device in the devices panel updates the live session too.
+useSettings.subscribe((s, prev) => {
+  if (s.deviceName !== prev.deviceName) void useConnect.getState().rename(s.deviceName || autoDeviceName())
 })
 
 // Signing out stops playback and forgets the queue.

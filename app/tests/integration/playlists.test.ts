@@ -69,6 +69,53 @@ describe.skipIf(!available)('mock server: playlist editing (real ApiClient over 
     await expect(api.playlist(created.id)).rejects.toMatchObject({ code: 'not_found' })
   })
 
+  it('keeps the same song more than once, with one entry id per occurrence', async () => {
+    const [a, b] = trackIds as [string, string]
+    const created = await api.createPlaylist({ name: 'Dupes', trackIds: [a, b] })
+    expect(created.tracks.every((t: any) => typeof t.entryId === 'string')).toBe(true)
+
+    // Default: already-present songs are skipped.
+    expect(await api.addToPlaylist(created.id, [a])).toMatchObject({ added: 0, skipped: [a] })
+    // allowDuplicates: appended again as a new entry.
+    expect(await api.addToPlaylist(created.id, [a], { allowDuplicates: true })).toMatchObject({ added: 1, skipped: [], playlist: { trackCount: 3 } })
+    let pl = await api.playlist(created.id)
+    expect(pl.tracks.map((t: any) => t.id)).toEqual([a, b, a])
+    const [e1, e2, e3] = pl.tracks.map((t: any) => t.entryId)
+    expect(new Set([e1, e2, e3]).size).toBe(3)
+    // Entry ids are stable across reads.
+    expect((await api.playlist(created.id)).tracks.map((t: any) => t.entryId)).toEqual([e1, e2, e3])
+
+    // Reorder by entry ids: only the chosen occurrence moves.
+    pl = await api.reorderPlaylist(created.id, [pl.tracks[2], pl.tracks[0], pl.tracks[1]])
+    expect(pl.tracks.map((t: any) => t.entryId)).toEqual([e3, e1, e2])
+    await expect(api.reorderPlaylist(created.id, [{ id: a, entryId: e1 }, { id: b, entryId: e2 }, { id: a, entryId: 'nope' }])).rejects.toMatchObject({
+      code: 'bad_request'
+    })
+    await expect(api.reorderPlaylist(created.id, [{ id: a, entryId: e1 }, { id: a, entryId: e1 }, { id: b, entryId: e2 }])).rejects.toMatchObject({
+      code: 'bad_request'
+    })
+
+    // Legacy reorder by song ids still works with duplicates and keeps the entry ids.
+    pl = await api.reorderPlaylist(created.id, [b, a, a])
+    expect(pl.tracks.map((t: any) => t.id)).toEqual([b, a, a])
+    expect(pl.tracks.map((t: any) => t.entryId)).toEqual([e2, e3, e1])
+
+    // Removing one entry leaves the other copy.
+    await expect(api.removePlaylistEntry(created.id, e3)).resolves.toBeUndefined()
+    pl = await api.playlist(created.id)
+    expect(pl.tracks.map((t: any) => t.entryId)).toEqual([e2, e1])
+    await expect(api.removePlaylistEntry(created.id, e3)).rejects.toMatchObject({ code: 'not_found' })
+
+    // The legacy track delete removes every occurrence.
+    await api.addToPlaylist(created.id, [a], { allowDuplicates: true })
+    expect((await api.playlist(created.id)).tracks.map((t: any) => t.id)).toEqual([b, a, a])
+    await api.removeFromPlaylist(created.id, a)
+    expect((await api.playlist(created.id)).tracks.map((t: any) => t.id)).toEqual([b])
+
+    await expect(guest.removePlaylistEntry(created.id, e2)).rejects.toMatchObject({ code: 'not_found' })
+    await api.deletePlaylist(created.id)
+  })
+
   it('rejects bad input and edits to shared playlists', async () => {
     await expect(api.createPlaylist({ name: '   ' })).rejects.toMatchObject({ code: 'bad_request' })
     await expect(api.createPlaylist({ name: 'x'.repeat(101) })).rejects.toMatchObject({ code: 'bad_request' })

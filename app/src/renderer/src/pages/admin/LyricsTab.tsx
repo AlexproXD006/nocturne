@@ -3,7 +3,7 @@ import { Eye, FileText, Loader2, Play, Replace, Search, Trash2, Upload, X } from
 import type { AdminTrack, LyricsFormat } from '../../api/types'
 import { describeError } from '../../api/errors'
 import { artistNames, formatTime } from '../../lib/format'
-import { api, usePlayer } from '../../services'
+import { api, playback } from '../../services'
 import { useUi } from '../../store/ui'
 import { usePaged } from '../../hooks/usePaged'
 import { Artwork, EmptyState, ErrorState, Spinner } from '../../components/common'
@@ -15,7 +15,7 @@ import { Button, Card, Chip, ProgressBar, inputClass, useDebounced } from './ui'
 type Filter = 'missing' | 'present'
 
 function play(t: AdminTrack, name: string): void {
-  void usePlayer.getState().playTracks([t], 0, { type: 'tracks', name })
+  void playback.playTracks([t], 0, { type: 'tracks', name })
 }
 
 function Row({ track, format, children }: { track: AdminTrack; format?: LyricsFormat | null; children: ReactNode }): ReactNode {

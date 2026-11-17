@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume, Volume1, Volume2, VolumeX } from 'lucide-react'
-import { usePlayer } from '../services'
+import { playback } from '../services'
 import { readPosition, useFrame } from '../hooks/useClock'
+import { useHasNowPlaying, useNowDuration, useNowPositionTick, useNowRepeat, useNowShuffle, useNowStatus, useNowVolume } from '../hooks/useNowPlaying'
 import { formatTime } from '../lib/format'
 import { IconButton, cx } from './common'
 
 /** Seek bar that animates smoothly from the engine clock; dragging previews without seeking. */
 export function SeekBar({ compact = false, className }: { compact?: boolean; className?: string }): ReactNode {
-  const duration = usePlayer((s) => s.duration)
-  const seek = usePlayer((s) => s.seek)
-  const playing = usePlayer((s) => s.status === 'playing')
+  const duration = useNowDuration()
+  const seek = playback.seek
+  const playing = useNowStatus() === 'playing'
   const inputRef = useRef<HTMLInputElement>(null)
   const elapsedRef = useRef<HTMLSpanElement>(null)
   const [drag, setDrag] = useState<number | null>(null)
@@ -27,7 +28,7 @@ export function SeekBar({ compact = false, className }: { compact?: boolean; cla
 
   useFrame(() => paint(dragRef.current ?? readPosition()), playing || drag !== null)
   // Paint once when paused/duration changes.
-  usePlayer((s) => s.position) // subscribe so we re-render on discrete seeks
+  useNowPositionTick() // subscribe so we re-render on discrete seeks
   useEffect(() => {
     paint(dragRef.current ?? readPosition())
   })
@@ -67,11 +68,11 @@ export function SeekBar({ compact = false, className }: { compact?: boolean; cla
 }
 
 export function TransportControls({ size = 'md' }: { size?: 'md' | 'lg' }): ReactNode {
-  const status = usePlayer((s) => s.status)
-  const shuffle = usePlayer((s) => s.queue.shuffle)
-  const repeat = usePlayer((s) => s.queue.repeat)
-  const hasQueue = usePlayer((s) => s.queue.items.length > 0)
-  const p = usePlayer.getState
+  const status = useNowStatus()
+  const shuffle = useNowShuffle()
+  const repeat = useNowRepeat()
+  const hasQueue = useHasNowPlaying()
+  const p = (): typeof playback => playback
   const playing = status === 'playing' || status === 'buffering' || status === 'loading'
   const big = size === 'lg'
 
@@ -116,11 +117,11 @@ export function TransportControls({ size = 'md' }: { size?: 'md' | 'lg' }): Reac
   )
 }
 
-export function VolumeControl({ className }: { className?: string }): ReactNode {
-  const volume = usePlayer((s) => s.volume)
-  const muted = usePlayer((s) => s.muted)
-  const setVolume = usePlayer((s) => s.setVolume)
-  const toggleMute = usePlayer((s) => s.toggleMute)
+/** Volume of whatever is playing: the local player, or the controlled Connect device. */
+export function VolumeControl({ className, width = 'w-24' }: { className?: string; width?: string }): ReactNode {
+  const { volume, muted } = useNowVolume()
+  const setVolume = playback.setVolume
+  const toggleMute = playback.toggleMute
   const v = muted ? 0 : volume
   const Icon = v === 0 ? VolumeX : v < 0.34 ? Volume : v < 0.67 ? Volume1 : Volume2
   return (
@@ -130,7 +131,7 @@ export function VolumeControl({ className }: { className?: string }): ReactNode 
       </IconButton>
       <input
         type="range"
-        className="range w-24"
+        className={cx('range', width)}
         aria-label="Volume"
         min={0}
         max={1}

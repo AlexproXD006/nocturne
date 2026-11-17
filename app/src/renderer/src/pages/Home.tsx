@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Heart, Play } from 'lucide-react'
-import { api, useSession, usePlayer } from '../services'
+import { api, playback, useSession } from '../services'
 import { useResource } from '../hooks/useResource'
 import { greeting } from '../lib/format'
 import type { HomeSection, Track } from '../api/types'
@@ -50,7 +50,7 @@ export function HomePage(): ReactNode {
   const name = useSession((s) => s.session?.user.displayName || s.session?.user.username)
   const home = useResource('home', (signal) => api.home(signal))
   const go = useNav((s) => s.go)
-  const playTracks = usePlayer((s) => s.playTracks)
+  const playTracks = playback.playTracks
   const hour = new Date().getHours()
 
   const sections = home.data?.sections ?? []

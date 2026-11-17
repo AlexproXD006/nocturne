@@ -397,3 +397,60 @@ def test_backfill_apply_stores_and_backs_up(tmp_path, lrclib):
     lb.main(["--apply", "--report", str(out), "--library-db", str(lib), "--nocturne-db", str(noc)])
     assert lrclib.n == n
     assert json.loads(out.read_text())["stats"]["skip_auto_row"] == 2
+
+
+# ---------------------------------------------------------------------------
+# .lrc files written by NOVA with invented timings
+# ---------------------------------------------------------------------------
+
+FAKE_GRID = ("[ti:Castillo]\n[ar:X]\n[al:]\n[by:NOVA Music Server]\n\n"
+             "[00:00] Jajaja\n[00:10] Vivo asombrado\n[00:20] Me hizo encontrarme\n")
+NOVA_REAL = "[ti:19]\n[by:NOVA Music Server]\n\n[00:10.03] Ella baila\n[00:14.12] Anda con 18\n"
+
+
+def test_classify_lrc():
+    assert la.classify_lrc(FAKE_GRID) == la.LRC_FAKE                              # NOVA header + 10-s grid
+    assert la.classify_lrc("[00:00] a\n[00:10] b\n[00:20] c") == la.LRC_FAKE     # grid without header
+    assert la.classify_lrc("[by:NOVA Music Server]\n[00:03] a\n[00:11] b") == la.LRC_FAKE  # NOVA, no fractions
+    assert la.classify_lrc("[ti:x]\nno timestamps at all") == la.LRC_FAKE
+    assert la.classify_lrc(NOVA_REAL) == la.LRC_NOVA_SYNCED
+    assert la.classify_lrc("[00:16.40] Castillo\n[00:19.95] de arena\n[00:24.10] y mar") == la.LRC_USER
+    assert la.classify_lrc("[00:00.00] from file") == la.LRC_USER
+    assert la.lrc_plain_text(FAKE_GRID) == "Jajaja\nVivo asombrado\nMe hizo encontrarme"
+
+
+def test_fake_lrc_does_not_block_backfill_or_lookup(tmp_path):
+    audio = tmp_path / "a.opus"
+    (tmp_path / "a.lrc").write_text(FAKE_GRID, encoding="utf-8")
+    assert la.has_lrc_file(str(audio)) is False
+    (tmp_path / "a.lrc").write_text("[00:16.40] real\n[00:19.95] sync", encoding="utf-8")
+    assert la.has_lrc_file(str(audio)) is True
+
+
+async def test_endpoint_fake_lrc_loses_to_auto_and_is_plain_fallback(client, user_token, lrclib):
+    from nocturne_api.db import connect
+    tid = _add_track(lrc=FAKE_GRID)
+    lrc_file = Path(__import__("database").get_track(tid)["file_path"]).with_suffix(".lrc")
+    # the LRCLIB lookup (lazy) wins over the fake grid
+    assert await _get(client, user_token, tid) == {"synced": SYNCED, "plain": None, "ttml": None}
+    # nothing found anywhere -> the fake file's text as PLAIN lyrics
+    tid2 = _add_track(title="Nada Que Ver", artist="Nadie", lrc=FAKE_GRID)
+    assert await _get(client, user_token, tid2) == {
+        "synced": None, "plain": "Jajaja\nVivo asombrado\nMe hizo encontrarme", "ttml": None}
+    assert _auto_row(tid2)["status"] == "not_found"
+    # NOVA file with real timings: below auto, but used as synced when auto has nothing
+    tid3 = _add_track(title="Nada Que Ver", artist="Nadie", lrc=NOVA_REAL)
+    with connect() as c:
+        c.execute("INSERT INTO v1_lyrics_auto (track_id,status,fetched_at) VALUES (?,?,?)",
+                  (tid3, "not_found", datetime.now(timezone.utc).isoformat()))
+    assert (await _get(client, user_token, tid3))["synced"] == NOVA_REAL
+    assert lrc_file.read_text(encoding="utf-8") == FAKE_GRID          # files are never modified
+
+
+def test_downloader_no_longer_invents_timestamps(tmp_path):
+    import downloader
+    audio = tmp_path / "song.opus"
+    assert downloader.save_lyrics_file(str(audio), "A", "T", "line one\nline two") is None
+    assert not (tmp_path / "song.lrc").exists()
+    p = downloader.save_lyrics_file(str(audio), "A", "T", "[00:01.20] line one\n[00:04.50] line two")
+    assert p and "[00:01.20] line one" in (tmp_path / "song.lrc").read_text(encoding="utf-8")

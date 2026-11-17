@@ -200,18 +200,43 @@ export function Toasts(): ReactNode {
   const dismiss = useUi((s) => s.dismissToast)
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-28 z-[90] flex flex-col items-center gap-2 px-4 md:bottom-24" aria-live="polite">
-      {toasts.map((t) => (
-        <button
-          key={t.id}
-          onClick={() => dismiss(t.id)}
-          className={cx(
-            'fade-up pointer-events-auto max-w-md rounded-lg px-4 py-2.5 text-sm font-medium shadow-2xl shadow-black/50',
-            t.tone === 'error' ? 'bg-[#3a1d22] text-[#ffd5d5]' : 'bg-fg text-ink-950'
-          )}
-        >
-          {t.message}
-        </button>
-      ))}
+      {toasts.map((t) =>
+        t.action ? (
+          <div
+            key={t.id}
+            className={cx(
+              'fade-up pointer-events-auto flex max-w-md items-center gap-1 rounded-lg py-1 pr-1 pl-4 text-sm font-medium shadow-2xl shadow-black/50',
+              t.tone === 'error' ? 'bg-[#3a1d22] text-[#ffd5d5]' : 'bg-fg text-ink-950'
+            )}
+          >
+            <button type="button" onClick={() => dismiss(t.id)} className="min-w-0 py-1.5 text-left">
+              {t.message}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const run = t.action!.run
+                dismiss(t.id)
+                run()
+              }}
+              className="min-h-9 shrink-0 rounded-md px-3 font-bold underline underline-offset-2 hover:bg-black/10 focus-visible:bg-black/10"
+            >
+              {t.action.label}
+            </button>
+          </div>
+        ) : (
+          <button
+            key={t.id}
+            onClick={() => dismiss(t.id)}
+            className={cx(
+              'fade-up pointer-events-auto max-w-md rounded-lg px-4 py-2.5 text-sm font-medium shadow-2xl shadow-black/50',
+              t.tone === 'error' ? 'bg-[#3a1d22] text-[#ffd5d5]' : 'bg-fg text-ink-950'
+            )}
+          >
+            {t.message}
+          </button>
+        )
+      )}
     </div>
   )
 }

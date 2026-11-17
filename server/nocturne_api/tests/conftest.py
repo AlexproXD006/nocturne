@@ -83,6 +83,9 @@ _create_fake_nova_db()
 # Monkey-patch database module to use test DB
 import database as _nova_db
 _nova_db.DB_PATH = _FAKE_DB
+# The fake DB starts with the legacy playlist_tracks schema; run NOVA's startup
+# migration (entry ids, repeats allowed) exactly as production does.
+_nova_db.migrate_playlist_entries()
 
 
 @pytest.fixture(autouse=True)

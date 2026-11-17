@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 import { readJson, writeJson } from '../lib/storage'
+import { applyAdaptivePatch, DEFAULT_ADAPTIVE, sanitizeAdaptive, type AdaptiveSettings } from '../lib/adaptive'
+
+export type { AdaptiveSettings } from '../lib/adaptive'
 
 export type VisualizerStyle = 'aurora' | 'spectrum' | 'minimal'
 export type MotionPref = 'system' | 'reduced' | 'full'
@@ -61,6 +64,10 @@ export interface Settings {
   muted: boolean
   theme: ThemeId
   accent: AccentId
+  /** Adaptive theme background options (see lib/adaptive.ts). */
+  adaptive: AdaptiveSettings
+  /** Custom Nocturne Connect name for this device ('' = automatic, e.g. "PC (Windows)"). */
+  deviceName: string
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -71,7 +78,9 @@ export const DEFAULT_SETTINGS: Settings = {
   volume: 0.8,
   muted: false,
   theme: 'dark',
-  accent: 'adaptive'
+  accent: 'adaptive',
+  adaptive: DEFAULT_ADAPTIVE,
+  deviceName: ''
 }
 
 const KEY = 'nocturne.settings.v1'
@@ -89,12 +98,16 @@ export function sanitizeSettings(raw: unknown): Settings {
     muted: typeof r.muted === 'boolean' ? r.muted : DEFAULT_SETTINGS.muted,
     theme: THEMES.some((t) => t.id === r.theme) ? (r.theme as ThemeId) : DEFAULT_SETTINGS.theme,
     accent:
-      r.accent === 'adaptive' || (typeof r.accent === 'string' && r.accent in ACCENTS) ? (r.accent as AccentId) : DEFAULT_SETTINGS.accent
+      r.accent === 'adaptive' || (typeof r.accent === 'string' && r.accent in ACCENTS) ? (r.accent as AccentId) : DEFAULT_SETTINGS.accent,
+    adaptive: sanitizeAdaptive(r.adaptive),
+    deviceName: typeof r.deviceName === 'string' ? r.deviceName.trim().slice(0, 80) : DEFAULT_SETTINGS.deviceName
   }
 }
 
 interface SettingsStore extends Settings {
   update(patch: Partial<Settings>): void
+  /** Edits the Adaptive background options; see applyAdaptivePatch for preset handling. */
+  updateAdaptive(patch: Partial<AdaptiveSettings>): void
   reset(): void
 }
 
@@ -104,6 +117,9 @@ export const useSettings = create<SettingsStore>((set, get) => ({
     const next = sanitizeSettings({ ...pick(get()), ...patch })
     set(next)
     writeJson(KEY, next)
+  },
+  updateAdaptive(patch) {
+    get().update({ adaptive: applyAdaptivePatch(get().adaptive, patch) })
   },
   reset() {
     set(DEFAULT_SETTINGS)
@@ -120,7 +136,9 @@ function pick(s: Settings): Settings {
     volume: s.volume,
     muted: s.muted,
     theme: s.theme,
-    accent: s.accent
+    accent: s.accent,
+    adaptive: s.adaptive,
+    deviceName: s.deviceName
   }
 }
 

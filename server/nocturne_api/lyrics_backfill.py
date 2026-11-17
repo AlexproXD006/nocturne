@@ -10,8 +10,18 @@ Backfill automatic lyrics (LRCLIB) for the existing library.
     runuser -u musicserver -- venv/bin/python -m nocturne_api.lyrics_backfill --apply \\
         [--cover-report ...] [--report ...] [--limit N]
 
+Spotify imports (--spotify): tracks in v1_spotify_track_map get Spotify's clean
+metadata (name, artists, album; Spotify duration when the file has none) as the
+first, high-quality guess. Metadata comes from v1_spotify_track_meta and/or
+--spotify-snapshot (written by the spotify_* CLIs). --only-spotify restricts the run
+to those tracks; --retry-not-found looks up tracks whose auto row is `not_found`
+again (found/instrumental rows are kept; a new not_found result only refreshes it).
+
+    runuser -u musicserver -- venv/bin/python -m nocturne_api.lyrics_backfill --apply \
+        --spotify --only-spotify --retry-not-found [--spotify-snapshot SNAP.json]
+
 Tracks that already have admin lyrics (v1_lyrics), a .lrc file next to the audio or a
-v1_lyrics_auto row are skipped. The table is created by migration v4 (nocturne_api/db.py)
+v1_lyrics_auto row are skipped (except not_found rows with --retry-not-found). The table is created by migration v4 (nocturne_api/db.py)
 on service start, so restart the service before --apply. Never touches audio files.
 This module does not import nocturne_api.config (no secrets needed).
 """
@@ -67,19 +77,56 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
     return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
 
 
-def load_existing(nocturne_db: str) -> tuple[set, set]:
-    """(track ids with admin lyrics, track ids with an auto row) — read-only."""
+def load_existing(nocturne_db: str, retry_not_found: bool = False) -> tuple[set, set]:
+    """(track ids with admin lyrics, track ids with an auto row to keep) — read-only."""
     if not Path(nocturne_db).exists():
         return set(), set()
     conn = _ro(nocturne_db)
     try:
         admin = {r[0] for r in conn.execute("SELECT track_id FROM v1_lyrics")} \
             if _table_exists(conn, "v1_lyrics") else set()
-        auto = {r[0] for r in conn.execute("SELECT track_id FROM v1_lyrics_auto")} \
-            if _table_exists(conn, "v1_lyrics_auto") else set()
+        q = "SELECT track_id FROM v1_lyrics_auto"
+        if retry_not_found:
+            q += " WHERE status <> 'not_found'"
+        auto = {r[0] for r in conn.execute(q)} if _table_exists(conn, "v1_lyrics_auto") else set()
         return admin, auto
     finally:
         conn.close()
+
+
+def load_spotify_guesses(nocturne_db: str, snapshot: Optional[str] = None) -> dict[str, dict]:
+    """track_id -> {'title','artists','album','duration','label'} from Spotify metadata of
+    v1_spotify_track_map tracks (oldest mapping wins). Read-only."""
+    if not Path(nocturne_db).exists():
+        return {}
+    metas: dict[str, dict] = {}
+    if snapshot:
+        try:
+            metas.update(json.loads(Path(snapshot).read_text()).get("tracks") or {})
+        except Exception as exc:
+            log.warning("spotify snapshot not usable (%s): %s", snapshot, exc)
+    conn = _ro(nocturne_db)
+    try:
+        if not _table_exists(conn, "v1_spotify_track_map"):
+            return {}
+        if _table_exists(conn, "v1_spotify_track_meta"):
+            for r in conn.execute("SELECT * FROM v1_spotify_track_meta"):
+                if r["spotify_track_id"] not in metas:
+                    metas[r["spotify_track_id"]] = {"name": r["name"], "artists": json.loads(r["artists"] or "[]"),
+                                                    "album": r["album"], "duration_ms": r["duration_ms"]}
+        rows = conn.execute("SELECT spotify_track_id, track_id FROM v1_spotify_track_map"
+                            " ORDER BY created_at, spotify_track_id").fetchall()
+    finally:
+        conn.close()
+    out: dict[str, dict] = {}
+    for sid, tid in rows:
+        m = metas.get(sid)
+        if tid in out or not m or not m.get("name"):
+            continue
+        ms = m.get("duration_ms")
+        out[tid] = {"title": m["name"], "artists": m.get("artists") or [], "album": m.get("album"),
+                    "duration": int(round(ms / 1000)) if ms else None, "label": "spotify"}
+    return out
 
 
 def load_cover_guesses(path: Optional[str]) -> dict[str, list[dict]]:
@@ -117,8 +164,14 @@ def run(args: argparse.Namespace) -> dict:
     library_db = args.library_db or default_library_db()
     nocturne_db = args.nocturne_db or default_nocturne_db()
     tracks = load_tracks(library_db)
-    admin_ids, auto_ids = load_existing(nocturne_db)
+    admin_ids, auto_ids = load_existing(nocturne_db, getattr(args, "retry_not_found", False))
     extra = load_cover_guesses(args.cover_report)
+    spotify = load_spotify_guesses(nocturne_db, getattr(args, "spotify_snapshot", None)) \
+        if getattr(args, "spotify", False) else {}
+    if getattr(args, "only_spotify", False):
+        tracks = [t for t in tracks if t["id"] in spotify]
+    for tid, g in spotify.items():           # Spotify first: the highest-quality guess
+        extra[tid] = [g] + [x for x in extra.get(tid, []) if x.get("title") != g["title"]]
 
     wconn: Optional[sqlite3.Connection] = None
     backup = None
@@ -155,9 +208,13 @@ def run(args: argparse.Namespace) -> dict:
             if args.limit and processed >= args.limit:
                 break
             processed += 1
+            sg = spotify.get(t["id"])
+            if sg and not t.get("duration") and sg.get("duration"):
+                t = dict(t, duration=sg["duration"])
             res = la.lookup(t, extra.get(t["id"]), deadline_s=None)
             rep = dict(base, **res.to_report())
             rep["cover_report_hint"] = bool(extra.get(t["id"]))
+            rep["spotify_hint"] = t["id"] in spotify
             key = res.status
             if res.status == la.STATUS_FOUND:
                 key = "found_synced" if res.synced else "found_plain_only"
@@ -198,9 +255,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument("--limit", type=int, default=0, help="look up at most N tracks")
     p.add_argument("--report", help="write a JSON report here")
     p.add_argument("--cover-report", help="cover backfill report JSON (official titles as extra guesses)")
+    p.add_argument("--spotify", action="store_true",
+                   help="use Spotify metadata of imported tracks as the first guess")
+    p.add_argument("--spotify-snapshot", help="Spotify snapshot JSON from the spotify_* CLIs")
+    p.add_argument("--only-spotify", action="store_true", help="only tracks imported from Spotify (implies --spotify)")
+    p.add_argument("--retry-not-found", action="store_true",
+                   help="look up tracks whose auto row is not_found again")
     p.add_argument("--library-db", help="NOVA library.db (default: $MUSIC_DIR/library.db)")
     p.add_argument("--nocturne-db", help="nocturne.db (default: $NOCTURNE_DB_PATH or $MUSIC_DIR/nocturne.db)")
     args = p.parse_args(argv)
+    if args.only_spotify:
+        args.spotify = True
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if not la.lookups_enabled():
         print("LRCLIB lookups are disabled (NOCTURNE_TESTING / NOCTURNE_LYRICS_LOOKUP=0).", file=sys.stderr)

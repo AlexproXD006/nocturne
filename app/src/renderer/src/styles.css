@@ -66,29 +66,157 @@
   --color-fg-subtle: #7a7a87;
   --color-line: rgb(255 255 255 / 0.09);
 }
-:root[data-theme='adaptive'] body,
-:root[data-theme='adaptive'] .app-shell {
+:root {
+  /* Panel glass colours for the Adaptive theme; useAdaptiveRoot overrides them
+     from Settings → Adaptive background → Panel glass (62 = these values). */
+  --adaptive-main-bg: rgb(8 8 12 / 0.38);
+  --adaptive-chrome-bg: rgb(0 0 0 / 0.32);
+  --adaptive-fade-top: rgb(0 0 0 / 0.35);
+  --adaptive-fade-bottom: rgb(0 0 0 / 0.75);
+}
+/* Glass shell only when the backdrop is shown app-wide (scope "everywhere");
+   with scope "fullscreen" the app keeps the normal solid dark surfaces. */
+:root[data-theme='adaptive']:not([data-adaptive-scope='fullscreen']) body,
+:root[data-theme='adaptive']:not([data-adaptive-scope='fullscreen']) .app-shell {
   background: #000;
 }
-:root[data-theme='adaptive'] .app-chrome {
-  background-color: rgb(0 0 0 / 0.32);
+:root[data-theme='adaptive']:not([data-adaptive-scope='fullscreen']) .app-chrome {
+  background-color: var(--adaptive-chrome-bg);
   backdrop-filter: blur(24px) saturate(140%);
 }
-:root[data-theme='adaptive'] .app-chrome-fade {
-  background-image: linear-gradient(to top, rgb(0 0 0 / 0.75), rgb(0 0 0 / 0.35));
+:root[data-theme='adaptive']:not([data-adaptive-scope='fullscreen']) .app-chrome-fade {
+  background-image: linear-gradient(to top, var(--adaptive-fade-bottom), var(--adaptive-fade-top));
   backdrop-filter: blur(20px);
 }
-:root[data-theme='adaptive'] .app-main {
-  background-color: rgb(8 8 12 / 0.38);
+:root[data-theme='adaptive']:not([data-adaptive-scope='fullscreen']) .app-main {
+  background-color: var(--adaptive-main-bg);
   backdrop-filter: blur(8px);
+}
+/* Battery saver: backdrop-filter on large panels is the costliest part on
+   phones; the backdrop under them is already blurred, so drop it. */
+:root[data-theme='adaptive'][data-adaptive-perf='saver'] .app-chrome,
+:root[data-theme='adaptive'][data-adaptive-perf='saver'] .app-chrome-fade,
+:root[data-theme='adaptive'][data-adaptive-perf='saver'] .app-main {
+  backdrop-filter: none;
 }
 .ambient-in {
   animation: ambient-in 1.1s var(--ease-out-soft) both;
+}
+.adaptive-backdrop .ambient-in {
+  animation-duration: var(--ab-fade, 1.1s);
 }
 @keyframes ambient-in {
   from {
     opacity: 0;
   }
+}
+
+/* AdaptiveBackdrop layers. All tunables arrive as variables on the root
+   (--ab-opacity, --ab-filter, --ab-fade, --ab-motion-duration,
+   --ab-aurora-duration); motion is transform-only. */
+.adaptive-backdrop {
+  container-type: size;
+}
+.ab-media {
+  position: absolute;
+  inset: 0;
+  transform-origin: center;
+}
+.ab-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.25);
+  opacity: var(--ab-opacity, 0.55);
+  filter: var(--ab-filter, none);
+}
+.ab-solid {
+  position: absolute;
+  inset: 0;
+  opacity: var(--ab-opacity, 0.55);
+  transition: background-color var(--ab-fade, 1.1s) ease;
+}
+.ab-aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: var(--ab-opacity, 0.55);
+}
+.ab-aurora-field {
+  position: absolute;
+  inset: -25%;
+}
+.ab-aurora-animated {
+  animation: ab-aurora var(--ab-aurora-duration, 24s) ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes ab-aurora {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(6%, -4%, 0) rotate(25deg) scale(1.08); }
+  100% { transform: translate3d(-5%, 5%, 0) rotate(-20deg) scale(1.02); }
+}
+.ab-drift {
+  animation: ab-drift var(--ab-motion-duration, 36s) ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes ab-drift {
+  0% { transform: scale(1) translate3d(0, 0, 0); }
+  50% { transform: scale(1.12) translate3d(-3%, 2%, 0); }
+  100% { transform: scale(1.06) translate3d(3%, -2%, 0); }
+}
+/* Spin: a centred square larger than the box diagonal, so corners never show. */
+.ab-spin {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: 150vmax;
+  height: 150vmax;
+  width: max(150cqw, 150cqh);
+  height: max(150cqw, 150cqh);
+  translate: -50% -50%;
+  animation: ab-spin var(--ab-motion-duration, 50s) linear infinite;
+  will-change: transform;
+}
+.ab-spin .ab-cover {
+  transform: none;
+}
+@keyframes ab-spin {
+  to { transform: rotate(360deg); }
+}
+.ab-pulse {
+  will-change: transform;
+  transition: transform 80ms linear;
+}
+/* Paused (with "freeze on pause") or hidden: hold the current frame. */
+.ab-frozen .ab-drift,
+.ab-frozen .ab-spin,
+.ab-frozen .ab-aurora-animated {
+  animation-play-state: paused;
+}
+.ab-dim {
+  transition: opacity 600ms ease;
+}
+/* Saver: render the media at half resolution and scale it up (the blur
+   radius is halved in JS to match), so the filter touches 1/4 of the pixels. */
+.ab-saver .ab-media {
+  inset: auto;
+  left: 0;
+  top: 0;
+  width: 50%;
+  height: 50%;
+  transform-origin: 0 0;
+  transform: scale(2);
+}
+.ab-vignette {
+  background: radial-gradient(ellipse at center, transparent 50%, rgb(0 0 0 / 0.6) 100%);
+}
+/* Static film grain: a tiny tiled SVG turbulence, rasterised once. */
+.ab-grain {
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='128' height='128'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.2 -0.2'/></filter><rect width='128' height='128' filter='url(%23n)'/></svg>");
+  background-size: 128px 128px;
 }
 
 :root[data-theme='oled'] {
@@ -402,6 +530,12 @@ textarea {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+  /* Infinite loops at 0.01ms would strobe: stop the backdrop motion outright. */
+  .ab-drift,
+  .ab-spin,
+  .ab-aurora-animated {
+    animation: none !important;
   }
 }
 

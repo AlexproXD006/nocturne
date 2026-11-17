@@ -135,12 +135,87 @@ class StateBody(BaseModel):
 _COMMAND_KINDS = {
     "play", "pause", "toggle", "next", "previous",
     "seek", "setShuffle", "setRepeat", "setVolume", "stop", "transferTo",
+    "playContext", "addToQueue", "playNext",
 }
+
+# Bounds for track-list commands (playContext / addToQueue / playNext).
+MAX_TRACK_IDS = 5000
+MAX_TRACK_ID_LEN = 128
+MAX_PAYLOAD_BYTES = 256 * 1024
+_CONTEXT_TYPES = {"album", "playlist", "artist", "search", "library", "home", "tracks"}
 
 
 class CommandBody(BaseModel):
     kind: str
     payload: Optional[dict] = None
+
+
+class RenameBody(BaseModel):
+    name: str
+
+
+def _bad(message: str) -> HTTPException:
+    return HTTPException(status_code=400, detail={"message": message, "code": "bad_request"})
+
+
+def _is_number(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _track_ids(payload: dict) -> list:
+    ids = payload.get("trackIds")
+    if not isinstance(ids, list) or not ids:
+        raise _bad('"trackIds" must be a non-empty array of track ids.')
+    if len(ids) > MAX_TRACK_IDS:
+        raise _bad(f'"trackIds" can hold at most {MAX_TRACK_IDS} ids.')
+    for t in ids:
+        if not isinstance(t, str) or not t or len(t) > MAX_TRACK_ID_LEN:
+            raise _bad('"trackIds" must contain non-empty strings.')
+    return ids
+
+
+def _validate_payload(kind: str, payload: dict) -> dict:
+    """Validates and normalises a command payload. Raises 400 on bad input."""
+    if len(json.dumps(payload)) > MAX_PAYLOAD_BYTES:
+        raise _bad("Command payload is too large.")
+    if kind == "seek":
+        pos = payload.get("position")
+        if not _is_number(pos) or pos < 0:
+            raise _bad('"position" must be a number of seconds >= 0.')
+    elif kind == "setVolume":
+        vol = payload.get("volume")
+        muted = payload.get("muted")
+        if vol is None and muted is None:
+            raise _bad('"volume" or "muted" is required.')
+        if vol is not None and (not _is_number(vol) or not 0 <= vol <= 1):
+            raise _bad('"volume" must be a number between 0 and 1.')
+        if muted is not None and not isinstance(muted, bool):
+            raise _bad('"muted" must be a boolean.')
+    elif kind == "setShuffle":
+        if not isinstance(payload.get("on"), bool):
+            raise _bad('"on" must be a boolean.')
+    elif kind == "setRepeat":
+        if payload.get("mode") not in ("off", "all", "one"):
+            raise _bad('"mode" must be off, all or one.')
+    elif kind == "playContext":
+        ids = _track_ids(payload)
+        start = payload.get("startIndex", 0)
+        if not isinstance(start, int) or isinstance(start, bool) or not 0 <= start < len(ids):
+            raise _bad('"startIndex" must be an index into "trackIds".')
+        shuffle = payload.get("shuffle")
+        if shuffle is not None and not isinstance(shuffle, bool):
+            raise _bad('"shuffle" must be a boolean.')
+        ctx = payload.get("context")
+        if ctx is not None:
+            if not isinstance(ctx, dict) or ctx.get("type") not in _CONTEXT_TYPES:
+                raise _bad('"context.type" is not a known context type.')
+            for key, limit in (("id", 256), ("name", 300)):
+                v = ctx.get(key)
+                if v is not None and (not isinstance(v, str) or len(v) > limit):
+                    raise _bad(f'"context.{key}" must be a string of at most {limit} characters.')
+    elif kind in ("addToQueue", "playNext"):
+        _track_ids(payload)
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +261,17 @@ async def unregister_session(session_id: str, account: dict = Depends(require_us
     return Response(status_code=204)
 
 
+@router.patch("/sessions/{session_id}", status_code=204)
+async def rename_session(session_id: str, body: RenameBody, account: dict = Depends(require_user)):
+    _own_session_or_404(session_id, account["id"])
+    name = (body.name or "").strip()[:80]
+    if not name:
+        raise _bad('"name" is required.')
+    with connect() as conn:
+        conn.execute("UPDATE v1_connect_sessions SET name=? WHERE id=?", (name, session_id))
+    return Response(status_code=204)
+
+
 @router.put("/sessions/{session_id}/state", status_code=204)
 async def update_state(session_id: str, body: StateBody, account: dict = Depends(require_user)):
     _own_session_or_404(session_id, account["id"])
@@ -195,8 +281,17 @@ async def update_state(session_id: str, body: StateBody, account: dict = Depends
             "UPDATE v1_connect_sessions SET state=?, last_seen=? WHERE id=?",
             (json.dumps(body.state)[:16000], now, session_id),
         )
-    # Notify this user's OTHER sessions that watch this one (controllers).
-    _push(session_id, {"type": "state", "state": body.state})
+    # Notify the session's own listeners (legacy) and the user's OTHER live sessions, so a
+    # controlling device sees the change at once instead of on its next poll.
+    event = {"type": "state", "sessionId": session_id, "state": body.state}
+    _push(session_id, event)
+    with connect() as conn:
+        others = conn.execute(
+            "SELECT id FROM v1_connect_sessions WHERE user_id=? AND id<>?",
+            (account["id"], session_id),
+        ).fetchall()
+    for r in others:
+        _push(r["id"], event)
     return Response(status_code=204)
 
 
@@ -221,7 +316,8 @@ async def send_command(session_id: str, body: CommandBody, account: dict = Depen
     row = _own_session_or_404(session_id, account["id"])
     if not row["controllable"]:
         raise HTTPException(status_code=409, detail={"message": "This device cannot be controlled.", "code": "conflict"})
-    delivered = _push(session_id, {"type": "command", "kind": body.kind, "payload": body.payload or {}})
+    payload = _validate_payload(body.kind, body.payload or {})
+    delivered = _push(session_id, {"type": "command", "kind": body.kind, "payload": payload})
     if not delivered:
         raise HTTPException(status_code=409, detail={"message": "That device is offline.", "code": "offline"})
     return {"delivered": True}

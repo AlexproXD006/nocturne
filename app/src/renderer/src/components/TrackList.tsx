@@ -2,8 +2,8 @@ import { memo, useCallback, useRef, useState, type ReactNode } from 'react'
 import { Clock3, Disc3, GripVertical, ListEnd, ListMinus, ListMusic, ListPlus, MoreHorizontal, Pause, Play, UserRound } from 'lucide-react'
 import type { Track } from '../api/types'
 import type { QueueContext } from '../player/queue'
-import { currentItem } from '../player/queue'
-import { usePlayer } from '../services'
+import { playback } from '../services'
+import { useNowContext, useNowPlaying, useNowTrack } from '../hooks/useNowPlaying'
 import { useNav } from '../store/nav'
 import { useUi } from '../store/ui'
 import { artistNames, formatTime } from '../lib/format'
@@ -63,7 +63,7 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
   const { menu, open, close } = useMenu()
   const go = useNav((s) => s.go)
   const toast = useUi((s) => s.toast)
-  const toggle = usePlayer((s) => s.toggle)
+  const toggle = playback.toggle
   const playlists = usePlaylistsEnabled()
   // The row only becomes draggable while the mouse is down on the grip, so touch scrolling and
   // text selection elsewhere in the row behave normally.
@@ -71,8 +71,8 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
   const [over, setOver] = useState(false)
 
   const items = [
-    { label: 'Play next', icon: <ListPlus />, onSelect: () => (usePlayer.getState().addNext([track]), toast(`“${track.title}” will play next`)) },
-    { label: 'Add to queue', icon: <ListEnd />, onSelect: () => (usePlayer.getState().addToQueue([track]), toast('Added to queue')) },
+    { label: 'Play next', icon: <ListPlus />, onSelect: () => (playback.addNext([track]), toast(`“${track.title}” will play next`)) },
+    { label: 'Add to queue', icon: <ListEnd />, onSelect: () => (playback.addToQueue([track]), toast('Added to queue')) },
     ...(playlists ? [{ label: 'Add to playlist…', icon: <ListMusic />, onSelect: () => usePlaylistUi.getState().openPicker([track]) }] : []),
     ...(playlists && onRemove ? [{ label: 'Remove from this playlist', icon: <ListMinus />, onSelect: () => onRemove(index) }] : []),
     ...(track.album ? [{ label: 'Go to album', icon: <Disc3 />, onSelect: () => go({ name: 'album', id: track.album!.id }) }] : []),
@@ -80,6 +80,10 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
   ]
 
   const activate = (): void => (isCurrent ? toggle() : onPlay(index))
+  const quickQueue = (): void => {
+    const undo = playback.addToQueue([track])
+    toast('Added to queue', 'info', undo ? { action: { label: 'Undo', run: undo } } : undefined)
+  }
 
   return (
     <div
@@ -207,6 +211,19 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
             <GripVertical className="h-4 w-4" />
           </span>
         )}
+        <button
+          type="button"
+          aria-label={`Add ${track.title} to queue`}
+          title="Add to queue"
+          onClick={(e) => {
+            e.stopPropagation()
+            quickQueue()
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+          className="flex h-8 w-8 items-center justify-center rounded-full text-fg-subtle opacity-0 transition hover:bg-white/8 hover:text-fg group-hover:opacity-100 focus:opacity-100 max-md:opacity-100"
+        >
+          <ListEnd className="h-4 w-4" />
+        </button>
         <span className="opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
           <LikeButton trackId={track.id} serverValue={track.liked} />
         </span>
@@ -236,7 +253,8 @@ export function TrackList({
   showAlbum = true,
   header = true,
   onRemove,
-  onMove
+  onMove,
+  rowKeys
 }: {
   tracks: Track[]
   context: QueueContext
@@ -247,13 +265,16 @@ export function TrackList({
   onRemove?: (index: number) => void
   /** Editable playlist: move the song at `from` to `to` (desktop drag-and-drop). */
   onMove?: (from: number, to: number) => void
+  /** Stable React keys per row (e.g. playlist entry ids, so the same song can appear twice). Default: id + index. */
+  rowKeys?: readonly string[]
 }): ReactNode {
-  const currentId = usePlayer((s) => currentItem(s.queue)?.track.id)
-  const sameContext = usePlayer((s) => s.queue.context?.type === context.type && s.queue.context?.id === context.id)
-  const isPlaying = usePlayer((s) => s.status === 'playing' || s.status === 'buffering' || s.status === 'loading')
+  const currentId = useNowTrack()?.id
+  const nowCtx = useNowContext()
+  const sameContext = nowCtx?.type === context.type && nowCtx?.id === context.id
+  const isPlaying = useNowPlaying()
 
   const onPlay = useCallback(
-    (index: number) => void usePlayer.getState().playTracks(tracks, index, context),
+    (index: number) => void playback.playTracks(tracks, index, context),
     [tracks, context]
   )
 
@@ -296,7 +317,7 @@ export function TrackList({
       )}
       {tracks.map((t, i) => (
         <TrackRow
-          key={`${t.id}:${i}`}
+          key={rowKeys?.[i] ?? `${t.id}:${i}`}
           track={t}
           index={i}
           showArt={showArt}

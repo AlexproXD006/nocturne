@@ -6,7 +6,7 @@ import { PLAYLIST_DESCRIPTION_MAX, PLAYLIST_NAME_MAX, type Playlist, type Track 
 import { useResource } from '../hooks/useResource'
 import { useNav } from '../store/nav'
 import { useUi } from '../store/ui'
-import { EDITABLE_PLAYLISTS_KEY, addTracks, createPlaylist, fetchEditablePlaylists, usePlaylistUi } from '../store/playlists'
+import { EDITABLE_PLAYLISTS_KEY, addTracks, createPlaylist, fetchEditablePlaylists, usePlaylistUi, type AddOutcome } from '../store/playlists'
 import { plural } from '../lib/format'
 import { Button, Field, InlineError, inputClass } from '../pages/admin/ui'
 import { Artwork, IconButton, Spinner, cx } from './common'
@@ -202,6 +202,43 @@ export function NewPlaylistTile({ onClick }: { onClick: () => void }): ReactNode
 
 // ---- Add to playlist ----------------------------------------------------------
 
+/**
+ * Shows the toast for an add. When the server skipped songs that were already in the playlist, the
+ * toast offers "Add again" ("Add them again" for several), which appends those songs once more.
+ */
+export function notifyAdd(playlist: Pick<Playlist, 'id' | 'name'>, out: AddOutcome): void {
+  const { toast } = useUi.getState()
+  const again = out.skippedIds
+  if (again.length === 0) {
+    toast(out.message)
+    return
+  }
+  toast(out.message, 'info', {
+    action: {
+      label: again.length === 1 ? 'Add again' : 'Add them again',
+      run: () => void addAgain({ id: playlist.id, name: out.name || playlist.name }, again)
+    }
+  })
+}
+
+async function addAgain(playlist: Pick<Playlist, 'id' | 'name'>, ids: string[]): Promise<void> {
+  const { toast } = useUi.getState()
+  try {
+    const res = await addTracks(
+      api,
+      playlist,
+      ids.map((id) => ({ id })),
+      undefined,
+      { allowDuplicates: true }
+    )
+    // A server without duplicate support ignores the flag and skips them again.
+    if (res.added === 0 && res.skipped > 0) toast(`${res.message}. This server doesn't allow the same song twice in a playlist.`, 'error')
+    else toast(res.message)
+  } catch (err) {
+    toast(describeError(err), 'error')
+  }
+}
+
 /** Button that opens the picker for the given songs; renders nothing on servers without playlist editing. */
 export function AddToPlaylistButton({
   tracks,
@@ -254,7 +291,7 @@ export function AddToPlaylistDialog({ tracks, label, onClose }: { tracks: Track[
     setError(null)
     try {
       const res = await addTracks(api, p, tracks)
-      toast(res.message)
+      notifyAdd(p, res)
       onClose()
     } catch (err) {
       setError(describeError(err))

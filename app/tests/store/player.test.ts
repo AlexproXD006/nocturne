@@ -786,7 +786,8 @@ describe('queue management', () => {
     c.s().addToQueue([track('n2')])
     await flush(20)
     expect(c.engine.load).not.toHaveBeenCalled()
-    expect(c.s().queue.items.map((i) => i.track.id)).toEqual(['t0', 'n1', 't1', 'n2'])
+    // Both go to the user queue (play next first), ahead of the rest of the context.
+    expect(c.s().queue.items.map((i) => i.track.id)).toEqual(['t0', 'n1', 'n2', 't1'])
   })
 
   it('adding nothing to an empty queue does not start anything', async () => {

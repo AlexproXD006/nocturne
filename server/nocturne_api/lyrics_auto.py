@@ -634,13 +634,71 @@ def auto_fetch_async(track: dict, raw_artist: Optional[str] = None) -> None:
         logger.warning("lyrics_auto: hook not started for %s: %s", track.get("id"), exc)
 
 
-def has_lrc_file(file_path: Optional[str]) -> bool:
+# .lrc files next to the audio. NOVA's downloader used to write UNSYNCED lyrics as a
+# .lrc with invented timestamps every 10 s ("[00:00] ... [00:10] ...", header
+# "[by:NOVA Music Server]"); those must not beat real LRCLIB sync.
+LRC_USER = "user"            # hand-made / external .lrc: keeps priority over everything automatic
+LRC_NOVA_SYNCED = "nova"     # written by NOVA with real timestamps: below v1_lyrics_auto
+LRC_FAKE = "fake"            # NOVA's 10-s grid / no usable timing: plain text, last resort
+
+_NOVA_LRC_HEADER_RE = re.compile(r"^\s*\[by:\s*NOVA Music Server\s*\]", re.I | re.M)
+_LRC_TS_RE = re.compile(r"^\s*\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]")
+_LRC_ANY_TS_RE = re.compile(r"\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]")
+_LRC_TAG_RE = re.compile(r"^\s*\[[a-z]+:[^\]]*\]\s*$", re.I)
+
+
+def classify_lrc(text: str) -> str:
+    """LRC_USER, LRC_NOVA_SYNCED or LRC_FAKE (evenly spaced whole-second grid, e.g.
+    every 10 s, or no timestamps at all)."""
+    stamps: list[float] = []
+    fractions = False
+    for line in (text or "").splitlines():
+        m = _LRC_TS_RE.match(line)
+        if not m:
+            continue
+        stamps.append(int(m.group(1)) * 60 + int(m.group(2)) + (int(m.group(3)) / 10 ** len(m.group(3))
+                                                                  if m.group(3) else 0))
+        fractions = fractions or bool(m.group(3))
+    nova = bool(_NOVA_LRC_HEADER_RE.search(text or ""))
+    if not stamps:
+        return LRC_FAKE
+    deltas = {round(b - a, 3) for a, b in zip(stamps, stamps[1:])}
+    grid = not fractions and len(stamps) >= 2 and len(deltas) == 1
+    if grid or (nova and not fractions):
+        return LRC_FAKE
+    return LRC_NOVA_SYNCED if nova else LRC_USER
+
+
+def lrc_plain_text(text: str) -> Optional[str]:
+    lines = []
+    for line in (text or "").splitlines():
+        if _LRC_TAG_RE.match(line):
+            continue
+        line = _LRC_ANY_TS_RE.sub("", line).strip()
+        if line:
+            lines.append(line)
+    return "\n".join(lines) or None
+
+
+def read_lrc(file_path: Optional[str]) -> Optional[tuple[str, str]]:
+    """(kind, text) of the .lrc next to the audio, or None. Never modifies the file."""
     if not file_path:
-        return False
+        return None
     try:
-        return Path(file_path).with_suffix(".lrc").exists()
+        p = Path(file_path).with_suffix(".lrc")
+        if not p.exists():
+            return None
+        text = p.read_text(encoding="utf-8", errors="replace")
     except Exception:
-        return False
+        return None
+    return classify_lrc(text), text
+
+
+def has_lrc_file(file_path: Optional[str]) -> bool:
+    """True only for a .lrc that takes priority over automatic lyrics (a real,
+    user-provided one). NOVA-generated .lrc files do not count."""
+    r = read_lrc(file_path)
+    return bool(r) and r[0] == LRC_USER
 
 
 def empty_response() -> dict:

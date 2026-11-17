@@ -256,6 +256,34 @@ _MIGRATIONS: list[tuple[int, str]] = [
             created_at       TEXT NOT NULL
         );
     """),
+    (6, """
+        -- Clean Spotify metadata of every imported track (cached at import time
+        -- and by the spotify_* CLIs): used to fix library titles, covers and lyrics.
+        CREATE TABLE IF NOT EXISTS v1_spotify_track_meta (
+            spotify_track_id TEXT PRIMARY KEY,
+            name             TEXT NOT NULL,
+            artists          TEXT NOT NULL DEFAULT '[]',   -- JSON list of names
+            album            TEXT,
+            duration_ms      INTEGER,
+            image_url        TEXT,                          -- largest album image
+            isrc             TEXT,
+            updated_at       TEXT NOT NULL
+        );
+
+        -- Original library metadata of tracks renamed from Spotify (first change
+        -- wins, so the oldest values are always kept). Undo source.
+        CREATE TABLE IF NOT EXISTS v1_spotify_meta_undo (
+            track_id    TEXT PRIMARY KEY,
+            old_title   TEXT,
+            old_artist  TEXT,
+            old_album   TEXT,
+            new_title   TEXT,
+            new_artist  TEXT,
+            new_album   TEXT,
+            spotify_track_id TEXT,
+            changed_at  TEXT NOT NULL
+        );
+    """),
 ]
 
 

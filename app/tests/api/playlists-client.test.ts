@@ -43,6 +43,37 @@ describe('playlist editing endpoints', () => {
     expect(f.calls[0]).toMatchObject({ method: 'POST', url: `${BASE}/v1/playlists/p1/tracks`, body: { trackIds: ['t1', 't2'] } })
   })
 
+  it('addToPlaylist sends allowDuplicates only when set', async () => {
+    const f = fakeFetch(() => jsonResponse({ added: ['t1'], skipped: [], playlist: { id: 'p1', name: 'Mine', artwork: [] } }))
+    await expect(client(f).addToPlaylist('p1', ['t1'], { allowDuplicates: true })).resolves.toMatchObject({ added: 1, skipped: [] })
+    await client(f).addToPlaylist('p1', ['t1'], { allowDuplicates: false })
+    expect(f.calls[0]!.body).toEqual({ trackIds: ['t1'], allowDuplicates: true })
+    expect(f.calls[1]!.body).toEqual({ trackIds: ['t1'] })
+  })
+
+  it('removePlaylistEntry DELETEs one encoded entry', async () => {
+    const f = fakeFetch(() => emptyResponse(204))
+    await expect(client(f).removePlaylistEntry('p 1', 'e/1')).resolves.toBeUndefined()
+    expect(f.calls[0]).toMatchObject({ method: 'DELETE', url: `${BASE}/v1/playlists/p%201/entries/e%2F1` })
+  })
+
+  it('reorderPlaylist sends entryIds when every track has one', async () => {
+    const f = fakeFetch(() => jsonResponse(detail))
+    await client(f).reorderPlaylist('p1', [
+      { id: 'a', entryId: 'e2' },
+      { id: 'a', entryId: 'e1' },
+      { id: 'b', entryId: 'e3' }
+    ])
+    expect(f.calls[0]).toMatchObject({ method: 'PUT', url: `${BASE}/v1/playlists/p1/tracks` })
+    expect(f.calls[0]!.body).toEqual({ entryIds: ['e2', 'e1', 'e3'] })
+  })
+
+  it('reorderPlaylist falls back to trackIds when any track lacks an entryId', async () => {
+    const f = fakeFetch(() => jsonResponse(detail))
+    await client(f).reorderPlaylist('p1', [{ id: 'a', entryId: 'e1' }, { id: 'b' }, { id: 'a' }])
+    expect(f.calls[0]!.body).toEqual({ trackIds: ['a', 'b', 'a'] })
+  })
+
   it('removeFromPlaylist DELETEs the encoded track path', async () => {
     const f = fakeFetch(() => emptyResponse(204))
     await expect(client(f).removeFromPlaylist('p1', 'a/b')).resolves.toBeUndefined()

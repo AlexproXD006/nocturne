@@ -157,11 +157,15 @@ def init_db() -> None:
                 created_at  TEXT
             );
 
+            -- One row per playlist *entry*: the same track may appear several
+            -- times (entry_id is the stable identity of each occurrence).
+            -- Older databases are converted by migrate_playlist_entries().
             CREATE TABLE IF NOT EXISTS playlist_tracks (
+                entry_id    TEXT PRIMARY KEY,
                 playlist_id TEXT NOT NULL,
                 track_id    TEXT NOT NULL,
-                position    INTEGER DEFAULT 0,
-                PRIMARY KEY (playlist_id, track_id),
+                position    INTEGER NOT NULL DEFAULT 0,
+                added_at    TEXT,
                 FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
                 FOREIGN KEY (track_id)    REFERENCES tracks(id)    ON DELETE CASCADE
             );
@@ -230,6 +234,124 @@ def init_db() -> None:
             );
             """
         )
+    migrate_playlist_entries()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Playlist entries migration (PRIMARY KEY (playlist_id, track_id) -> entry_id)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PLAYLIST_ENTRIES_DDL = """
+    CREATE TABLE {name} (
+        entry_id    TEXT PRIMARY KEY,
+        playlist_id TEXT NOT NULL,
+        track_id    TEXT NOT NULL,
+        position    INTEGER NOT NULL DEFAULT 0,
+        added_at    TEXT,
+        FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+        FOREIGN KEY (track_id)    REFERENCES tracks(id)    ON DELETE CASCADE
+    )
+"""
+_PLAYLIST_ENTRIES_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS idx_playlist_tracks_pos   ON playlist_tracks(playlist_id, position)",
+    "CREATE INDEX IF NOT EXISTS idx_playlist_tracks_track ON playlist_tracks(track_id)",
+)
+
+
+def new_entry_id() -> str:
+    return uuid.uuid4().hex
+
+
+def backup_db_named(label: str) -> str:
+    """Consistent copy of library.db (SQLite backup API) as
+    <MUSIC_DIR>/.backups/library-<label>-<timestamp>.db. Not rotated by _trim_backups()."""
+    _ensure_backup_storage()
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    dest = str(Path(_BACKUPS_DIR) / f"library-{label}-{ts}.db")
+    src = sqlite3.connect(DB_PATH, timeout=30)
+    dst = sqlite3.connect(dest)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    return dest
+
+
+def _playlist_tracks_columns(conn) -> list[str]:
+    return [r[1] for r in conn.execute("PRAGMA table_info(playlist_tracks)").fetchall()]
+
+
+def migrate_playlist_entries() -> str | None:
+    """
+    Idempotent startup migration: let a track appear several times in a playlist.
+
+    Old schema: playlist_tracks(playlist_id, track_id, position, PK(playlist_id, track_id)).
+    New schema: playlist_tracks(entry_id PK, playlist_id, track_id, position, added_at).
+    Existing rows are copied in their current order (position, then title, as the old
+    readers sorted them) and renumbered 0..n-1 per playlist, each with a new entry_id.
+    library.db is backed up first (SQLite backup API) to
+    <MUSIC_DIR>/.backups/library-pre-playlist-entries-<ts>.db; the swap runs in one
+    transaction and is verified (row count) before COMMIT. Returns the backup path when
+    a migration ran, else None.
+    """
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    try:
+        cols = _playlist_tracks_columns(conn)
+        if "entry_id" in cols or not cols:
+            for ddl in _PLAYLIST_ENTRIES_INDEXES if cols else ():
+                conn.execute(ddl)
+            conn.commit()
+            return None
+    finally:
+        conn.close()
+
+    backup = backup_db_named("pre-playlist-entries")
+    conn = sqlite3.connect(DB_PATH, timeout=30, isolation_level=None)
+    try:
+        conn.execute("PRAGMA foreign_keys=OFF")      # no-op inside a transaction: set before BEGIN
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if "entry_id" in _playlist_tracks_columns(conn):   # another process won the race
+                conn.execute("ROLLBACK")
+                return None
+            conn.execute("DROP TABLE IF EXISTS playlist_tracks_entries_new")
+            conn.execute(_PLAYLIST_ENTRIES_DDL.format(name="playlist_tracks_entries_new"))
+            rows = conn.execute(
+                """SELECT pt.playlist_id, pt.track_id
+                   FROM playlist_tracks pt LEFT JOIN tracks t ON t.id = pt.track_id
+                   ORDER BY pt.playlist_id, pt.position, t.title, pt.rowid"""
+            ).fetchall()
+            now = datetime.now(timezone.utc).isoformat()
+            pos: dict[str, int] = {}
+            out = []
+            for pid, tid in rows:
+                n = pos.get(pid, 0)
+                pos[pid] = n + 1
+                out.append((new_entry_id(), pid, tid, n, now))
+            conn.executemany(
+                "INSERT INTO playlist_tracks_entries_new(entry_id, playlist_id, track_id, position, added_at)"
+                " VALUES (?,?,?,?,?)", out)
+            copied = conn.execute("SELECT COUNT(*) FROM playlist_tracks_entries_new").fetchone()[0]
+            if copied != len(rows):
+                raise RuntimeError(f"playlist_tracks migration copied {copied} of {len(rows)} rows")
+            conn.execute("DROP TABLE playlist_tracks")
+            conn.execute("ALTER TABLE playlist_tracks_entries_new RENAME TO playlist_tracks")
+            for ddl in _PLAYLIST_ENTRIES_INDEXES:
+                conn.execute(ddl)
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+    finally:
+        try:
+            conn.execute("PRAGMA foreign_keys=ON")
+        finally:
+            conn.close()
+    import logging
+    logging.getLogger(__name__).info(
+        "playlist_tracks migrated to entry ids (%d rows); backup: %s", len(rows), backup)
+    return backup
 
 
 def _row_to_dict(row) -> dict:
@@ -514,37 +636,64 @@ def clear_playlist_tracks(playlist_id: str) -> None:
 
 
 def get_playlist_tracks(playlist_id: str) -> list[dict]:
+    """Tracks in playlist order, one item per entry (a track may repeat). Each item
+    is the track row plus `entry_id` and `position` of that occurrence."""
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT t.*
+            SELECT t.*, pt.entry_id AS entry_id, pt.position AS position
             FROM tracks t
             JOIN playlist_tracks pt ON pt.track_id = t.id
             WHERE pt.playlist_id = ?
-            ORDER BY pt.position, t.title
+            ORDER BY pt.position, pt.rowid
             """,
             (playlist_id,),
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 
-def add_track_to_playlist(playlist_id: str, track_id: str) -> None:
+def get_playlist_entries(playlist_id: str, conn=None) -> list[tuple[str, str]]:
+    """[(entry_id, track_id)] in playlist order (only entries whose track exists)."""
+    own = conn is None
+    conn = conn or connect()
+    try:
+        rows = conn.execute(
+            "SELECT pt.entry_id, pt.track_id FROM playlist_tracks pt JOIN tracks t ON t.id = pt.track_id"
+            " WHERE pt.playlist_id = ? ORDER BY pt.position, pt.rowid",
+            (playlist_id,),
+        ).fetchall()
+    finally:
+        if own:
+            conn.close()
+    return [(r[0], r[1]) for r in rows]
+
+
+def add_track_to_playlist(playlist_id: str, track_id: str, allow_duplicates: bool = False) -> str | None:
+    """Append a track. Legacy behaviour (default): no-op if it is already in the
+    playlist. Returns the new entry_id, or None when nothing was added."""
     _backup_before_write()
     with connect() as conn:
+        if not allow_duplicates and conn.execute(
+                "SELECT 1 FROM playlist_tracks WHERE playlist_id = ? AND track_id = ? LIMIT 1",
+                (playlist_id, track_id)).fetchone():
+            return None
         max_pos = conn.execute(
             "SELECT COALESCE(MAX(position), -1) FROM playlist_tracks WHERE playlist_id = ?",
             (playlist_id,),
         ).fetchone()[0]
+        entry_id = new_entry_id()
         conn.execute(
             """
-            INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position)
-            VALUES (?, ?, ?)
+            INSERT INTO playlist_tracks (entry_id, playlist_id, track_id, position, added_at)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (playlist_id, track_id, max_pos + 1),
+            (entry_id, playlist_id, track_id, max_pos + 1, datetime.now(timezone.utc).isoformat()),
         )
+    return entry_id
 
 
 def remove_track_from_playlist(playlist_id: str, track_id: str) -> None:
+    """Remove every occurrence of the track from the playlist."""
     _backup_before_write()
     with connect() as conn:
         conn.execute(
@@ -553,18 +702,54 @@ def remove_track_from_playlist(playlist_id: str, track_id: str) -> None:
         )
 
 
-def reorder_playlist_tracks(playlist_id: str, track_ids: list) -> None:
-    """Reorder tracks in a playlist by providing the full ordered list of track IDs."""
+def remove_playlist_entry(playlist_id: str, entry_id: str) -> bool:
+    """Remove one occurrence. Returns False if the entry is not in the playlist."""
+    with connect() as conn:
+        if not conn.execute("SELECT 1 FROM playlist_tracks WHERE playlist_id = ? AND entry_id = ?",
+                            (playlist_id, entry_id)).fetchone():
+            return False
     _backup_before_write()
     with connect() as conn:
-        for position, track_id in enumerate(track_ids):
-            conn.execute(
-                """
-                UPDATE playlist_tracks SET position = ?
-                WHERE playlist_id = ? AND track_id = ?
-                """,
-                (position, playlist_id, track_id),
-            )
+        cur = conn.execute("DELETE FROM playlist_tracks WHERE playlist_id = ? AND entry_id = ?",
+                           (playlist_id, entry_id))
+        return cur.rowcount > 0
+
+
+def reorder_playlist_entries(playlist_id: str, entry_ids: list) -> None:
+    """Set the order by entry ids. Entries not listed keep their relative order after them."""
+    _backup_before_write()
+    with connect() as conn:
+        current = [e for e, _ in get_playlist_entries(playlist_id, conn)]
+        known = set(current)
+        listed = [e for e in dict.fromkeys(entry_ids) if e in known]
+        used = set(listed)
+        rest = [e for e in current if e not in used]
+        conn.executemany(
+            "UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND entry_id = ?",
+            [(i, playlist_id, e) for i, e in enumerate(listed + rest)],
+        )
+
+
+def reorder_playlist_tracks(playlist_id: str, track_ids: list) -> None:
+    """Reorder tracks in a playlist by providing the ordered list of track IDs.
+    With repeated tracks, the n-th occurrence of an id in `track_ids` takes the
+    n-th entry of that track (in current order); unlisted entries go last."""
+    _backup_before_write()
+    with connect() as conn:
+        current = get_playlist_entries(playlist_id, conn)
+        pool: dict[str, list[str]] = {}
+        for e, t in current:
+            pool.setdefault(t, []).append(e)
+        listed: list[str] = []
+        for t in track_ids:
+            if pool.get(t):
+                listed.append(pool[t].pop(0))
+        used = set(listed)
+        rest = [e for e, _ in current if e not in used]
+        conn.executemany(
+            "UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND entry_id = ?",
+            [(i, playlist_id, e) for i, e in enumerate(listed + rest)],
+        )
 
 
 def update_track_play_count(track_id: str) -> None:

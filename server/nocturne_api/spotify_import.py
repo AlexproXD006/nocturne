@@ -16,6 +16,18 @@ Pipeline (one import at a time, progress persisted in v1_spotify_imports):
                2 downloads in flight with a pause between starts
   done         playlist order = Spotify order (re-applied after each batch)
 
+Repeated entries: a song listed several times in the Spotify playlist (same id, or
+the same song under another Spotify id: single vs album release) becomes several
+occurrences of ONE library track at the Spotify positions; it is never downloaded
+twice. Every Spotify id is recorded in v1_spotify_track_map.
+
+Post-processing (background thread, non-fatal, per resolved library track):
+  * library metadata = Spotify's clean title / artists (", "-joined) / album
+    (DB only, never audio tags; old values kept in v1_spotify_meta_undo)
+  * no official cover yet -> Spotify album image (largest) right away, then an
+    optional iTunes/Deezer upgrade searched with the clean metadata
+  * LRCLIB lyrics retried with the clean metadata when missing / not found
+
 Restart behaviour: imports are not resumed. On startup every import still in
 queued/reading/matching/downloading is marked `failed` with a clear reason.
 Starting the same Spotify playlist again reuses the Nocturne playlist created
@@ -26,10 +38,13 @@ through v1_spotify_track_map / the library match, so nothing is downloaded twice
 from __future__ import annotations
 
 import asyncio
+import os
+import queue
 import re
 import json
 import logging
 import secrets
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -37,6 +52,7 @@ from typing import Any, Optional
 from . import config
 from . import playlists as pl
 from . import spotify
+from . import spotify_catalog as sc
 from .db import connect
 
 import database as nova_db  # sys.path set by playlists.py
@@ -327,41 +343,193 @@ def _all_tracks() -> list[dict]:
     conn = nova_db.connect()
     try:
         return [dict(r) for r in conn.execute(
-            "SELECT id, title, artist, album, duration FROM tracks").fetchall()]
+            "SELECT id, title, artist, album, duration, file_path, cover_path FROM tracks").fetchall()]
     finally:
         conn.close()
 
 
 def _find_downloaded(video_title: str, known_before: set[str], claimed: set[str],
-                     expected_s: Optional[int], spotify_title: str = "") -> tuple[Optional[dict], Optional[str]]:
-    """Library row created by a finished YouTube download. Its title tag is the
-    video title (or yt-dlp's `track` field for YouTube Music uploads, which is the
-    plain song title); if the file already existed nothing new is created and the
-    existing row with that title is used."""
-    want = ca.norm(video_title)
-    song = ca._core_title(spotify_title)[0] if spotify_title else ""
-    if not want and not song:
-        return None, "La descarga no devolvió título"
-    cands = []
-    for r in _all_tracks():
-        if r["id"] in claimed:
-            continue
-        got = ca.norm(r.get("title") or "")
-        if want and got == want:
-            cands.append(r)
-        elif r["id"] not in known_before and (
-                (want and ca.title_similarity(got, want) >= 0.9)
-                or (song and ca.title_similarity(ca._core_title(r.get("title") or "")[0], song) >= 0.9)):
-            cands.append(r)
-    if not cands:
-        return None, "Descargada, pero no aparece en la biblioteca"
-    if expected_s:
-        cands.sort(key=lambda r: abs((r.get("duration") or 10**6) - expected_s))
+                     expected_s: Optional[int], spotify_title: str = "", *,
+                     track_id: Optional[str] = None, file_path: Optional[str] = None
+                     ) -> tuple[Optional[dict], Optional[str]]:
+    """Library row of a finished YouTube download.
+
+    NOVA's downloader reports the exact row (`track_id` / `file_path` of the job).
+    Without them (older downloader) fall back to the title: the title tag is the
+    video title (or yt-dlp's `track` field for YouTube Music uploads, the plain
+    song title). When the video had been downloaded before (the same song listed
+    twice under different Spotify ids), no new row is created and the EXISTING row
+    with that title is the answer, even if another entry of this import already
+    uses it - that used to fail as "Descargada, pero no aparece en la biblioteca"."""
+    rows = _all_tracks()
+    r = None
+    if track_id:
+        r = next((x for x in rows if x["id"] == track_id), None)
+    if r is None and file_path:
+        r = next((x for x in rows if x.get("file_path") == file_path), None)
+    if r is None:
+        want = ca.norm(video_title)
+        song = ca._core_title(spotify_title)[0] if spotify_title else ""
+        if not want and not song:
+            return None, "La descarga no devolvió título"
+        new_c, old_c = [], []
+        for x in rows:
+            got = ca.norm(x.get("title") or "")
+            if x["id"] not in known_before:
+                if (want and (got == want or ca.title_similarity(got, want) >= 0.9)) or (
+                        song and ca.title_similarity(ca._core_title(x.get("title") or "")[0], song) >= 0.9):
+                    new_c.append(x)
+            elif want and got == want:
+                old_c.append(x)
+        cands = [x for x in new_c if x["id"] not in claimed] or new_c or old_c
+        if not cands:
+            return None, "Descargada, pero no aparece en la biblioteca"
+        if expected_s:
+            cands.sort(key=lambda x: abs((x.get("duration") or 10**6) - expected_s))
         r = cands[0]
-        if r.get("duration") and abs(r["duration"] - expected_s) > DURATION_TOLERANCE:
-            return None, f"Duración descargada ({r['duration']} s) no coincide con Spotify ({expected_s} s)"
-        return r, None
-    return cands[0], None
+    if expected_s and r.get("duration") and abs(r["duration"] - expected_s) > DURATION_TOLERANCE:
+        return None, f"Duración descargada ({r['duration']} s) no coincide con Spotify ({expected_s} s)"
+    return r, None
+
+
+def same_song(a: ca.Candidate, b: ca.Candidate, key_a: Optional[tuple] = None,
+              key_b: Optional[tuple] = None) -> bool:
+    """Same recording under two Spotify ids (single vs album, re-release...)."""
+    if (key_a or _dedupe_key(a)) != (key_b or _dedupe_key(b)):
+        return False
+    return not (a.duration_s and b.duration_s and abs(a.duration_s - b.duration_s) > DURATION_TOLERANCE)
+
+
+def find_same_song(sid: str, cands: dict, keys: dict, pool_by_key: dict) -> Optional[str]:
+    """First id in pool_by_key[key of sid] that is the same song as sid."""
+    for o in pool_by_key.get(keys[sid], ()):
+        if o != sid and same_song(cands[o], cands[sid], keys[o], keys[sid]):
+            return o
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Post-processing: clean metadata, cover, lyrics (background, non-fatal)
+# ---------------------------------------------------------------------------
+
+def _flag(name: str, default: bool = True) -> bool:
+    v = os.getenv(name, "").strip().lower()
+    return default if not v else v not in ("0", "false", "no", "off")
+
+
+# Disabled in tests (they call postprocess_track() directly).
+POSTPROCESS = os.getenv("NOCTURNE_TESTING", "").strip().lower() not in ("1", "true")
+_post_q: "queue.Queue[tuple[str, dict]]" = queue.Queue()
+_post_thread: Optional[threading.Thread] = None
+_post_lock = threading.Lock()
+
+
+def _post_worker() -> None:
+    while True:
+        tid, meta = _post_q.get()
+        try:
+            postprocess_track(tid, meta)
+        except Exception as exc:  # pragma: no cover - postprocess_track never raises
+            logger.warning("import post-processing failed for %s: %s", tid, type(exc).__name__)
+
+
+def enqueue_postprocess(tasks: list[tuple[str, dict]]) -> None:
+    """(track_id, spotify meta) pairs, processed one at a time in a daemon thread."""
+    global _post_thread
+    if not POSTPROCESS or not tasks:
+        return
+    with _post_lock:
+        if _post_thread is None or not _post_thread.is_alive():
+            _post_thread = threading.Thread(target=_post_worker, daemon=True, name="spotify-postprocess")
+            _post_thread.start()
+    for t in tasks:
+        _post_q.put(t)
+
+
+def postprocess_track(track_id: str, meta: dict, *, metadata: Optional[bool] = None,
+                      cover: bool = True, upgrade: Optional[bool] = None,
+                      lyrics: Optional[bool] = None) -> dict:
+    """Give an imported library track Spotify's clean metadata, a cover and lyrics.
+    Never raises; returns what was done (for logs/tests)."""
+    done: dict = {}
+    if metadata is None:
+        metadata = _flag("NOCTURNE_SPOTIFY_METADATA")
+    if upgrade is None:
+        upgrade = _flag("NOCTURNE_SPOTIFY_COVER_UPGRADE") and ca.lookups_enabled()
+    try:
+        lib = nova_db.connect()
+    except Exception as exc:
+        logger.warning("post-processing %s: library unavailable: %s", track_id, exc)
+        return done
+    try:
+        row = lib.execute("SELECT * FROM tracks WHERE id=?", (track_id,)).fetchone()
+        if row is None:
+            return done
+        row = dict(row)
+        # 1. clean metadata (DB only)
+        if metadata:
+            try:
+                ch = sc.metadata_change(row, meta)
+                if ch:
+                    with connect() as noc:
+                        if sc.apply_metadata_change(lib, ch, noc):
+                            done["metadata"] = True
+                            row.update(title=ch["new_title"], artist=ch["new_artist"], album=ch["new_album"])
+                            logger.info("spotify import: metadata of %s set from Spotify", track_id)
+            except Exception as exc:
+                logger.warning("spotify import: metadata update failed for %s: %s", track_id, exc)
+        # 2. cover: Spotify album image now, iTunes/Deezer upgrade afterwards
+        if cover and not sc.is_official(row.get("cover_path")) and meta.get("image"):
+            try:
+                path, _w, _h = sc.set_cover_from_url(lib, track_id, meta["image"])
+                done["cover"] = "spotify"
+                row["cover_path"] = path
+                logger.info("spotify import: Spotify album cover set for %s", track_id)
+            except Exception as exc:
+                logger.warning("spotify import: Spotify cover failed for %s: %s", track_id, exc)
+            if done.get("cover") and upgrade:
+                try:
+                    m = ca.find_best_cover(row["title"], row.get("artist"), row.get("duration"), row.get("album"))
+                    if m.decision == ca.DECISION_APPLY and m.candidate:
+                        sc.set_cover_from_url(lib, track_id, m.candidate.art_url_max, min_px=ca.MIN_IMAGE_PX)
+                        done["cover"] = m.candidate.source
+                except Exception as exc:
+                    logger.info("spotify import: cover upgrade skipped for %s: %s", track_id, exc)
+        # 3. lyrics with the clean metadata
+        if lyrics is None:
+            lyrics = True
+        if lyrics:
+            done.update(_retry_lyrics(row, meta, force=bool(done.get("metadata"))))
+    finally:
+        lib.close()
+    return done
+
+
+def _retry_lyrics(row: dict, meta: dict, force: bool) -> dict:
+    try:
+        from . import lyrics_auto as la
+        if not la.lookups_enabled() or la.has_lrc_file(row.get("file_path")):
+            return {}
+        fut = la._inflight.get(str(row["id"]))      # the downloader's own lookup
+        if fut is not None:
+            try:
+                fut.result(timeout=120)
+            except Exception:
+                pass
+        with connect() as noc:
+            if noc.execute("SELECT 1 FROM v1_lyrics WHERE track_id=?", (row["id"],)).fetchone():
+                return {}
+        existing = la.get_auto(row["id"])
+        if existing is not None and (existing["status"] != la.STATUS_NOT_FOUND or not force):
+            return {}
+        res = la.lookup(row, [{"title": meta.get("name"), "artists": meta.get("artists") or [],
+                               "album": meta.get("album"), "label": "spotify"}])
+        if res.storable and (existing is None or res.status != la.STATUS_NOT_FOUND):
+            la.store(row["id"], res)
+            return {"lyrics": res.status}
+    except Exception as exc:
+        logger.info("spotify import: lyrics retry skipped for %s: %s", row.get("id"), exc)
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +580,31 @@ class _Run:
         self.failures: list[dict] = []
         self.playlist_id: Optional[str] = None
         self.order: list[Optional[str]] = []          # track id per Spotify position
+        self.positions: dict[str, list[int]] = {}      # Spotify id -> its positions
+        self.cands: dict[str, ca.Candidate] = {}
+        self.metas: dict[str, dict] = {}
+        self.keys: dict[str, tuple] = {}
+        self.resolved: dict[str, str] = {}             # Spotify id -> library track id
+        self.post_done: set[str] = set()
         self.lock = asyncio.Lock()
+
+    def resolve(self, sid: str, track_id: str) -> None:
+        self.resolved[sid] = track_id
+        for i in self.positions.get(sid, []):
+            self.order[i] = track_id
+
+    def fail_sid(self, sid: str, reason: str) -> None:
+        for _ in self.positions.get(sid, [None]):
+            self.fail(self.cands.get(sid), reason)
+
+    def postprocess(self, sids: list[str]) -> None:
+        tasks = []
+        for sid in sids:
+            tid = self.resolved.get(sid)
+            if tid and tid not in self.post_done and self.metas.get(sid):
+                self.post_done.add(tid)
+                tasks.append((tid, self.metas[sid]))
+        enqueue_postprocess(tasks)
 
     def fail(self, cand: Optional[ca.Candidate], reason: str, raw: Optional[dict] = None) -> None:
         self.failed += 1
@@ -446,23 +638,12 @@ def _reusable_playlist(user_id: str, spotify_playlist_id: str, import_id: str) -
 
 
 async def _sync_order(run: _Run) -> None:
-    """Re-apply Spotify order; tracks the user added by hand stay at the end."""
-    def work():
-        current = pl.playlist_track_ids(run.playlist_id)
-        cur = set(current)
-        desired = [t for t in dict.fromkeys(x for x in run.order if x) if t in cur]
-        ds = set(desired)
-        new = desired + [t for t in current if t not in ds]
-        if new != current:
-            pl.set_order(run.playlist_id, new)
+    """Make the playlist follow the Spotify order, one occurrence per resolved Spotify
+    entry (repeats included); entries the user added by hand stay at the end."""
     async with run.lock:
-        await asyncio.to_thread(work)
-
-
-async def _add(run: _Run, track_ids: list[str]) -> None:
-    async with run.lock:
-        await asyncio.to_thread(pl.append_tracks, run.playlist_id, track_ids)
-        pl.touch(run.playlist_id)
+        res = await asyncio.to_thread(pl.sync_sequence, run.playlist_id, list(run.order))
+        if res["added"] or res["reordered"]:
+            pl.touch(run.playlist_id)
 
 
 def _spotify_reason(e: spotify.SpotifyError) -> str:
@@ -496,20 +677,25 @@ async def run_import(import_id: str) -> None:
     if _cancelled(import_id):
         return
 
-    items: list[tuple[str, ca.Candidate]] = []      # importable tracks in Spotify order
-    seen_ids: set[str] = set()
+    # Every importable entry, in Spotify order: repeated songs are kept (each one
+    # becomes an occurrence in the playlist; they are resolved/downloaded once).
+    items: list[tuple[str, ca.Candidate]] = []
+    metas: dict[str, dict] = {}
     for e in entries:
         t, reason = spotify.entry_track(e)
         if t is None:
             run.total += 1
             run.fail(None, reason, e)
             continue
-        if t["id"] in seen_ids:                     # same track twice in the playlist
-            continue
-        seen_ids.add(t["id"])
+        metas[t["id"]] = sc.track_meta(t)
         items.append((t["id"], spotify_candidate(t)))
     run.total += len(items)
     run.order = [None] * len(items)
+    try:
+        with connect() as conn:
+            sc.store_meta(conn, metas.values())
+    except Exception as exc:
+        logger.warning("import %s: could not cache Spotify metadata: %s", import_id, exc)
 
     # 2. create (or reuse) the Nocturne playlist immediately
     pid = await asyncio.to_thread(_reusable_playlist, run.user_id, row["spotify_playlist_id"], import_id)
@@ -519,43 +705,63 @@ async def run_import(import_id: str) -> None:
     run.playlist_id = pid
     run.save(playlist_id=pid, status="matching")
 
-    # 3. match against the library
+    # 3. match against the library (each distinct Spotify id once)
     library = await asyncio.to_thread(_all_tracks)
     known_before = {r["id"] for r in library}
     index = await asyncio.to_thread(LibraryIndex, library)
-    mapped = await asyncio.to_thread(_map_get, [sid for sid, _ in items])
+    positions: dict[str, list[int]] = {}
+    cands: dict[str, ca.Candidate] = {}
+    for i, (sid, cand) in enumerate(items):
+        positions.setdefault(sid, []).append(i)
+        cands.setdefault(sid, cand)
+    uniq = list(positions)
+    mapped = await asyncio.to_thread(_map_get, uniq)
+    run.positions, run.cands, run.metas = positions, cands, metas
+    run.keys = {sid: _dedupe_key(c) for sid, c in cands.items()}
     claimed: set[str] = set()
-    unmatched: list[int] = []
+    unmatched: list[str] = []
 
     def match_all():
-        for i, (sid, cand) in enumerate(items):
+        # pass 1: exact identities learnt by earlier imports
+        by_key: dict[tuple, list[str]] = {}
+        for sid in uniq:
             tid = mapped.get(sid)
-            if tid and tid in known_before and tid not in claimed:
-                run.order[i] = tid
+            if tid and tid in known_before:
+                run.resolve(sid, tid)
                 claimed.add(tid)
+                by_key.setdefault(run.keys[sid], []).append(sid)
+        # pass 2: the same song under another Spotify id, then the fuzzy library match
+        for sid in uniq:
+            if sid in run.resolved:
+                continue
+            cand = cands[sid]
+            sib = find_same_song(sid, cands, run.keys, by_key)
+            if sib:
+                run.resolve(sid, run.resolved[sib])
+                _map_put(sid, run.resolved[sib], "duplicate")
                 continue
             tid, s, b = index.best(cand, claimed)
             if tid and accept_library_match(s, b):
-                run.order[i] = tid
+                run.resolve(sid, tid)
                 claimed.add(tid)
+                by_key.setdefault(run.keys[sid], []).append(sid)
                 _map_put(sid, tid, "match")
             else:
-                unmatched.append(i)
+                unmatched.append(sid)
 
     await asyncio.to_thread(match_all)
     if _cancelled(import_id):
         return
-    matched_ids = [t for t in run.order if t]
-    run.matched = len(matched_ids)
-    if matched_ids:
-        await _add(run, matched_ids)
+    run.matched = sum(len(positions[s]) for s in run.resolved)
+    if run.resolved:
         await _sync_order(run)
+        run.postprocess(list(run.resolved))
     run.save()
 
     # 4. downloads
     if unmatched and not run.download:
-        for i in unmatched:
-            run.fail(items[i][1], "No está en la biblioteca (descarga desactivada)")
+        for sid in unmatched:
+            run.fail_sid(sid, "No está en la biblioteca (descarga desactivada)")
         unmatched = []
     if unmatched:
         run.save(status="downloading")
@@ -564,10 +770,10 @@ async def run_import(import_id: str) -> None:
         except Exception:
             dm = None
         if dm is None:
-            for i in unmatched:
-                run.fail(items[i][1], "Descargas no disponibles en este servidor")
+            for sid in unmatched:
+                run.fail_sid(sid, "Descargas no disponibles en este servidor")
         else:
-            await _download_all(run, dm, items, unmatched, known_before, claimed)
+            await _download_all(run, dm, unmatched, known_before, claimed)
         if _cancelled(import_id):
             run.save()
             return
@@ -576,50 +782,61 @@ async def run_import(import_id: str) -> None:
     run.save(status="done", finished_at=_now())
 
 
-async def _download_all(run: _Run, dm, items, unmatched: list[int], known_before: set[str],
+async def _download_all(run: _Run, dm, unmatched: list[str], known_before: set[str],
                         claimed: set[str]) -> None:
-    # Same song listed twice under different Spotify ids: download once.
-    first_by_key: dict[tuple, int] = {}
-    todo: list[int] = []
-    for i in unmatched:
-        k = _dedupe_key(items[i][1])
-        if k in first_by_key:
-            run.fail(items[i][1], "Duplicada: la misma canción ya está en esta importación")
+    # The same song listed under several Spotify ids: download it once; the other
+    # ids follow the first one (same library track, or the same failure).
+    groups: dict[str, list[str]] = {}
+    todo: list[str] = []
+    leads_by_key: dict[tuple, list[str]] = {}
+    for sid in unmatched:
+        lead = find_same_song(sid, run.cands, run.keys, leads_by_key)
+        if lead:
+            groups[lead].append(sid)
             continue
-        first_by_key[k] = i
-        todo.append(i)
+        groups[sid] = []
+        todo.append(sid)
+        leads_by_key.setdefault(run.keys[sid], []).append(sid)
     run.save()
 
     sem = asyncio.Semaphore(config.spotify_import_concurrency())
     tasks: list[asyncio.Task] = []
 
-    async def one(i: int) -> None:
-        sid, cand = items[i]
+    async def one(sid: str) -> None:
+        cand = run.cands[sid]
         try:
             await _wait_throttle()
-            reason = await _download_one(run, dm, i, sid, cand, known_before, claimed)
+            reason = await _download_one(run, dm, sid, cand, known_before, claimed)
             if reason and _is_throttled(reason) and not _cancelled(run.id):
                 # YouTube is rate-limiting this IP: pause every download, then retry once.
                 _trip_throttle()
                 await _wait_throttle()
-                reason = await _download_one(run, dm, i, sid, cand, known_before, claimed)
+                reason = await _download_one(run, dm, sid, cand, known_before, claimed)
         except Exception as e:
             logger.warning("import %s: download of %r failed: %s", run.id, cand.title, type(e).__name__)
             reason = f"Error al descargar: {type(e).__name__}"
         finally:
             sem.release()
+        followers = groups.get(sid, [])
         if reason:
-            run.fail(cand, reason)
+            for s in [sid] + followers:
+                run.fail_sid(s, reason)
         else:
-            run.downloaded += 1
+            tid = run.resolved[sid]
+            for s in followers:
+                run.resolve(s, tid)
+                _map_put(s, tid, "duplicate")
+            run.downloaded += sum(len(run.positions[s]) for s in [sid] + followers)
+            await _sync_order(run)
+            run.postprocess([sid])
         run.save()
 
-    for n, i in enumerate(todo):
+    for n, sid in enumerate(todo):
         await sem.acquire()
         if _cancelled(run.id):
             sem.release()
             break
-        tasks.append(asyncio.create_task(one(i)))
+        tasks.append(asyncio.create_task(one(sid)))
         if n < len(todo) - 1 and config.SPOTIFY_IMPORT_DELAY > 0:
             await asyncio.sleep(config.SPOTIFY_IMPORT_DELAY)
     if tasks:
@@ -651,7 +868,7 @@ async def _wait_throttle() -> None:
         await asyncio.sleep(min(left, 5.0))
 
 
-async def _download_one(run: _Run, dm, i: int, sid: str, cand: ca.Candidate,
+async def _download_one(run: _Run, dm, sid: str, cand: ca.Candidate,
                         known_before: set[str], claimed: set[str]) -> Optional[str]:
     """Returns None on success, else a failure reason."""
     query = f"{_artists_str(cand)} - {cand.title}" if cand.artists else cand.title
@@ -679,12 +896,10 @@ async def _download_one(run: _Run, dm, i: int, sid: str, cand: ca.Candidate,
     async with run.lock:
         found, why = await asyncio.to_thread(
             _find_downloaded, job.get("title") or choice.get("title") or "", known_before, claimed,
-            cand.duration_s, cand.title)
+            cand.duration_s, cand.title, track_id=job.get("track_id"), file_path=job.get("file_path"))
         if not found:
             return why
         claimed.add(found["id"])
-        run.order[i] = found["id"]
+        run.resolve(sid, found["id"])
     _map_put(sid, found["id"], "youtube")
-    await _add(run, [found["id"]])
-    await _sync_order(run)
     return None

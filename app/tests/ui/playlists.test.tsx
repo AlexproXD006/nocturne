@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { Playlist, PlaylistDetail } from '@/api/types'
+import type { Playlist, PlaylistDetail, PlaylistTrack } from '@/api/types'
 import { useSession } from '@/services'
 import { resources } from '@/lib/resource'
 import { useUi } from '@/store/ui'
@@ -9,6 +9,7 @@ import { useNav } from '@/store/nav'
 import { usePlaylistUi } from '@/store/playlists'
 import { AddToPlaylistDialog, PlaylistPickerHost } from '@/components/Playlists'
 import { TrackList } from '@/components/TrackList'
+import { Toasts } from '@/components/Shell'
 import { PlaylistPage } from '@/pages/Playlist'
 import { LibraryPage } from '@/pages/Library'
 import { track, tracks } from '../helpers/fixtures'
@@ -22,6 +23,7 @@ const h = vi.hoisted(() => ({
     deletePlaylist: vi.fn(),
     addToPlaylist: vi.fn(),
     removeFromPlaylist: vi.fn(),
+    removePlaylistEntry: vi.fn(),
     reorderPlaylist: vi.fn(),
     setLiked: vi.fn()
   }
@@ -43,7 +45,8 @@ vi.mock('@/services', async () => {
     addNext: () => undefined,
     addToQueue: () => undefined
   }))
-  return { api: h.api, platform: {}, getEngine: () => null, useSession, usePlayer }
+  const { connectMocks } = await import('../helpers/services-mock')
+  return { api: h.api, platform: {}, getEngine: () => null, useSession, usePlayer, ...connectMocks(usePlayer) }
 })
 
 const pl = (id: string, editable?: boolean, over: Partial<Playlist> = {}): Playlist => ({ id, name: `List ${id}`, artwork: [], editable, trackCount: 2, ...over })
@@ -81,6 +84,13 @@ beforeEach(() => {
 
 const toastText = (): string[] => useUi.getState().toasts.map((t) => t.message)
 
+type Order = Array<string | Pick<PlaylistTrack, 'id' | 'entryId'>>
+/** Song ids of what the page passed to `reorderPlaylist`. */
+const orderIds = (order: Order): string[] => order.map((x) => (typeof x === 'string' ? x : x.id))
+const entryOrder = (order: Order): Array<string | undefined> => order.map((x) => (typeof x === 'string' ? undefined : x.entryId))
+const reorderEcho = async (_id: string, order: Order): Promise<PlaylistDetail> =>
+  detail({ tracks: order.map((x) => (typeof x === 'string' ? track(x) : { ...track(x.id), ...(x.entryId ? { entryId: x.entryId } : {}) })) })
+
 describe('Add to playlist picker', () => {
   beforeEach(() => {
     h.api.libraryPlaylists.mockResolvedValue(page([pl('mine', true), pl('shared', false), pl('legacy'), pl('other', true, { name: 'Gym' })]))
@@ -107,6 +117,85 @@ describe('Add to playlist picker', () => {
     render(<AddToPlaylistDialog tracks={[track('t1')]} label="Title t1" onClose={() => undefined} />)
     await userEvent.click(await screen.findByRole('button', { name: /List mine/ }))
     await waitFor(() => expect(toastText()).toContain('Already in List mine'))
+  })
+
+  it('offers "Add again" when the song is already there and adds it a second time', async () => {
+    h.api.addToPlaylist
+      .mockResolvedValueOnce({ added: 0, skipped: ['t1'], playlist: pl('mine', true) })
+      .mockResolvedValueOnce({ added: 1, skipped: [], playlist: pl('mine', true) })
+    const onClose = vi.fn()
+    render(
+      <>
+        <AddToPlaylistDialog tracks={[track('t1')]} label="Title t1" onClose={onClose} />
+        <Toasts />
+      </>
+    )
+    await userEvent.click(await screen.findByRole('button', { name: /List mine/ }))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect(screen.getByText('Already in List mine')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Add again' }))
+    await waitFor(() => expect(toastText()).toContain('Added to List mine'))
+    expect(h.api.addToPlaylist).toHaveBeenNthCalledWith(1, 'mine', ['t1'])
+    expect(h.api.addToPlaylist).toHaveBeenNthCalledWith(2, 'mine', ['t1'], { allowDuplicates: true })
+    expect(toastText()).not.toContain('Already in List mine')
+    expect(screen.queryByRole('button', { name: 'Add again' })).toBeNull()
+  })
+
+  it('offers "Add them again" for the skipped songs of a multi-song add', async () => {
+    h.api.addToPlaylist
+      .mockResolvedValueOnce({ added: 1, skipped: ['t1', 't2'], playlist: pl('mine', true) })
+      .mockResolvedValueOnce({ added: 2, skipped: [], playlist: pl('mine', true) })
+    render(
+      <>
+        <AddToPlaylistDialog tracks={tracks(3)} label="3 songs" onClose={() => undefined} />
+        <Toasts />
+      </>
+    )
+    await userEvent.click(await screen.findByRole('button', { name: /List mine/ }))
+    expect(await screen.findByText('Added 1 song to List mine, 2 already there')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Add them again' }))
+    await waitFor(() => expect(toastText()).toContain('Added 2 songs to List mine'))
+    expect(h.api.addToPlaylist).toHaveBeenLastCalledWith('mine', ['t1', 't2'], { allowDuplicates: true })
+  })
+
+  it('does not offer "Add again" when everything was added', async () => {
+    h.api.addToPlaylist.mockResolvedValue({ added: 1, skipped: [], playlist: pl('mine', true) })
+    render(
+      <>
+        <AddToPlaylistDialog tracks={[track('t1')]} label="Title t1" onClose={() => undefined} />
+        <Toasts />
+      </>
+    )
+    await userEvent.click(await screen.findByRole('button', { name: /List mine/ }))
+    expect(await screen.findByText('Added to List mine')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Add (them )?again/ })).toBeNull()
+  })
+
+  it('explains when a server without duplicate support skips the song again', async () => {
+    h.api.addToPlaylist.mockResolvedValue({ added: 0, skipped: ['t1'], playlist: pl('mine', true) })
+    render(
+      <>
+        <AddToPlaylistDialog tracks={[track('t1')]} label="Title t1" onClose={() => undefined} />
+        <Toasts />
+      </>
+    )
+    await userEvent.click(await screen.findByRole('button', { name: /List mine/ }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Add again' }))
+    await waitFor(() => expect(toastText().some((m) => /doesn't allow the same song twice/.test(m))).toBe(true))
+    expect(screen.queryByRole('button', { name: 'Add again' })).toBeNull()
+  })
+
+  it('shows an error toast when "Add again" fails', async () => {
+    h.api.addToPlaylist.mockResolvedValueOnce({ added: 0, skipped: ['t1'], playlist: pl('mine', true) }).mockRejectedValueOnce(new Error('Offline'))
+    render(
+      <>
+        <AddToPlaylistDialog tracks={[track('t1')]} label="Title t1" onClose={() => undefined} />
+        <Toasts />
+      </>
+    )
+    await userEvent.click(await screen.findByRole('button', { name: /List mine/ }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Add again' }))
+    await waitFor(() => expect(useUi.getState().toasts).toContainEqual(expect.objectContaining({ message: 'Offline', tone: 'error' })))
   })
 
   it('filters with the search box', async () => {
@@ -184,14 +273,15 @@ describe('Playlist page editing', () => {
   })
 
   it('reorders with the touch-friendly edit mode', async () => {
-    h.api.reorderPlaylist.mockImplementation(async (_id: string, ids: string[]) => detail({ tracks: ids.map((i) => track(i)) }))
+    h.api.reorderPlaylist.mockImplementation(reorderEcho)
     render(<PlaylistPage id="pl1" />)
     await screen.findByRole('heading', { name: 'Road trip' })
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
     const list = screen.getByRole('list', { name: 'Edit playlist songs' })
     expect(within(list).getByRole('button', { name: 'Move Title t0 up' })).toBeDisabled()
     await userEvent.click(within(list).getByRole('button', { name: 'Move Title t0 down' }))
-    expect(h.api.reorderPlaylist).toHaveBeenCalledWith('pl1', ['t1', 't0', 't2'])
+    expect(h.api.reorderPlaylist).toHaveBeenCalledWith('pl1', expect.any(Array))
+    expect(orderIds(h.api.reorderPlaylist.mock.calls[0]![1])).toEqual(['t1', 't0', 't2'])
     expect(within(list).getAllByRole('listitem').map((li) => /Title t\d/.exec(li.textContent ?? '')![0])).toEqual(['Title t1', 'Title t0', 'Title t2'])
     expect(within(list).getByRole('button', { name: 'Move Title t0 down' })).toHaveFocus()
     await userEvent.click(screen.getByRole('button', { name: 'Done' }))
@@ -199,7 +289,7 @@ describe('Playlist page editing', () => {
   })
 
   it('reorders with drag and drop on desktop', async () => {
-    h.api.reorderPlaylist.mockImplementation(async (_id: string, ids: string[]) => detail({ tracks: ids.map((i) => track(i)) }))
+    h.api.reorderPlaylist.mockImplementation(reorderEcho)
     render(<PlaylistPage id="pl1" />)
     await screen.findByRole('heading', { name: 'Road trip' })
     const rows = screen.getAllByRole('row').filter((r) => /Title t\d/.test(r.textContent ?? ''))
@@ -207,7 +297,8 @@ describe('Playlist page editing', () => {
     fireEvent.dragOver(rows[2]!, { dataTransfer: {} })
     fireEvent.drop(rows[2]!, { dataTransfer: {} })
     expect(titles()).toEqual(['Title t1', 'Title t2', 'Title t0'])
-    await waitFor(() => expect(h.api.reorderPlaylist).toHaveBeenCalledWith('pl1', ['t1', 't2', 't0']))
+    await waitFor(() => expect(h.api.reorderPlaylist).toHaveBeenCalledTimes(1))
+    expect(orderIds(h.api.reorderPlaylist.mock.calls[0]![1])).toEqual(['t1', 't2', 't0'])
   })
 
   it('renames through the details dialog', async () => {
@@ -252,6 +343,140 @@ describe('Playlist page editing', () => {
     expect(screen.getByRole('button', { name: 'Add to playlist' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'More options for Title t1' }))
     expect(screen.queryByRole('menuitem', { name: 'Remove from this playlist' })).toBeNull()
+  })
+})
+
+describe('Playlist page with the same song more than once', () => {
+  // t0 appears twice (entries e1 and e3).
+  const dupTracks = (): PlaylistTrack[] => [
+    { ...track('t0'), entryId: 'e1' },
+    { ...track('t1'), entryId: 'e2' },
+    { ...track('t0'), entryId: 'e3' }
+  ]
+  beforeEach(() => {
+    h.api.playlist.mockResolvedValue(detail({ tracks: dupTracks() }))
+  })
+
+  it('renders both rows', async () => {
+    render(<PlaylistPage id="pl1" />)
+    await screen.findByRole('heading', { name: 'Road trip' })
+    expect(titles()).toEqual(['Title t0', 'Title t1', 'Title t0'])
+    expect(screen.getByText('3 songs')).toBeInTheDocument()
+  })
+
+  it('removes only the chosen occurrence by entry id', async () => {
+    h.api.removePlaylistEntry.mockResolvedValue(undefined)
+    render(<PlaylistPage id="pl1" />)
+    await screen.findByRole('heading', { name: 'Road trip' })
+    await userEvent.click(screen.getAllByRole('button', { name: 'More options for Title t0' })[1]!)
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Remove from this playlist' }))
+    expect(titles()).toEqual(['Title t0', 'Title t1'])
+    expect(h.api.removePlaylistEntry).toHaveBeenCalledWith('pl1', 'e3')
+    expect(h.api.removeFromPlaylist).not.toHaveBeenCalled()
+    await waitFor(() => expect(toastText()).toContain('Removed “Title t0”'))
+    expect((resources.peek('playlist:pl1') as PlaylistDetail).tracks.map((t) => t.entryId)).toEqual(['e1', 'e2'])
+  })
+
+  it('removes the first occurrence from edit mode and keeps the other', async () => {
+    h.api.removePlaylistEntry.mockResolvedValue(undefined)
+    render(<PlaylistPage id="pl1" />)
+    await screen.findByRole('heading', { name: 'Road trip' })
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    const list = screen.getByRole('list', { name: 'Edit playlist songs' })
+    await userEvent.click(within(list).getAllByRole('button', { name: 'Remove Title t0 from playlist' })[0]!)
+    expect(h.api.removePlaylistEntry).toHaveBeenCalledWith('pl1', 'e1')
+    expect(within(list).getAllByRole('listitem').map((li) => /Title t\d/.exec(li.textContent ?? '')![0])).toEqual(['Title t1', 'Title t0'])
+  })
+
+  it('rolls back just that row when removing the occurrence fails', async () => {
+    h.api.removePlaylistEntry.mockRejectedValue(new Error('Server says no'))
+    render(<PlaylistPage id="pl1" />)
+    await screen.findByRole('heading', { name: 'Road trip' })
+    await userEvent.click(screen.getAllByRole('button', { name: 'More options for Title t0' })[0]!)
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Remove from this playlist' }))
+    await waitFor(() => expect(toastText()).toContain('Server says no'))
+    expect(titles()).toEqual(['Title t0', 'Title t1', 'Title t0'])
+    expect((resources.peek('playlist:pl1') as PlaylistDetail).tracks.map((t) => t.entryId)).toEqual(['e1', 'e2', 'e3'])
+  })
+
+  it('moves one occurrence with the up / down buttons and sends entry ids', async () => {
+    h.api.reorderPlaylist.mockImplementation(reorderEcho)
+    render(<PlaylistPage id="pl1" />)
+    await screen.findByRole('heading', { name: 'Road trip' })
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    const list = screen.getByRole('list', { name: 'Edit playlist songs' })
+    // The second copy of t0 moves up past t1; the first copy stays on top.
+    await userEvent.click(within(list).getAllByRole('button', { name: 'Move Title t0 up' })[1]!)
+    expect(entryOrder(h.api.reorderPlaylist.mock.calls[0]![1])).toEqual(['e1', 'e3', 'e2'])
+    expect(within(list).getAllByRole('listitem').map((li) => /Title t\d/.exec(li.textContent ?? '')![0])).toEqual(['Title t0', 'Title t0', 'Title t1'])
+    // Focus followed the moved occurrence (now the second row), not the first copy.
+    const rows = within(list).getAllByRole('listitem')
+    expect(within(rows[1]!).getByRole('button', { name: 'Move Title t0 up' })).toHaveFocus()
+    await waitFor(() => expect((resources.peek('playlist:pl1') as PlaylistDetail).tracks.map((t) => t.entryId)).toEqual(['e1', 'e3', 'e2']))
+  })
+
+  it('reorders duplicates with drag and drop', async () => {
+    h.api.reorderPlaylist.mockImplementation(reorderEcho)
+    render(<PlaylistPage id="pl1" />)
+    await screen.findByRole('heading', { name: 'Road trip' })
+    const rows = screen.getAllByRole('row').filter((r) => /Title t\d/.test(r.textContent ?? ''))
+    fireEvent.dragStart(rows[0]!, { dataTransfer: { setData: () => undefined } })
+    fireEvent.dragOver(rows[2]!, { dataTransfer: {} })
+    fireEvent.drop(rows[2]!, { dataTransfer: {} })
+    expect(titles()).toEqual(['Title t1', 'Title t0', 'Title t0'])
+    await waitFor(() => expect(h.api.reorderPlaylist).toHaveBeenCalledTimes(1))
+    expect(entryOrder(h.api.reorderPlaylist.mock.calls[0]![1])).toEqual(['e2', 'e3', 'e1'])
+  })
+
+  it('rolls back a failed reorder', async () => {
+    h.api.reorderPlaylist.mockRejectedValue(new Error('Nope'))
+    render(<PlaylistPage id="pl1" />)
+    await screen.findByRole('heading', { name: 'Road trip' })
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    await userEvent.click(screen.getAllByRole('button', { name: 'Move Title t0 down' })[0]!)
+    await waitFor(() => expect(toastText()).toContain('Nope'))
+    expect((resources.peek('playlist:pl1') as PlaylistDetail).tracks.map((t) => t.entryId)).toEqual(['e1', 'e2', 'e3'])
+  })
+
+  it('plays the chosen occurrence by its index', async () => {
+    const { usePlayer } = await import('@/services')
+    const playTracks = vi.fn(async () => undefined)
+    usePlayer.setState({ playTracks } as never)
+    render(<PlaylistPage id="pl1" />)
+    await screen.findByRole('heading', { name: 'Road trip' })
+    await userEvent.click(screen.getAllByRole('button', { name: 'Play Title t0' })[1]!)
+    expect(playTracks).toHaveBeenCalledWith(expect.any(Array), 2, expect.objectContaining({ type: 'playlist', id: 'pl1' }))
+    expect((playTracks.mock.calls[0] as unknown[])[0]).toHaveLength(3)
+  })
+})
+
+describe('Playlist page on a server without entry ids (legacy)', () => {
+  beforeEach(() => {
+    h.api.playlist.mockResolvedValue(detail({ tracks: [track('t0'), track('t1'), track('t0')] }))
+  })
+
+  it('removes every copy of the song with the legacy endpoint', async () => {
+    h.api.removeFromPlaylist.mockResolvedValue(undefined)
+    render(<PlaylistPage id="pl1" />)
+    await screen.findByRole('heading', { name: 'Road trip' })
+    await userEvent.click(screen.getAllByRole('button', { name: 'More options for Title t0' })[1]!)
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Remove from this playlist' }))
+    expect(h.api.removeFromPlaylist).toHaveBeenCalledWith('pl1', 't0')
+    expect(h.api.removePlaylistEntry).not.toHaveBeenCalled()
+    expect(titles()).toEqual(['Title t1'])
+  })
+
+  it('reorders with song ids only (no entry ids to send)', async () => {
+    h.api.reorderPlaylist.mockImplementation(reorderEcho)
+    render(<PlaylistPage id="pl1" />)
+    await screen.findByRole('heading', { name: 'Road trip' })
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    const list = screen.getByRole('list', { name: 'Edit playlist songs' })
+    await userEvent.click(within(list).getAllByRole('button', { name: 'Move Title t0 up' })[1]!)
+    const order = h.api.reorderPlaylist.mock.calls[0]![1] as Order
+    expect(orderIds(order)).toEqual(['t0', 't0', 't1'])
+    expect(entryOrder(order).every((e) => e === undefined)).toBe(true)
+    expect(within(list).getAllByRole('listitem').map((li) => /Title t\d/.exec(li.textContent ?? '')![0])).toEqual(['Title t0', 'Title t0', 'Title t1'])
   })
 })
 

@@ -1,14 +1,15 @@
 import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react'
 import { RotateCw, X } from 'lucide-react'
-import { useSession, usePlayer } from './services'
-import { currentItem } from './player/queue'
+import { useSession } from './services'
 import { useNav, type Route } from './store/nav'
 import { useUi } from './store/ui'
 import { useLikes } from './store/likes'
 import { accentRgb, useSettings } from './store/settings'
 import { resources } from './lib/resource'
 import { pickImage } from './lib/url'
-import { useAccent } from './hooks/useAccent'
+import { usePalette } from './hooks/useAccent'
+import { useAdaptiveRoot } from './hooks/useAdaptive'
+import { FALLBACK_ACCENT, paletteAccent } from './lib/color'
 import { useMediaSession } from './hooks/useMediaSession'
 import { useShortcuts } from './hooks/useShortcuts'
 import { useTheme } from './hooks/useTheme'
@@ -16,6 +17,8 @@ import { ErrorState, IconButton, Spinner } from './components/common'
 import { FullscreenPlayer } from './components/FullscreenPlayer'
 import { LyricsView } from './components/LyricsView'
 import { MiniPlayer, PlayerBar } from './components/PlayerBar'
+import { DevicesSheet } from './components/Devices'
+import { useNowTrack } from './hooks/useNowPlaying'
 import { PlaylistPickerHost } from './components/Playlists'
 import { SpotifyImportsHost } from './components/Spotify'
 import { usePlaylistUi } from './store/playlists'
@@ -88,7 +91,7 @@ function RouteView({ route, index }: { route: Route; index: number }): ReactNode
 function SidePanel(): ReactNode {
   const panel = useUi((s) => s.panel)
   const closePanel = useUi((s) => s.closePanel)
-  const track = usePlayer((s) => currentItem(s.queue)?.track ?? null)
+  const track = useNowTrack()
   if (!panel) return null
   return (
     <aside
@@ -108,16 +111,22 @@ function SidePanel(): ReactNode {
 
 /**
  * Sole writer of the global accent: the user's fixed preset, or — when the
- * preference is 'adaptive' (default) — the current track's artwork color.
+ * preference is 'adaptive' (default) or the theme is Adaptive — a colour from
+ * the current track's artwork. Which one (dominant / vibrant / muted) follows
+ * Settings → Adaptive background → Accent source (default: dominant, the
+ * original behaviour).
  */
 function useGlobalAccent(): void {
-  const artwork = usePlayer((s) => currentItem(s.queue)?.track.artwork)
-  const accent = useAccent(pickImage(artwork, 120))
+  const artwork = useNowTrack()?.artwork
+  const palette = usePalette(pickImage(artwork, 120))
+  const source = useSettings((s) => s.adaptive.accentSource)
+  const accent = paletteAccent(palette, source) ?? FALLBACK_ACCENT
   // The Adaptive theme always derives its accent from the cover.
   const fixed = useSettings((s) => (s.theme === 'adaptive' ? null : accentRgb(s.accent)))
+  const value = fixed ?? `${accent.r} ${accent.g} ${accent.b}`
   useEffect(() => {
-    document.documentElement.style.setProperty('--accent-rgb', fixed ?? `${accent.r} ${accent.g} ${accent.b}`)
-  }, [accent, fixed])
+    document.documentElement.style.setProperty('--accent-rgb', value)
+  }, [value])
   useEffect(
     () => () => {
       document.documentElement.style.removeProperty('--accent-rgb')
@@ -153,6 +162,7 @@ function SignedInShell(): ReactNode {
         <MobileNav />
       </div>
       {fullscreen && <FullscreenPlayer />}
+      <DevicesSheet />
       <PlaylistPickerHost />
       <SpotifyImportsHost />
     </div>
@@ -172,6 +182,7 @@ export function App(): ReactNode {
   const status = useSession((s) => s.status)
 
   useTheme()
+  useAdaptiveRoot()
 
   useEffect(() => {
     void useSession.getState().restore()
