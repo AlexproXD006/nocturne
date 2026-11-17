@@ -97,8 +97,10 @@ jobs:
         run: |
           SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKM" --licenses > /dev/null || true
-          "$SDKM" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools"
-      - uses: gradle/actions/setup-gradle@v4
+          # AGP 8.13 builds with build-tools 35.0.0 by default; install it too so it is
+          # not auto-downloaded into the runner's read-only SDK.
+          "$SDKM" --install "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v5
       - run: npm ci
       - name: Build web bundle, sync Capacitor and patch the Android project
         run: npm run android:sync
@@ -120,14 +122,21 @@ jobs:
       - name: Assemble APK (signed release when secrets exist, otherwise debug)
         working-directory: app/android
         run: |
-          if [ -n "$NOCTURNE_KEYSTORE_B64" ]; then
-            ./gradlew --no-daemon assembleRelease
-            echo "APK_KIND=release" >> "$GITHUB_ENV"
+          if [ -n "$NOCTURNE_KEYSTORE_B64" ]; then task=assembleRelease; kind=release
           else
             echo "::notice::No ANDROID_KEYSTORE_BASE64 secret: building a debug-signed APK."
-            ./gradlew --no-daemon assembleDebug
-            echo "APK_KIND=debug" >> "$GITHUB_ENV"
+            task=assembleDebug; kind=debug
           fi
+          set +e
+          ./gradlew --no-daemon "$task" 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            # Surface the Gradle failure as annotations (readable without logging in).
+            grep -A15 "What went wrong" "$RUNNER_TEMP/gradle.log" | head -40 | while IFS= read -r line; do echo "::error title=Gradle::$line"; done
+            exit "$status"
+          fi
+          echo "APK_KIND=$kind" >> "$GITHUB_ENV"
       - name: Collect APK
         run: |
           version=$(node -p "require('./package.json').version")
