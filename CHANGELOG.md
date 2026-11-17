@@ -4,23 +4,23 @@ Historial de versiones de Nocturne. Las versiones `-beta` se publican en el cana
 
 ## 1.0.7 — 2026-11-17
 
-**Nocturne Connect, Spotify-style queue and adaptive themes** · web, android, windows, linux
+**Nocturne Connect, cola estilo Spotify y temas adaptativos** · web, android, windows, linux
 
-### Added
+### Novedades
 
-- Nocturne Connect remote control: play songs, albums and playlists on another device, change its volume remotely, with a "Listening on" bar and a device panel.
-- Spotify-style queue: your queue stays in order regardless of shuffle, then continues with the playlist.
-- Quick "Add to queue" button on every song, with Undo.
-- Configurable Adaptive theme with presets: Classic, Subtle, Immersive, Vinyl, Concert and Reading.
-- Duplicate songs are now allowed in playlists ("Add again").
-- Clean Spotify titles and artists for imported songs.
-- Official covers for imported songs.
+- Control remoto con Nocturne Connect: elige desde el móvil canciones, álbumes o playlists para que suenen en otro dispositivo, y cambia su volumen, con la barra "Escuchando en…" y el panel de dispositivos.
+- Cola estilo Spotify: lo que añades a la cola suena en tu orden aunque tengas el aleatorio, y después sigue con la playlist.
+- Botón rápido "Añadir a la cola" en cada canción, con Deshacer.
+- Tema Adaptive configurable con estilos: Classic, Subtle, Immersive, Vinyl, Concert y Reading.
+- Ya se pueden repetir canciones en una playlist ("Añadir de nuevo").
+- Títulos y artistas limpios de Spotify para las canciones importadas.
+- Portadas oficiales para las canciones importadas.
 
-### Fixed
+### Correcciones
 
-- Lyrics out of sync: fake generated .lrc files are ignored and real synced lyrics are looked up again.
-- Missing lyrics on imported songs.
-- Duplicated download logging.
+- Letras desincronizadas: se ignoran los .lrc generados con tiempos inventados y se vuelve a buscar la letra sincronizada de verdad.
+- Canciones importadas sin letra.
+- Registro de descargas duplicado.
 
 ## 1.0.6 — 2026-11-17
 
