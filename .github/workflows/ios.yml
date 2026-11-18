@@ -8,11 +8,6 @@ name: ios
 on:
   push:
     tags: ['v*']
-    # Test branch for the iOS pipeline itself (no GitHub token is needed to trigger it).
-    branches: [ios-build]
-    paths:
-      - 'app/**'
-      - '.github/workflows/ios.yml'
   workflow_dispatch:
 
 permissions:
