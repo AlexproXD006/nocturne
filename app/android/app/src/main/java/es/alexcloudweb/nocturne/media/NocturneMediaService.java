@@ -79,6 +79,9 @@ public final class NocturneMediaService extends MediaLibraryService {
     private static final SessionCommand REPEAT = new SessionCommand(ACTION_REPEAT, Bundle.EMPTY);
 
     private static final long TICK_MS = 1000;
+    /** How often the session (queue + position) is saved while playing. */
+    private static final long PERSIST_MS = 5000;
+    private long lastPersistAt;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ListeningExecutorService io = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(3));
@@ -158,6 +161,7 @@ public final class NocturneMediaService extends MediaLibraryService {
                 .setHandleAudioBecomingNoisy(true)
                 .setWakeMode(C.WAKE_MODE_NETWORK)
                 .build();
+            restoreSession(p);
             p.addListener(new PlayerEvents());
             player = p;
 
@@ -211,6 +215,7 @@ public final class NocturneMediaService extends MediaLibraryService {
     /** Swiping the app away keeps music playing (it lives here now); an idle service just stops. */
     @Override
     public void onTaskRemoved(@Nullable Intent rootIntent) {
+        persistSession();
         ExoPlayer p = player;
         if (p == null || !p.getPlayWhenReady() || p.getMediaItemCount() == 0) {
             try {
@@ -224,6 +229,7 @@ public final class NocturneMediaService extends MediaLibraryService {
 
     @Override
     public void onDestroy() {
+        persistSession();
         EventHub.detach(this);
         EventHub.dropPending();
         main.removeCallbacksAndMessages(null);
@@ -273,6 +279,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         emitState();
         refreshButtons();
         startTicker();
+        persistSession();
     }
 
     void cmdPlay() {
@@ -310,6 +317,7 @@ public final class NocturneMediaService extends MediaLibraryService {
     void cmdSetShuffleFlag(boolean on) {
         shuffleOn = on;
         refreshButtons();
+        persistSession();
     }
 
     void cmdSetPauseAtEnd(boolean on) {
@@ -326,6 +334,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         trackJson.clear();
         currentUid = null;
         lastStatus = "";
+        SessionStore.clear(this);
         emitState();
         refreshButtons();
         try {
@@ -386,6 +395,54 @@ public final class NocturneMediaService extends MediaLibraryService {
     }
 
     // ---------------------------------------------------------------------------------------------
+    // Session persistence (survives app close, process death and reboot)
+    // ---------------------------------------------------------------------------------------------
+
+    /** Saves the queue, index, position, repeat and shuffle. Cheap enough to call on every event. */
+    private void persistSession() {
+        ExoPlayer p = player;
+        if (p == null || p.getMediaItemCount() == 0) return;
+        lastPersistAt = System.currentTimeMillis();
+        JSONObject snap = snapshot();
+        if (snap != null) SessionStore.save(this, snap);
+    }
+
+    private static List<MediaItem> itemsOf(SessionStore.Restored r, Map<String, String> json) {
+        List<MediaItem> items = new ArrayList<>();
+        for (SessionStore.Entry e : r.entries) {
+            items.add(new MediaItem.Builder()
+                .setMediaId(e.uid)
+                .setUri(trackUri(e.trackId))
+                .setMediaMetadata(songMeta(e.title, e.artist, e.album, e.artworkUrl, e.durationMs).build())
+                .build());
+            if (e.trackJson != null) json.put(e.uid, e.trackJson);
+        }
+        return items;
+    }
+
+    /** Loads the saved session into the (idle) player, paused: the user presses play to continue. */
+    private void restoreSession(ExoPlayer p) {
+        try {
+            SessionStore.Restored r = SessionStore.parse(SessionStore.load(this));
+            if (r == null) return;
+            Map<String, String> json = new HashMap<>();
+            List<MediaItem> items = itemsOf(r, json);
+            trackJson.putAll(json);
+            contextName = r.contextName;
+            shuffleOn = r.shuffle;
+            p.setRepeatMode("one".equals(r.repeat) ? Player.REPEAT_MODE_ONE : "all".equals(r.repeat) ? Player.REPEAT_MODE_ALL : Player.REPEAT_MODE_OFF);
+            p.setMediaItems(items, r.index, r.positionMs);
+            p.setPlayWhenReady(false);
+            MediaItem cur = items.get(r.index);
+            currentUid = cur.mediaId;
+            long dur = cur.mediaMetadata.durationMs == null ? 0 : cur.mediaMetadata.durationMs;
+            listen.start(trackIdOf(cur), dur, System.currentTimeMillis());
+        } catch (Throwable t) {
+            Log.w(TAG, "session restore failed", t);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // Player events -> WebView
     // ---------------------------------------------------------------------------------------------
 
@@ -405,12 +462,14 @@ public final class NocturneMediaService extends MediaLibraryService {
 
         @Override
         public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) {
+            persistSession();
             emitState();
             startTicker();
         }
 
         @Override
         public void onMediaItemTransition(@Nullable MediaItem item, int reason) {
+            persistSession();
             if (item == null) {
                 finishListen();
                 currentUid = null;
@@ -435,6 +494,7 @@ public final class NocturneMediaService extends MediaLibraryService {
 
         @Override
         public void onTimelineChanged(@NonNull Timeline timeline, int reason) {
+            if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) persistSession();
             if (externalQueuePending && reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) {
                 externalQueuePending = false;
                 main.post(NocturneMediaService.this::emitQueue);
@@ -449,6 +509,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         @Override
         public void onRepeatModeChanged(int repeatMode) {
             refreshButtons();
+            persistSession();
         }
 
         @Override
@@ -540,6 +601,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         if (d != C.TIME_UNSET && d > 0) listen.setDuration(d);
         listen.tick(pos, p.isPlaying());
         emitPosition();
+        if (System.currentTimeMillis() - lastPersistAt >= PERSIST_MS) persistSession();
         if (lyricsEnabled && lrc != null && lrcTrackId.equals(currentTrackId())) {
             int idx = lrc.lineAt(pos);
             long now = System.currentTimeMillis();
@@ -1064,6 +1126,23 @@ public final class NocturneMediaService extends MediaLibraryService {
         public ListenableFuture<List<MediaItem>> onAddMediaItems(
             @NonNull MediaSession mediaSession, @NonNull MediaSession.ControllerInfo controller, @NonNull List<MediaItem> mediaItems) {
             return io.submit(() -> resolve(mediaItems, 0, C.TIME_UNSET).mediaItems);
+        }
+
+        /** System "resume" (media resumption card, Bluetooth / Android Auto play after a reboot): the saved queue. */
+        @NonNull
+        @Override
+        public ListenableFuture<MediaSession.MediaItemsWithStartPosition> onPlaybackResumption(
+            @NonNull MediaSession mediaSession, @NonNull MediaSession.ControllerInfo controller, boolean isForPlayback) {
+            SessionStore.Restored r = SessionStore.parse(SessionStore.load(NocturneMediaService.this));
+            if (r == null) return Futures.immediateFailedFuture(new UnsupportedOperationException("nothing to resume"));
+            Map<String, String> json = new HashMap<>();
+            List<MediaItem> items = itemsOf(r, json);
+            main.post(() -> {
+                trackJson.putAll(json);
+                contextName = r.contextName;
+                shuffleOn = r.shuffle;
+            });
+            return Futures.immediateFuture(new MediaSession.MediaItemsWithStartPosition(items, r.index, r.positionMs));
         }
 
         @NonNull

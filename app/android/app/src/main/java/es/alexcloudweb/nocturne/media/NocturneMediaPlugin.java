@@ -184,12 +184,9 @@ public class NocturneMediaPlugin extends Plugin {
 
     @PluginMethod
     public void getSnapshot(PluginCall call) {
-        if (!EventHub.serviceAlive()) {
-            JSObject res = new JSObject();
-            res.put("snapshot", JSONObject.NULL);
-            call.resolve(res);
-            return;
-        }
+        // The service may not exist yet (app just started, or it was stopped while paused): connecting
+        // creates it, and it restores the saved session, so the WebView can adopt the last song.
+        EventHub.runOnMain(this::ensureConnected);
         EventHub.withService(s -> {
             JSObject res = new JSObject();
             JSONObject snap = s.snapshot();

@@ -3,6 +3,7 @@ import { createPlayerStore, type PlayerDeps } from '@/store/player'
 import type { StreamInfo } from '@/api/types'
 import { ApiError } from '@/api/errors'
 import { currentItem } from '@/player/queue'
+import { serializeSession } from '@/lib/playerSession'
 import { FakeEngine } from '../helpers/fake-engine'
 import { flush } from '../helpers/http'
 import { seq, track, tracks } from '../helpers/fixtures'
@@ -1027,3 +1028,39 @@ describe('scrobbling', () => {
     expect(c.reportPlayed).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('session restore (web / desktop)', () => {
+  it('restores paused at the saved position and plays from there on demand', async () => {
+    const a = await playing(3, 2)
+    const saved = serializeSession(a.s().queue, 61, 1)!
+    const c = setup({ loadSession: () => saved })
+    expect(cur2(c)).toBe(a.cur())
+    expect(c.s().status).toBe('idle')
+    expect(c.s().position).toBe(61)
+    expect(c.engine.load).not.toHaveBeenCalled()
+    c.s().play()
+    await flush()
+    expect(c.engine.load).toHaveBeenCalledWith(expect.any(String), expect.any(String), expect.objectContaining({ startAt: 61, autoplay: true }))
+  })
+
+  it('saves the session on pause and every ~5 s of playback, and forgets it on stop', async () => {
+    const saves: unknown[] = []
+    const c = await playing(2, 0, { saveSession: (x) => void saves.push(x) })
+    await flush()
+    c.s().pause()
+    await flush()
+    expect(saves.at(-1)).toMatchObject({ v: 1 })
+    const n = saves.length
+    c.engine.events.onPlaying()
+    await flush()
+    c.clock.t += 5_001
+    c.engine.events.onTime(10, 200)
+    c.clock.t += 5_001
+    c.engine.events.onTime(15, 200)
+    expect(saves.length).toBeGreaterThan(n)
+    c.s().stop()
+    await flush()
+    expect(saves.at(-1)).toBeNull()
+  })
+})
+const cur2 = (c: Ctx): string | undefined => currentItem(c.s().queue)?.track.id

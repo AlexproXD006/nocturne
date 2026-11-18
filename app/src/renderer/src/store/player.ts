@@ -6,6 +6,7 @@ import { newPlayId, PERSIST_EVERY_S } from '../lib/playQueue'
 import type { NativePlayer, NativePlayerEvent, NativeQueueItem, NativeSnapshot } from '../platform/nativePlayerTypes'
 import { artistNames } from '../lib/format'
 import { pickImage } from '../lib/url'
+import { queueFromSaved, serializeSession, type SavedSession } from '../lib/playerSession'
 
 /** The subset of AudioEngine the store relies on (lets tests use a fake). */
 export interface PlaybackEngine {
@@ -97,6 +98,10 @@ export interface PlayerDeps {
   getAutoplay?(): boolean
   /** Library songs similar to `seedId`, skipping `exclude`. Rejections are ignored (Autoplay is best effort). */
   fetchAutoplay?(seedId: string, exclude: string[]): Promise<Track[]>
+  /** The session remembered from the previous run (queue, index, position); restored paused, never auto-played. */
+  loadSession?(): SavedSession | null
+  /** Persists the session (null forgets it). Called on queue/state changes and about every 5 s while playing. */
+  saveSession?(session: SavedSession | null): void
   initialVolume?: number
   initialMuted?: boolean
   onVolumeChange?(volume: number, muted: boolean): void
@@ -110,6 +115,8 @@ const URL_SAFETY_MS = 60_000
 const RESTART_THRESHOLD = 3
 /** Ids sent as `exclude` to the radio endpoint (most recent queue entries). */
 const AUTOPLAY_EXCLUDE = 100
+/** How often the session (queue position) is written while playing. */
+const PERSIST_SESSION_MS = 5000
 
 /** The queue as sent to the native service. */
 export function toNativeItems(q: Q.QueueState): NativeQueueItem[] {
@@ -313,7 +320,10 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     }
   }
 
+  /** True once something started playback in this run (a late native snapshot must not override it). */
+  let touched = false
   async function startCurrent(opts: { autoplay?: boolean; startAt?: number; forceUrl?: boolean } = {}): Promise<void> {
+    touched = true
     const item = Q.currentItem(store.getState().queue)
     if (!item) {
       engine.stop()
@@ -564,10 +574,62 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     }
   }))
 
-  if (native) wireNative(native)
+  // Restore the last session paused (the user presses play to continue from where they were).
+  const saved = deps.loadSession?.() ?? null
+  if (saved) {
+    const queue = queueFromSaved(saved)
+    const item = Q.currentItem(queue)
+    if (item) {
+      store.setState({
+        queue,
+        status: native ? 'paused' : 'idle',
+        position: Math.min(saved.position, item.track.duration > 0 ? item.track.duration : saved.position),
+        duration: item.track.duration
+      })
+    }
+  }
+
+  if (native) wireNative(native, saved && Q.currentItem(store.getState().queue) ? store.getState().queue : null)
+  if (deps.saveSession) wirePersistence(deps.saveSession)
+
+  /** Remembers the session so the next run restores it. */
+  function wirePersistence(save: (s: SavedSession | null) => void): void {
+    let lastSave = 0
+    let scheduled = false
+    const persist = (): void => {
+      lastSave = now()
+      const s = store.getState()
+      try {
+        save(serializeSession(s.queue, s.position, now()))
+      } catch {
+        /* best effort */
+      }
+    }
+    store.subscribe((s, prev) => {
+      const changed = s.queue !== prev.queue || s.status !== prev.status
+      if (changed && !scheduled) {
+        scheduled = true
+        // Deferred a microtask so an action's follow-up state (position reset, status) is included.
+        queueMicrotask(() => {
+          scheduled = false
+          persist()
+        })
+      } else if (!changed && s.status === 'playing' && now() - lastSave >= PERSIST_SESSION_MS) {
+        persist()
+      }
+    })
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') persist()
+      })
+    }
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pagehide', persist)
+    }
+  }
 
   /** Mirrors the Media3 service into the store and keeps the native queue in step with the store's. */
-  function wireNative(n: NativePlayer): void {
+  function wireNative(n: NativePlayer, restored: Q.QueueState | null): void {
     let flushScheduled = false
     store.subscribe((s, prev) => {
       if (s.queue.repeat !== prev.queue.repeat) n.setRepeat(s.queue.repeat)
@@ -589,11 +651,17 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     const adopt = (snap: NativeSnapshot): void => {
       const uids = snap.items.map((i) => i.uid)
       let k = 0
-      const queue = Q.createQueue(snap.items.map(trackFromNative), snap.index, {
-        repeat: snap.repeat,
-        uid: () => uids[k++] ?? Q.makeUid(),
-        context: snap.contextName ? { type: 'tracks', name: snap.contextName } : null
-      })
+      const cur = store.getState().queue
+      // Same entries as the queue we already hold (restored session / WebView recreated): keep its
+      // structure (user queue, autoplay, shuffle order, context) and take only the native position.
+      const sameQueue = cur.items.length === uids.length && cur.items.every((it, i) => it.uid === uids[i])
+      const queue = sameQueue
+        ? { ...cur, index: Math.min(Math.max(0, snap.index), cur.items.length - 1), repeat: snap.repeat }
+        : Q.createQueue(snap.items.map(trackFromNative), snap.index, {
+            repeat: snap.repeat,
+            uid: () => uids[k++] ?? Q.makeUid(),
+            context: snap.contextName ? { type: 'tracks', name: snap.contextName } : null
+          })
       nativeSig = uidSig(queue)
       const item = Q.currentItem(queue)
       store.setState({
@@ -666,7 +734,16 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
 
     // The service may already be playing (Android Auto started it, or the WebView was recreated).
     void n.getSnapshot().then((snap) => {
-      if (snap && store.getState().queue.items.length === 0) adopt(snap)
+      if (touched) return
+      if (snap) {
+        // The service holds a queue (still playing, or restored from its own saved session): adopt it.
+        adopt(snap)
+      } else if (restored && store.getState().queue.items.length > 0) {
+        // Nothing native: load the restored queue paused at the saved position.
+        const q = store.getState().queue
+        nativeSig = uidSig(q)
+        n.setQueue(toNativeItems(q), q.index, { play: false, startAt: store.getState().position })
+      }
     })
   }
 

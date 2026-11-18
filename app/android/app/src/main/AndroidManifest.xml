@@ -46,6 +46,14 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+        <!-- nocturne:media-button-receiver: lets the system resume the last session (media resumption card, headset / car play after a reboot) -->
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
         <!-- nocturne:android-auto: tells Android Auto this app is a media app (res/xml/automotive_app_desc.xml) -->
         <meta-data
             android:name="com.google.android.gms.car.application"

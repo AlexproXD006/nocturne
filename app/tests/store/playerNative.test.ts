@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { createPlayerStore, toNativeItems, trackFromNative } from '@/store/player'
 import type { NativePlayer, NativePlayerEvent } from '@/platform/nativePlayerTypes'
 import { NativeEngine } from '@/player/nativeEngine'
+import * as Q from '@/player/queue'
 import { currentItem } from '@/player/queue'
+import { serializeSession } from '@/lib/playerSession'
 import { tracks } from '../helpers/fixtures'
 
 function fakeNative(snapshot: Awaited<ReturnType<NativePlayer['getSnapshot']>> = null) {
@@ -183,5 +185,65 @@ describe('native queue mapping', () => {
   it('trackFromNative keeps the full track when native has it', () => {
     const t = tracks(1)[0]!
     expect(trackFromNative({ uid: 'u', trackId: t.id, title: '', artist: '', album: '', artworkUrl: '', duration: 0, track: t })).toBe(t)
+  })
+})
+
+describe('session restore and adoption', () => {
+  const saved = (n = 3, index = 1, position = 37) => {
+    const q = Q.createQueue(tracks(n), index, { context: { type: 'playlist', id: 'p1', name: 'Mix' } })
+    return serializeSession(q, position, 1)!
+  }
+
+  it('restores the saved queue paused and loads it into native without autoplay', async () => {
+    const f = fakeNative(null)
+    const store = createPlayerStore({ native: f.n, createEngine: () => new NativeEngine(f.n), resolveStream: vi.fn(), getCrossfade: () => 0, loadSession: () => saved() })
+    expect(store.getState().queue.index).toBe(1)
+    expect(store.getState().status).toBe('paused')
+    expect(store.getState().position).toBe(37)
+    await vi.waitFor(() => expect(f.n.setQueue).toHaveBeenCalledTimes(1))
+    const [items, index, opts] = f.n.setQueue.mock.calls[0]!
+    expect(items).toHaveLength(3)
+    expect(index).toBe(1)
+    expect(opts).toMatchObject({ play: false, startAt: 37 })
+    expect(f.n.play).not.toHaveBeenCalled()
+  })
+
+  it('adopts the playing native state over the saved session, keeping its structure when the entries match', async () => {
+    const s = saved(3, 0, 5)
+    const snap = {
+      items: s.queue.items.map((it) => ({ uid: it.uid, trackId: it.track.id, title: it.track.title, artist: '', album: '', artworkUrl: '', duration: it.track.duration })),
+      index: 2,
+      position: 99,
+      playing: true,
+      repeat: 'off' as const,
+      shuffle: false
+    }
+    const f = fakeNative(snap)
+    const store = createPlayerStore({ native: f.n, createEngine: () => new NativeEngine(f.n), resolveStream: vi.fn(), getCrossfade: () => 0, loadSession: () => s })
+    await vi.waitFor(() => expect(store.getState().status).toBe('playing'))
+    expect(store.getState().queue.index).toBe(2)
+    expect(store.getState().position).toBe(99)
+    expect(store.getState().queue.context).toEqual({ type: 'playlist', id: 'p1', name: 'Mix' })
+    expect(f.n.setQueue).not.toHaveBeenCalled()
+  })
+
+  it('adopts a native snapshot when nothing was saved', async () => {
+    const f = fakeNative({ items: [{ uid: 'a', trackId: 't1', title: 'X', artist: 'Y', album: '', artworkUrl: '', duration: 10 }], index: 0, position: 4, playing: false, repeat: 'off', shuffle: false })
+    const store = createPlayerStore({ native: f.n, createEngine: () => new NativeEngine(f.n), resolveStream: vi.fn(), getCrossfade: () => 0 })
+    await vi.waitFor(() => expect(currentItem(store.getState().queue)?.uid).toBe('a'))
+    expect(store.getState().status).toBe('paused')
+    expect(store.getState().position).toBe(4)
+  })
+
+  it('persists on queue change and forgets when stopped', async () => {
+    const saves: unknown[] = []
+    const f = fakeNative(null)
+    const store = createPlayerStore({ native: f.n, createEngine: () => new NativeEngine(f.n), resolveStream: vi.fn(), getCrossfade: () => 0, saveSession: (x) => void saves.push(x) })
+    await store.getState().playTracks(tracks(2), 0)
+    await Promise.resolve()
+    expect(saves.at(-1)).toMatchObject({ v: 1, queue: { index: 0 } })
+    store.getState().stop()
+    await Promise.resolve()
+    expect(saves.at(-1)).toBeNull()
   })
 })

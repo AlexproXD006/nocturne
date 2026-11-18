@@ -17,6 +17,7 @@ import { createPlayQueue } from './lib/playQueue'
 import { createSleepTimer } from './store/sleepTimer'
 import { createListenBrainzStore } from './store/listenbrainz'
 import { currentItem } from './player/queue'
+import { loadSavedSession, storeSavedSession } from './lib/playerSession'
 
 export { platform }
 
@@ -81,6 +82,8 @@ export const usePlayer = createPlayerStore({
   getCrossfade: () => useSettings.getState().crossfade,
   getAutoplay: () => useSettings.getState().autoplay,
   fetchAutoplay: async (seedId, exclude) => (useSession.getState().server?.capabilities?.radio === false ? [] : api.radio(seedId, exclude, 20)),
+  loadSession: loadSavedSession,
+  saveSession: storeSavedSession,
   initialVolume: useSettings.getState().volume,
   initialMuted: useSettings.getState().muted,
   onVolumeChange: (volume, muted) => useSettings.getState().update({ volume, muted }),
