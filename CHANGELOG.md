@@ -2,6 +2,16 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.0-beta.8 — 2026-11-18
+
+**Buscar en playlists, acciones masivas y desplazamiento rápido (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Tirador de desplazamiento rápido en playlists y listas largas: arrástralo para saltar por la lista, con la letra o la posición mientras arrastras.
+- Buscador dentro de las playlists, Me gusta, mixes y álbumes (sin tildes ni mayúsculas).
+- Selección múltiple y acciones masivas: añade canciones (o la playlist entera) a otra playlist nueva o existente, a la cola o a Me gusta, y quítalas de golpe.
+
 ## 1.1.0-beta.7 — 2026-11-18
 
 **Ajustes de la beta (beta)** · android, windows, linux, ios
