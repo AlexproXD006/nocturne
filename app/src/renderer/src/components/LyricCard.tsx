@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Download, Share2, X } from 'lucide-react'
+import { Download, Loader2, Share2, X } from 'lucide-react'
 import { useUi } from '../store/ui'
 import { prefersReducedMotion, useSettings } from '../store/settings'
 import { cx } from './common'
 import {
-  canvasToPngBlob,
   drawLyricCard,
   ensureCardFonts,
   loadCardImage,
   type CardRatio
 } from '../lib/lyricCard'
+import { exportCard } from '../lib/cardExport'
+import type { ImageIntent } from '../platform'
 import { useT, type MessageKey } from '../i18n'
 
 export interface LyricCardProps {
@@ -56,8 +57,6 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
     })
   }, [reduced, onClose])
 
-  const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
-
   // Load the album art once (best-effort; null on CORS failure).
   useEffect(() => {
     let alive = true
@@ -97,68 +96,22 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
     return () => document.removeEventListener('keydown', onKey, true)
   }, [requestClose])
 
-  /** Returns a PNG blob, retrying without the cover if the canvas was tainted. */
-  const currentBlob = async (): Promise<Blob | null> => {
+  const run = async (intent: ImageIntent): Promise<void> => {
     const canvas = canvasRef.current
-    if (!canvas) return null
-    let blob = await canvasToPngBlob(canvas)
-    if (!blob && coverRef.current) {
-      await ensureCardFonts()
-      drawLyricCard(canvas, ratio, { title, artist, lines }, null)
-      blob = await canvasToPngBlob(canvas)
-    }
-    return blob
-  }
-
-  const triggerDownload = (blob: Blob): void => {
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'nocturne-lyrics.png'
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 1500)
-  }
-
-  const onDownload = async (): Promise<void> => {
+    if (!canvas) return
     setBusy(true)
     try {
-      const blob = await currentBlob()
-      if (!blob) {
-        toast(tr('card.imageFailed'), 'error')
-        return
-      }
-      triggerDownload(blob)
+      const result = await exportCard(
+        canvas,
+        () => drawLyricCard(canvas, ratio, { title, artist, lines }, null),
+        'nocturne-lyrics.png',
+        intent,
+        { title, text: artist ? `${title} — ${artist}` : title }
+      )
+      if (result === 'saved') toast(tr('card.saved'))
+      else if (result === 'copied') toast(tr('card.copied'))
     } catch {
-      toast(tr('card.imageFailed'), 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const onShare = async (): Promise<void> => {
-    setBusy(true)
-    try {
-      const blob = await currentBlob()
-      if (!blob) {
-        toast(tr('card.imageFailed'), 'error')
-        return
-      }
-      const file = new File([blob], 'nocturne-lyrics.png', { type: 'image/png' })
-      const data: ShareData = { files: [file], title, text: artist ? `${title} — ${artist}` : title }
-      if (typeof navigator.canShare === 'function' && navigator.canShare(data)) {
-        try {
-          await navigator.share(data)
-          return
-        } catch (err) {
-          // User-cancelled share is not an error; anything else falls back.
-          if (err instanceof DOMException && err.name === 'AbortError') return
-        }
-      }
-      triggerDownload(blob)
-    } catch {
-      toast(tr('card.shareFailed'), 'error')
+      toast(intent === 'share' ? tr('card.shareFailed') : tr('card.imageFailed'), 'error')
     } finally {
       setBusy(false)
     }
@@ -228,17 +181,17 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
             type="button"
             aria-label={tr('card.downloadLabel')}
             disabled={busy}
-            onClick={() => void onDownload()}
+            onClick={() => void run('save')}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-3 text-sm font-semibold text-fg transition-colors hover:bg-white/14 disabled:pointer-events-none disabled:opacity-50"
           >
-            <Download className="h-4 w-4" /> {tr('card.download')}
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} {tr('card.download')}
           </button>
-          {canNativeShare && (
+          {(
             <button
               type="button"
               aria-label={tr('card.shareLabel')}
               disabled={busy}
-              onClick={() => void onShare()}
+              onClick={() => void run('share')}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-accent px-4 py-3 text-sm font-semibold text-ink-950 transition-transform active:scale-95 disabled:pointer-events-none disabled:opacity-50"
             >
               <Share2 className="h-4 w-4" /> {tr('card.share')}

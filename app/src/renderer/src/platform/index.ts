@@ -1,9 +1,11 @@
 import { getLocale } from '../i18n'
 import type { NocturneBridge, WindowState } from '../../../shared/ipc'
 import { createNativeNowPlaying, type NocturneMediaPlugin } from './nocturneMedia'
+import { capacitorSaveOrShare, desktopSaveOrShare, webSaveOrShare, type SaveOrShareImage } from './saveImage'
 import { createNativeUpdates, type NativeUpdates, type NocturneUpdatesPlugin } from './nocturneUpdates'
 
 export type { NativeUpdates } from './nocturneUpdates'
+export type { ImageIntent, ImageResult, SaveOrShareImage } from './saveImage'
 
 export type PlatformKind = 'desktop' | 'android' | 'ios' | 'web'
 
@@ -59,6 +61,8 @@ export interface Platform {
   hostedOrigin: string | null
   window: NocturneBridge['window'] | null
   openExternal(url: string): Promise<void>
+  /** Export a rendered PNG: share sheet (mobile), save dialog / clipboard (desktop), Web Share or download (web). */
+  saveOrShareImage: SaveOrShareImage
   /** Native now-playing controls (Android Media3 session). Desktop and iOS use navigator.mediaSession. */
   nativeNowPlaying: NativeNowPlaying | null
   /** Android only: background update check (WorkManager) + "update available" notification. */
@@ -127,6 +131,7 @@ function desktopPlatform(bridge: NocturneBridge): Platform {
     hostedOrigin: null,
     window: bridge.window,
     openExternal: (url) => bridge.app.openExternal(url),
+    saveOrShareImage: desktopSaveOrShare(bridge),
     nativeNowPlaying: null,
     nativeUpdates: null,
     notifyUpdate: async (info) => {
@@ -176,7 +181,8 @@ function androidPlatform(): Platform {
     },
     nativeNowPlaying: createNativeNowPlaying(mediaBox),
     nativeUpdates: createNativeUpdates(updatesBox),
-    notifyUpdate: null
+    notifyUpdate: null,
+    saveOrShareImage: capacitorSaveOrShare()
   }
 }
 
@@ -212,7 +218,8 @@ function iosPlatform(): Platform {
     },
     nativeNowPlaying: null,
     nativeUpdates: null,
-    notifyUpdate: null
+    notifyUpdate: null,
+    saveOrShareImage: capacitorSaveOrShare()
   }
 }
 
@@ -229,7 +236,8 @@ function webPlatform(): Platform {
     },
     nativeNowPlaying: null,
     nativeUpdates: null,
-    notifyUpdate: null
+    notifyUpdate: null,
+    saveOrShareImage: webSaveOrShare()
   }
 }
 

@@ -290,9 +290,11 @@ export const en = {
   // Lyric card / recap card (share dialogs)
   'card.imageFailed': 'Could not create the image.',
   'card.shareFailed': 'Could not share the image.',
+  'card.saved': 'Image saved',
+  'card.copied': 'Image copied to the clipboard',
   'card.close': 'Close',
-  'card.download': 'Download',
-  'card.downloadLabel': 'Download image',
+  'card.download': 'Save image',
+  'card.downloadLabel': 'Save image',
   'card.share': 'Share',
   'card.shareLabel': 'Share image',
   'card.shapeGroup': 'Image shape',

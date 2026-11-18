@@ -23,6 +23,10 @@ const bridge: NocturneBridge = {
     info: () => ipcRenderer.invoke(IPC.appInfo),
     openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
     notifyUpdate: (info) => ipcRenderer.invoke(IPC.notifyUpdate, info)
+  },
+  image: {
+    save: (bytes, filename) => ipcRenderer.invoke(IPC.imageSave, bytes, filename),
+    copy: (bytes) => ipcRenderer.invoke(IPC.imageCopy, bytes)
   }
 }
 

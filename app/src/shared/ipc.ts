@@ -10,7 +10,9 @@ export const IPC = {
   windowState: 'window:state',
   appInfo: 'app:info',
   openExternal: 'shell:open-external',
-  notifyUpdate: 'app:notify-update'
+  notifyUpdate: 'app:notify-update',
+  imageSave: 'image:save',
+  imageCopy: 'image:copy'
 } as const
 
 export interface WindowState {
@@ -49,6 +51,13 @@ export interface NocturneBridge {
      * Optional so older preloads / test fakes stay valid.
      */
     notifyUpdate?(info: { version: string; url: string; locale?: string }): Promise<boolean>
+  }
+  /** Desktop image export (optional so older preloads / fakes stay valid). */
+  image?: {
+    /** Save dialog + write; resolves false when the user cancels. */
+    save(bytes: Uint8Array, filename: string): Promise<boolean>
+    /** Puts the PNG on the system clipboard. */
+    copy(bytes: Uint8Array): Promise<boolean>
   }
 }
 

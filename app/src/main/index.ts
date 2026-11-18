@@ -3,6 +3,9 @@ import { readFile, writeFile, rename } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import {
   app,
+  clipboard,
+  dialog,
+  nativeImage,
   BrowserWindow,
   ipcMain,
   net,
@@ -255,6 +258,24 @@ function registerIpc(): void {
     await shell.openExternal(url)
   })
   handle(IPC.notifyUpdate, (_e, info: unknown) => showUpdateNotification(info))
+  handle(IPC.imageSave, async (e, bytes: unknown, filename: unknown) => {
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > 32 * 1024 * 1024) throw new Error('Invalid image')
+    const base = typeof filename === 'string' ? filename.replace(/[^\w.-]+/g, '-').slice(0, 100) : ''
+    const name = base.toLowerCase().endsWith('.png') ? base : 'nocturne.png'
+    const win = withWindow(e)
+    const opts = { defaultPath: join(app.getPath('pictures'), name), filters: [{ name: 'PNG', extensions: ['png'] }] }
+    const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+    if (res.canceled || !res.filePath) return false
+    await writeFile(res.filePath, bytes)
+    return true
+  })
+  handle(IPC.imageCopy, (_e, bytes: unknown) => {
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > 32 * 1024 * 1024) throw new Error('Invalid image')
+    const img = nativeImage.createFromBuffer(Buffer.from(bytes))
+    if (img.isEmpty()) throw new Error('Invalid image')
+    ;(clipboard as unknown as { writeImage(i: Electron.NativeImage): void }).writeImage(img)
+    return true
+  })
 }
 
 async function bootstrap(): Promise<void> {

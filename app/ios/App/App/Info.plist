@@ -72,5 +72,7 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Nocturne guarda en tu galería las imágenes que compartes (resumen y letras).</string>
 </dict>
 </plist>

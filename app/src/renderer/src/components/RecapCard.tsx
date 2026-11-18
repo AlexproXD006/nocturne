@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Download, Share2, X } from 'lucide-react'
+import { Download, Loader2, Share2, X } from 'lucide-react'
 import { useUi } from '../store/ui'
 import { prefersReducedMotion, useSettings } from '../store/settings'
 import { cx } from './common'
-import { canvasToPngBlob, ensureCardFonts, loadCardImage } from '../lib/lyricCard'
+import { ensureCardFonts, loadCardImage } from '../lib/lyricCard'
+import { exportCard } from '../lib/cardExport'
+import type { ImageIntent } from '../platform'
 import { drawRecapCard, parseAccent, type RecapImages } from '../lib/recapCard'
 import type { RecapData } from '../lib/stats'
 import { useT } from '../i18n'
@@ -23,7 +25,6 @@ export function RecapCard({ data, onClose }: { data: RecapData; onClose: () => v
   const [closing, setClosing] = useState(false)
   const toast = useUi((s) => s.toast)
   const reduced = prefersReducedMotion(useSettings((s) => s.motion))
-  const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
 
   const requestClose = useCallback((): void => {
     if (reduced) {
@@ -80,53 +81,22 @@ export function RecapCard({ data, onClose }: { data: RecapData; onClose: () => v
 
   const fileName = `nocturne-recap-${data.periodLabel.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'stats'}.png`
 
-  /** PNG blob; if the canvas was tainted, redraw with placeholders instead of images. */
-  const currentBlob = async (): Promise<Blob | null> => {
+  const run = async (intent: ImageIntent): Promise<void> => {
     const canvas = canvasRef.current
-    if (!canvas) return null
-    let blob = await canvasToPngBlob(canvas)
-    if (!blob) {
-      await ensureCardFonts()
-      drawRecapCard(canvas, data, { artists: [], cover: null }, accent())
-      blob = await canvasToPngBlob(canvas)
-    }
-    return blob
-  }
-
-  const triggerDownload = (blob: Blob): void => {
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 1500)
-  }
-
-  const run = async (share: boolean): Promise<void> => {
+    if (!canvas) return
     setBusy(true)
     try {
-      const blob = await currentBlob()
-      if (!blob) {
-        toast(tr('card.imageFailed'), 'error')
-        return
-      }
-      if (share) {
-        const file = new File([blob], fileName, { type: 'image/png' })
-        const payload: ShareData = { files: [file], title: tr('card.recapShareTitle', { period: data.periodLabel }) }
-        if (typeof navigator.canShare === 'function' && navigator.canShare(payload)) {
-          try {
-            await navigator.share(payload)
-            return
-          } catch (err) {
-            if (err instanceof DOMException && err.name === 'AbortError') return
-          }
-        }
-      }
-      triggerDownload(blob)
+      const result = await exportCard(
+        canvas,
+        () => drawRecapCard(canvas, data, { artists: [], cover: null }, accent()),
+        fileName,
+        intent,
+        { title: tr('card.recapShareTitle', { period: data.periodLabel }) }
+      )
+      if (result === 'saved') toast(tr('card.saved'))
+      else if (result === 'copied') toast(tr('card.copied'))
     } catch {
-      toast(share ? tr('card.shareFailed') : tr('card.imageFailed'), 'error')
+      toast(intent === 'share' ? tr('card.shareFailed') : tr('card.imageFailed'), 'error')
     } finally {
       setBusy(false)
     }
@@ -175,17 +145,17 @@ export function RecapCard({ data, onClose }: { data: RecapData; onClose: () => v
             type="button"
             aria-label={tr('card.downloadLabel')}
             disabled={busy}
-            onClick={() => void run(false)}
+            onClick={() => void run('save')}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-3 text-sm font-semibold text-fg transition-colors hover:bg-white/14 disabled:pointer-events-none disabled:opacity-50"
           >
-            <Download className="h-4 w-4" /> {tr('card.download')}
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} {tr('card.download')}
           </button>
-          {canNativeShare && (
+          {(
             <button
               type="button"
               aria-label={tr('card.shareLabel')}
               disabled={busy}
-              onClick={() => void run(true)}
+              onClick={() => void run('share')}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-accent px-4 py-3 text-sm font-semibold text-ink-950 transition-transform active:scale-95 disabled:pointer-events-none disabled:opacity-50"
             >
               <Share2 className="h-4 w-4" /> {tr('card.share')}

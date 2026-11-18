@@ -291,9 +291,11 @@ export const es: Record<MessageKey, string> = {
   // Lyric card / recap card (share dialogs)
   'card.imageFailed': 'No se ha podido crear la imagen.',
   'card.shareFailed': 'No se ha podido compartir la imagen.',
+  'card.saved': 'Imagen guardada',
+  'card.copied': 'Imagen copiada al portapapeles',
   'card.close': 'Cerrar',
-  'card.download': 'Descargar',
-  'card.downloadLabel': 'Descargar imagen',
+  'card.download': 'Guardar imagen',
+  'card.downloadLabel': 'Guardar imagen',
   'card.share': 'Compartir',
   'card.shareLabel': 'Compartir imagen',
   'card.shapeGroup': 'Formato de la imagen',
