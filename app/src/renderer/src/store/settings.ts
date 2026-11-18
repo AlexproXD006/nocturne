@@ -71,6 +71,8 @@ export interface Settings {
   adaptive: AdaptiveSettings
   /** UI language: 'system' follows the browser/OS language list. */
   language: LanguagePref
+  /** Autoplay: when the queue ends, keep playing similar songs from the library. */
+  autoplay: boolean
   /** Custom Nocturne Connect name for this device ('' = automatic, e.g. "PC (Windows)"). */
   deviceName: string
 }
@@ -86,6 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
   accent: 'adaptive',
   adaptive: DEFAULT_ADAPTIVE,
   language: 'system',
+  autoplay: true,
   deviceName: ''
 }
 
@@ -130,6 +133,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     adaptive: sanitizeAdaptive(r.adaptive),
     // Migration: settings saved before i18n have no language and default to following the system.
     language: isLanguagePref(r.language) ? r.language : DEFAULT_SETTINGS.language,
+    autoplay: typeof r.autoplay === 'boolean' ? r.autoplay : DEFAULT_SETTINGS.autoplay,
     deviceName: typeof r.deviceName === 'string' ? r.deviceName.trim().slice(0, 80) : DEFAULT_SETTINGS.deviceName
   }
 }
@@ -174,6 +178,7 @@ function pick(s: Settings): Settings {
     accent: s.accent,
     adaptive: s.adaptive,
     language: s.language,
+    autoplay: s.autoplay,
     deviceName: s.deviceName
   }
 }

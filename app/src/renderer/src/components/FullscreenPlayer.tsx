@@ -17,6 +17,7 @@ import { LyricsView } from './LyricsView'
 import { QueuePanel } from './QueuePanel'
 import { Visualizer } from './Visualizer'
 import { AddToPlaylistButton } from './Playlists'
+import { SleepTimerButton } from './SleepTimer'
 import { useT, type MessageKey } from '../i18n'
 
 const STYLES: { id: VisualizerStyle; label: MessageKey; icon: ReactNode }[] = [
@@ -113,6 +114,7 @@ export function FullscreenPlayer(): ReactNode {
           {contextName ?? tr('fs.nowPlaying')}
         </p>
         <div className="no-drag flex items-center gap-1">
+          <SleepTimerButton />
           <DevicesButton onClick={() => useDevicesUi.getState().show('sheet')} />
           {STYLES.map((s) => (
             <IconButton key={s.id} label={tr('fs.visualizer', { name: tr(s.label) })} active={visualizer === s.id} onClick={() => update({ visualizer: s.id })} size="sm">

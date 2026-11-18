@@ -10,6 +10,7 @@ import { Logo } from '../components/Shell'
 import { LanguageSelect } from '../components/LanguageSelect'
 import { Page } from './Page'
 import { SpotifySettings, useSpotifyImportEnabled } from '../components/Spotify'
+import { ListenBrainzSettings, useListenBrainzEnabled } from '../components/ListenBrainz'
 import { isPrerelease } from '../lib/version'
 import { Row, Segmented, Toggle } from './SettingsControls'
 import { AdaptiveSettingsPanel } from './AdaptiveSettings'
@@ -253,13 +254,14 @@ function UpdatesSection(): ReactNode {
 
 export function SettingsPage(): ReactNode {
   const tr = useT()
-  const { crossfade, visualizer, motion, lyrics, theme, accent, update } = useSettings()
+  const { crossfade, visualizer, motion, lyrics, theme, accent, autoplay, update } = useSettings()
   const session = useSession((s) => s.session)
   const server = useSession((s) => s.server)
   const lastServerUrl = useSession((s) => s.lastServerUrl)
   const logout = useSession((s) => s.logout)
   const admin = useSession(isAdmin)
   const spotify = useSpotifyImportEnabled()
+  const listenbrainz = useListenBrainzEnabled()
   const go = useNav((s) => s.go)
   const [signingOut, setSigningOut] = useState(false)
   const fadeId = useId()
@@ -291,6 +293,9 @@ export function SettingsPage(): ReactNode {
               />
               <span className="min-w-16 shrink-0 text-right text-sm whitespace-nowrap text-fg-muted tabular-nums">{crossfade === 0 ? tr('set.gaplessShort') : `${crossfade} s`}</span>
             </div>
+          </Row>
+          <Row label={tr('set.autoplay')} hint={tr('set.autoplayHint')}>
+            <Toggle label={tr('set.autoplay')} checked={autoplay} onChange={(v) => update({ autoplay: v })} />
           </Row>
         </Section>
 
@@ -362,9 +367,20 @@ export function SettingsPage(): ReactNode {
           </button>
         </Section>
 
-        {spotify && (
-          <Section title="Spotify">
-            <SpotifySettings />
+        {(spotify || listenbrainz) && (
+          <Section title={tr('set.integrations')}>
+            {spotify && (
+              <div>
+                <h3 className="mb-3 text-[15px] font-semibold">Spotify</h3>
+                <SpotifySettings />
+              </div>
+            )}
+            {listenbrainz && (
+              <div>
+                <h3 className="mb-3 text-[15px] font-semibold">ListenBrainz</h3>
+                <ListenBrainzSettings />
+              </div>
+            )}
           </Section>
         )}
 

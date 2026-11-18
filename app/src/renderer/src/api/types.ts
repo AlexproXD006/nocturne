@@ -157,7 +157,25 @@ export interface ServerInfo {
     playlists?: boolean
     /** Server implements /v1/spotify/* (connect a Spotify account and import its playlists). */
     spotifyImport?: boolean
+    /** Server implements GET /v1/radio (Autoplay: similar songs from the library). */
+    radio?: boolean
+    /** Server implements /v1/listenbrainz/* (scrobbling to ListenBrainz). */
+    listenbrainz?: boolean
   }
+}
+
+/** GET /v1/listenbrainz/status */
+export interface ListenBrainzStatus {
+  connected: boolean
+  /** Scrobbling on/off (the token stays saved when off). */
+  enabled: boolean
+  /** Also send "now playing". */
+  nowPlaying: boolean
+  userName: string | null
+  /** Listens waiting to be sent (retrying). */
+  pending: number
+  lastError: string | null
+  lastOkAt?: string | null
 }
 
 // ---- Spotify import (capabilities.spotifyImport) ------------------------

@@ -13,6 +13,8 @@ export interface QueueItem {
   track: Track
   /** Explicitly queued by the user ("Add to queue" / "Play next"): the user queue. */
   queued?: boolean
+  /** Added by Autoplay when the queue ran out: similar songs after the context, always at the tail. */
+  autoplay?: boolean
 }
 
 export interface QueueState {
@@ -110,7 +112,37 @@ export function userUpcoming(q: QueueState): QueueItem[] {
 
 /** "Next from <context>": what plays after the user queue runs out. */
 export function contextUpcoming(q: QueueState): QueueItem[] {
-  return q.index < 0 ? [] : q.items.slice(q.index + 1 + userQueueLength(q))
+  return q.index < 0 ? [] : q.items.slice(q.index + 1 + userQueueLength(q)).filter((it) => !it.autoplay)
+}
+
+/** "Autoplay": similar songs appended after everything else once the queue ran out. */
+export function autoplayUpcoming(q: QueueState): QueueItem[] {
+  return q.index < 0 ? [] : q.items.slice(q.index + 1).filter((it) => it.autoplay)
+}
+
+/** Appends Autoplay songs at the very end (tracks already in the queue are skipped). */
+export function appendAutoplay(q: QueueState, tracks: Track[], uid: () => string = makeUid): QueueState {
+  const have = new Set(q.items.map((it) => it.track.id))
+  const fresh: Track[] = []
+  for (const t of tracks) {
+    if (!have.has(t.id)) {
+      have.add(t.id)
+      fresh.push(t)
+    }
+  }
+  if (fresh.length === 0 || q.index < 0) return q
+  return { ...q, items: [...q.items, ...wrap(fresh, uid).map((it) => ({ ...it, autoplay: true }))] }
+}
+
+/** Empties the Autoplay section. */
+export function clearAutoplay(q: QueueState): QueueState {
+  const ids = new Set(autoplayUpcoming(q).map((it) => it.uid))
+  return ids.size === 0 ? q : { ...q, items: q.items.filter((it) => !ids.has(it.uid)) }
+}
+
+/** True when nothing is left after the current item (the moment Autoplay kicks in). */
+export function isAtEnd(q: QueueState): boolean {
+  return q.index >= 0 && q.index === q.items.length - 1
 }
 
 /** Sets the current index to `index` (in `q.items`) and moves the pending user queue right after it. */
@@ -242,27 +274,30 @@ export function setShuffle(q: QueueState, on: boolean, rng: Rng = Math.random): 
   if (on === q.shuffle) return q
   const cur = currentItem(q)
   const user = userUpcoming(q)
+  // Autoplay songs are neither context nor user queue: they stay at the tail, untouched.
+  const tail = autoplayUpcoming(q).filter((it) => it.uid !== cur?.uid)
+  const extra = (it: QueueItem): boolean => Boolean(it.queued || it.autoplay)
   if (on) {
     // Played user-queued songs are dropped from history; the context keeps all its songs.
-    const context = q.items.filter((it) => !it.queued)
+    const context = q.items.filter((it) => !extra(it))
     if (!cur) return { ...q, shuffle: true, ordered: context }
     const rest = shuffled(context.filter((it) => it.uid !== cur.uid), rng)
-    return { ...q, shuffle: true, ordered: context, items: [cur, ...user, ...rest], index: 0 }
+    return { ...q, shuffle: true, ordered: context, items: [cur, ...user, ...rest, ...tail], index: 0 }
   }
-  const ordered = q.ordered ?? q.items.filter((it) => !it.queued)
+  const ordered = q.ordered ?? q.items.filter((it) => !extra(it))
   if (!cur) return { ...q, shuffle: false, ordered: null, items: ordered, index: ordered.length ? 0 : -1 }
-  if (!cur.queued) {
+  if (!extra(cur)) {
     const pos = ordered.findIndex((it) => it.uid === cur.uid)
     if (pos < 0) return { ...q, shuffle: false, ordered: null, items: ordered, index: ordered.length ? 0 : -1 }
-    return { ...q, shuffle: false, ordered: null, items: [...ordered.slice(0, pos + 1), ...user, ...ordered.slice(pos + 1)], index: pos }
+    return { ...q, shuffle: false, ordered: null, items: [...ordered.slice(0, pos + 1), ...user, ...ordered.slice(pos + 1), ...tail], index: pos }
   }
-  // A user-queued song is playing: resume the context after the last context song played.
+  // A user-queued (or Autoplay) song is playing: resume the context after the last context song played.
   let anchor = -1
   for (let i = q.index - 1; i >= 0 && anchor < 0; i--) {
     const it = q.items[i]!
-    if (!it.queued) anchor = ordered.findIndex((o) => o.uid === it.uid)
+    if (!extra(it)) anchor = ordered.findIndex((o) => o.uid === it.uid)
   }
-  const items = [...ordered.slice(0, anchor + 1), cur, ...user, ...ordered.slice(anchor + 1)]
+  const items = [...ordered.slice(0, anchor + 1), cur, ...user, ...ordered.slice(anchor + 1), ...tail]
   return { ...q, shuffle: false, ordered: null, items, index: anchor + 1 }
 }
 

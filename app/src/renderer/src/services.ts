@@ -11,6 +11,9 @@ import { defaultDeviceName } from './lib/deviceName'
 import { resolveTracks } from './player/resolveTracks'
 import { createPlayback } from './player/playback'
 import { createPlayQueue } from './lib/playQueue'
+import { createSleepTimer } from './store/sleepTimer'
+import { createListenBrainzStore } from './store/listenbrainz'
+import { currentItem } from './player/queue'
 
 export { platform }
 
@@ -64,10 +67,44 @@ export const usePlayer = createPlayerStore({
   },
   dropListen: (playId) => playQueue.drop(playId),
   getCrossfade: () => useSettings.getState().crossfade,
+  getAutoplay: () => useSettings.getState().autoplay,
+  fetchAutoplay: async (seedId, exclude) => (useSession.getState().server?.capabilities?.radio === false ? [] : api.radio(seedId, exclude, 20)),
   initialVolume: useSettings.getState().volume,
   initialMuted: useSettings.getState().muted,
   onVolumeChange: (volume, muted) => useSettings.getState().update({ volume, muted }),
   onError: (message) => useUi.getState().toast(message, 'error')
+})
+
+/** Sleep timer (fullscreen player menu): fades out and pauses; see store/sleepTimer.ts. */
+export const useSleepTimer = createSleepTimer({
+  player: usePlayer,
+  setOutputVolume: (v) => engineRef?.setVolume(v)
+})
+// A WebView may throttle timers in the background: re-check the wall-clock deadline when we come back.
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  document.addEventListener('visibilitychange', () => useSleepTimer.getState().tick())
+}
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('focus', () => useSleepTimer.getState().tick())
+  window.addEventListener('pageshow', () => useSleepTimer.getState().tick())
+}
+
+export const useListenBrainz = createListenBrainzStore(api)
+
+// Optional ListenBrainz "now playing": the server only sends it when the user turned it on.
+let nowPlayingUid = ''
+usePlayer.subscribe((s) => {
+  const it = currentItem(s.queue)
+  const uid = s.status === 'playing' && it ? it.uid : ''
+  if (uid === nowPlayingUid) return
+  nowPlayingUid = uid
+  const st = useListenBrainz.getState().status
+  if (uid && it && st?.connected && st.enabled && st.nowPlaying) void api.listenBrainzNowPlaying(it.track.id).catch(() => undefined)
+})
+useSession.subscribe((s, prev) => {
+  const on = (x: typeof s): boolean => x.status === 'signedIn' && x.server?.capabilities?.listenbrainz === true
+  if (on(s) && !on(prev)) void useListenBrainz.getState().load()
+  if (s.status !== 'signedIn' && prev.status === 'signedIn') useListenBrainz.getState().reset()
 })
 
 export const useConnect = createConnectStore({

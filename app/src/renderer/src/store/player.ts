@@ -32,6 +32,8 @@ export interface PlayerState {
   muted: boolean
   error: string | null
   reactive: boolean
+  /** Sleep timer "End of track": playback pauses (instead of advancing) when the current track ends. */
+  sleepAfterTrack: boolean
 
   playTracks(tracks: Track[], startIndex?: number, context?: Q.QueueContext | null, opts?: { shuffle?: boolean }): Promise<void>
   playItem(uid: string): Promise<void>
@@ -57,6 +59,10 @@ export interface PlayerState {
   clearContextUpcoming(): void
   /** Reorders within one upcoming section (indices inside that section). */
   moveInSection(section: Q.QueueSection, from: number, to: number): void
+  /** Arms/disarms "pause when the current track ends" (sleep timer). */
+  setSleepAfterTrack(on: boolean): void
+  /** Empties the Autoplay section of the queue. */
+  clearAutoplay(): void
   stop(): void
 }
 
@@ -77,6 +83,10 @@ export interface PlayerDeps {
   /** The listen ended without counting as a play: forget its persisted entry. */
   dropListen?(playId: string): void
   getCrossfade(): number
+  /** "Autoplay similar songs" setting. Autoplay is off when this is missing. */
+  getAutoplay?(): boolean
+  /** Library songs similar to `seedId`, skipping `exclude`. Rejections are ignored (Autoplay is best effort). */
+  fetchAutoplay?(seedId: string, exclude: string[]): Promise<Track[]>
   initialVolume?: number
   initialMuted?: boolean
   onVolumeChange?(volume: number, muted: boolean): void
@@ -88,6 +98,8 @@ export interface PlayerDeps {
 const PRELOAD_WINDOW = 45
 const URL_SAFETY_MS = 60_000
 const RESTART_THRESHOLD = 3
+/** Ids sent as `exclude` to the radio endpoint (most recent queue entries). */
+const AUTOPLAY_EXCLUDE = 100
 
 export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<PlayerState>> {
   const now = deps.now ?? Date.now
@@ -179,7 +191,7 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
   async function maybeCrossfade(c: number, d: number): Promise<void> {
     const fade = deps.getCrossfade()
     const { queue, status } = store.getState()
-    if (fade <= 0 || crossfading || engine.isTransitioning || status !== 'playing') return
+    if (fade <= 0 || crossfading || engine.isTransitioning || status !== 'playing' || store.getState().sleepAfterTrack) return
     if (queue.repeat === 'one' || d <= fade * 2 || d - c > fade) return
     const nextQ = Q.advance(queue, true)
     const item = nextQ && Q.currentItem(nextQ)
@@ -231,6 +243,34 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     }
   })
 
+  let autoplayBusy = false
+  /**
+   * Autoplay: when the context and the user queue are exhausted (current is the last item, repeat off),
+   * appends similar songs from the library to the queue. Resolves true when songs were added.
+   */
+  async function ensureAutoplay(): Promise<boolean> {
+    const s0 = store.getState()
+    const cur = Q.currentItem(s0.queue)
+    if (!deps.fetchAutoplay || !deps.getAutoplay?.() || autoplayBusy || !cur) return false
+    if (s0.queue.repeat !== 'off' || !Q.isAtEnd(s0.queue)) return false
+    autoplayBusy = true
+    try {
+      const exclude = s0.queue.items.slice(-AUTOPLAY_EXCLUDE).map((it) => it.track.id)
+      const tracks = await deps.fetchAutoplay(cur.track.id, exclude)
+      const q = store.getState().queue
+      // The queue changed while we were asking (new context, skip, user added songs): drop the result.
+      if (Q.currentItem(q)?.uid !== cur.uid || q.repeat !== 'off' || !Q.isAtEnd(q)) return false
+      const next = Q.appendAutoplay(q, tracks)
+      if (next === q) return false
+      store.setState({ queue: next })
+      return true
+    } catch {
+      return false
+    } finally {
+      autoplayBusy = false
+    }
+  }
+
   async function startCurrent(opts: { autoplay?: boolean; startAt?: number; forceUrl?: boolean } = {}): Promise<void> {
     const item = Q.currentItem(store.getState().queue)
     if (!item) {
@@ -246,6 +286,7 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
       if (Q.currentItem(store.getState().queue)?.uid !== item.uid) return
       engine.load(item.uid, url, { autoplay: opts.autoplay !== false, startAt: opts.startAt })
       if (opts.autoplay === false) store.setState({ status: 'paused' })
+      void ensureAutoplay()
     } catch (err) {
       if (Q.currentItem(store.getState().queue)?.uid !== item.uid) return
       const message = describeError(err)
@@ -257,7 +298,22 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
   async function handleEnded(): Promise<void> {
     if (engine.isTransitioning) return
     const s = store.getState()
-    const nextQ = Q.advance(s.queue, true)
+    if (s.sleepAfterTrack) {
+      // Sleep timer: stop here; the next song (if any) is loaded paused.
+      reportIfListened()
+      store.setState({ sleepAfterTrack: false })
+      const after = Q.advance(s.queue, true)
+      if (after && after.index !== s.queue.index) {
+        store.setState({ queue: after })
+        await startCurrent({ autoplay: false })
+      } else {
+        engine.seek(0)
+        store.setState({ status: 'paused', position: 0 })
+      }
+      return
+    }
+    let nextQ = Q.advance(s.queue, true)
+    if (!nextQ && (await ensureAutoplay())) nextQ = Q.advance(store.getState().queue, true)
     if (!nextQ) {
       reportIfListened()
       engine.seek(0)
@@ -309,6 +365,7 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     muted: initialMuted,
     error: null,
     reactive: engine.reactive,
+    sleepAfterTrack: false,
 
     async playTracks(tracks, startIndex = 0, context = null, opts = {}) {
       if (tracks.length === 0) return
@@ -347,7 +404,8 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     },
 
     async next() {
-      const nextQ = Q.advance(get().queue, false)
+      let nextQ = Q.advance(get().queue, false)
+      if (!nextQ && (await ensureAutoplay())) nextQ = Q.advance(get().queue, false)
       if (!nextQ) return
       set({ queue: nextQ })
       await startCurrent()
@@ -435,12 +493,20 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
       set({ queue: Q.moveInSection(get().queue, section, from, to) })
     },
 
+    setSleepAfterTrack(on) {
+      if (get().sleepAfterTrack !== on) set({ sleepAfterTrack: on })
+    },
+
+    clearAutoplay() {
+      set({ queue: Q.clearAutoplay(get().queue) })
+    },
+
     stop() {
       reportIfListened()
       forgetListen()
       played = newListen('', '', 0, 0)
       engine.stop()
-      set({ queue: { ...Q.emptyQueue, repeat: get().queue.repeat, shuffle: get().queue.shuffle }, status: 'idle', position: 0, duration: 0, error: null })
+      set({ queue: { ...Q.emptyQueue, repeat: get().queue.repeat, shuffle: get().queue.shuffle }, status: 'idle', position: 0, duration: 0, error: null, sleepAfterTrack: false })
     }
   }))
 

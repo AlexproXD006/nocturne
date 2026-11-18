@@ -9,6 +9,7 @@ import { Artwork, IconButton, LikeButton, cx } from './common'
 import { SeekBar, TransportControls, VolumeControl } from './controls'
 import { DevicesButton, ListeningBar, RemoteSuggestion, openDevices } from './Devices'
 import { AddToPlaylistButton } from './Playlists'
+import { SleepTimerButton } from './SleepTimer'
 import { useT } from '../i18n'
 
 function NowPlayingInfo(): ReactNode {
@@ -73,6 +74,7 @@ export function PlayerBar(): ReactNode {
         <IconButton label={tr('player.queueHint')} active={panel === 'queue'} onClick={() => togglePanel('queue')}>
           <ListMusic className="h-[18px] w-[18px]" />
         </IconButton>
+        <SleepTimerButton />
         <DevicesButton />
         <VolumeControl className="ml-1 hidden lg:flex" />
         <IconButton label={tr('player.fullscreenHint')} onClick={() => setFullscreen(true)} disabled={!hasItem}>

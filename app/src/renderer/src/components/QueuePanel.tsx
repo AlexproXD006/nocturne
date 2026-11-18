@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { GripVertical, ListMusic, MonitorSpeaker, X } from 'lucide-react'
 import { api, useConnect, usePlayer } from '../services'
 import { useNowStatus } from '../hooks/useNowPlaying'
-import { contextUpcoming, currentItem, userUpcoming, type QueueItem, type QueueSection } from '../player/queue'
+import { autoplayUpcoming, contextUpcoming, currentItem, userUpcoming, type QueueItem, type QueueSection } from '../player/queue'
 import { resolveTracks } from '../player/resolveTracks'
 import type { Track } from '../api/types'
 import { artistNames } from '../lib/format'
@@ -196,6 +196,7 @@ export function QueuePanel(): ReactNode {
   }
   const user = userUpcoming(queue)
   const next = contextUpcoming(queue)
+  const auto = autoplayUpcoming(queue)
 
   return (
     <div className="flex h-full flex-col">
@@ -212,6 +213,15 @@ export function QueuePanel(): ReactNode {
           <>
             <SectionHeader title={contextTitle(queue.context?.name)} onClear={() => usePlayer.getState().clearContextUpcoming()} />
             <Section section="context" items={next} />
+          </>
+        )}
+        {auto.length > 0 && (
+          <>
+            <SectionHeader title={tr('queue.autoplay')} onClear={() => usePlayer.getState().clearAutoplay()} />
+            <p className="-mt-1 px-2 pb-2 text-xs text-fg-subtle">{tr('queue.autoplayHint')}</p>
+            {auto.map((item, i) => (
+              <QueueRow key={item.uid} item={item} index={i} />
+            ))}
           </>
         )}
       </div>

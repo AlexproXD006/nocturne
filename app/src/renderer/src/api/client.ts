@@ -34,6 +34,7 @@ import type {
   SetLyricsInput,
   SourceResult,
   SpotifyImport,
+  ListenBrainzStatus,
   SpotifyPlaylist,
   SpotifyStatus,
   StartSpotifyImportInput,
@@ -475,6 +476,43 @@ export class ApiClient {
         ...(opts?.playId ? { playId: opts.playId } : {})
       }
     })
+  }
+
+  /** Autoplay: library songs similar to `seed`, skipping `exclude`. */
+  async radio(seed: string, exclude: readonly string[] = [], limit = 20, signal?: AbortSignal): Promise<Track[]> {
+    const res = await this.request<Track[] | { items?: Track[] }>('GET', '/v1/radio', {
+      signal,
+      query: { seed, limit, exclude: exclude.join(',') }
+    })
+    return listOf(res)
+  }
+
+  // ---- ListenBrainz (capabilities.listenbrainz) ------------------------
+
+  listenBrainzStatus(signal?: AbortSignal): Promise<ListenBrainzStatus> {
+    return this.request('GET', '/v1/listenbrainz/status', { signal })
+  }
+
+  /** Checks a token (the pasted one, or the saved one when omitted) without saving it. */
+  listenBrainzTest(token?: string): Promise<{ valid: boolean; userName: string | null }> {
+    return this.request('POST', '/v1/listenbrainz/test', { body: token ? { token } : {} })
+  }
+
+  /** Validates and stores the token (encrypted on the server). */
+  listenBrainzConnect(token: string): Promise<ListenBrainzStatus> {
+    return this.request('PUT', '/v1/listenbrainz/connection', { body: { token } })
+  }
+
+  listenBrainzSettings(patch: { enabled?: boolean; nowPlaying?: boolean }): Promise<ListenBrainzStatus> {
+    return this.request('PATCH', '/v1/listenbrainz/settings', { body: patch })
+  }
+
+  listenBrainzDisconnect(): Promise<void> {
+    return this.request('DELETE', '/v1/listenbrainz/connection')
+  }
+
+  listenBrainzNowPlaying(trackId: string): Promise<void> {
+    return this.request('POST', '/v1/listenbrainz/now-playing', { body: { trackId } })
   }
 
   // ---- Connect (remote playback control) --------------------------------
