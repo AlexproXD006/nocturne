@@ -2,11 +2,14 @@
  * Dual-deck audio engine.
  *  - The standby deck preloads the next track so transitions are gapless.
  *  - Optional crossfade between decks.
- *  - Web Audio analyser for the visualizer. Requires CORS on the stream; if the
- *    server doesn't send CORS headers we transparently fall back to plain playback.
+ *  - Web Audio graph: decks -> master gain -> 10-band equalizer (bypassed when off) -> analyser -> output.
+ *    The analyser drives the visualizer. Requires CORS on the stream (the Nocturne server sends it); if a
+ *    server doesn't, we transparently fall back to plain playback (no equalizer, no visualizer).
  */
 
 import { t } from '../i18n'
+import { DEFAULT_EQ, type EqState } from '../lib/eq'
+import { EqGraph } from './eqGraph'
 
 export interface EngineEvents {
   onTime?(current: number, duration: number): void
@@ -54,6 +57,8 @@ export class AudioEngine {
   private ctx: AudioContext | null = null
   private master: GainNode | null = null
   private analyser: AnalyserNode | null = null
+  private eqGraph: EqGraph | null = null
+  private eq: EqState = { ...DEFAULT_EQ, gains: [...DEFAULT_EQ.gains] }
   private volume = 1
   private reactiveMode: boolean
   private probingPlain = false
@@ -148,14 +153,17 @@ export class AudioEngine {
       this.analyser = this.ctx.createAnalyser()
       this.analyser.fftSize = 2048
       this.analyser.smoothingTimeConstant = 0.78
-      this.master.connect(this.analyser)
       this.analyser.connect(this.ctx.destination)
       for (const d of this.decks) this.connect(d)
+      // master -> equalizer -> analyser (the equalizer wires itself around the filters while disabled).
+      this.eqGraph = new EqGraph(this.ctx, this.master, this.analyser)
+      this.eqGraph.apply(this.eq)
       this.events.onReactiveChange?.(true)
     } catch {
       this.ctx = null
       this.master = null
       this.analyser = null
+      this.eqGraph = null
       this.reactiveMode = false
       // Without an analyser there is no reason to demand CORS from the stream.
       for (const d of this.decks) d.el.crossOrigin = null
@@ -279,6 +287,7 @@ export class AudioEngine {
       this.ctx = null
       this.master = null
       this.analyser = null
+      this.eqGraph = null
     }
     this.reactiveMode = reactive
     this.decks = [this.makeDeck(), this.makeDeck()]
@@ -442,6 +451,17 @@ export class AudioEngine {
     this.transitioning = false
   }
 
+  /** Applies the equalizer. Remembered until the (lazily created) audio graph exists; a no-op without Web Audio. */
+  setEq(state: EqState): void {
+    this.eq = state
+    this.eqGraph?.apply(state)
+  }
+
+  /** True while the equalizer is actually in the signal path (Web Audio available and the EQ enabled). */
+  get eqActive(): boolean {
+    return this.eqGraph !== null && !this.eqGraph.isBypassed
+  }
+
   /** Fills `out` with frequency data. Returns false when no analyser is available. */
   getFrequencyData(out: Uint8Array<ArrayBuffer>): boolean {
     if (!this.analyser) return false
@@ -459,6 +479,8 @@ export class AudioEngine {
 
   destroy(): void {
     for (const d of this.decks) this.disposeDeck(d)
+    this.eqGraph?.destroy()
+    this.eqGraph = null
     void this.ctx?.close().catch(() => undefined)
     this.ctx = null
   }

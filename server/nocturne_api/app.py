@@ -35,6 +35,7 @@ from .routes_spotify import router as spotify_router
 from .routes_stats import router as stats_router
 from .routes_radio import router as radio_router
 from .routes_mixes import router as mixes_router
+from .routes_eq import router as eq_router
 from .routes_listenbrainz import router as listenbrainz_router
 
 logger = logging.getLogger("nocturne")
@@ -57,8 +58,8 @@ v1_app.add_middleware(
     allow_origins=config.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
-    expose_headers=["Retry-After", "WWW-Authenticate"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Range"],
+    expose_headers=["Retry-After", "WWW-Authenticate", "Content-Range", "Accept-Ranges", "Content-Length"],
 )
 
 
@@ -132,6 +133,7 @@ v1_app.include_router(spotify_router)
 v1_app.include_router(stats_router)
 v1_app.include_router(radio_router)
 v1_app.include_router(mixes_router)
+v1_app.include_router(eq_router)
 v1_app.include_router(listenbrainz_router)
 
 

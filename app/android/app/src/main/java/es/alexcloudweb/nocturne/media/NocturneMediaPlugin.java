@@ -29,6 +29,7 @@ import org.json.JSONObject;
  * <ul>
  *   <li>{@code setQueue / play / pause / seek / setVolume / setRepeat / setShuffle / setPauseAtEnd / stop /
  *       setLiked / setLyricsInCar}: transport and queue.
+ *   <li>{@code setEq}: equalizer state (enabled, preamp, 10 gains), persisted natively and applied by the service.
  *   <li>{@code setAuth / getAuth}: the session handed to native secure storage.
  *   <li>{@code getSnapshot}: the native queue (adopted when Android Auto started playback).
  *   <li>event {@code event}: state, position, index, error, queue, liked, command, auth.
@@ -155,6 +156,20 @@ public class NocturneMediaPlugin extends Plugin {
         final boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
         if (EventHub.serviceAlive()) EventHub.withService(s -> s.cmdSetLyricsEnabled(enabled));
         else LyricsPref.set(getContext(), enabled);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setEq(PluginCall call) {
+        final boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        final double preamp = call.getDouble("preamp", 0.0);
+        double[] gains = new double[EqDsp.BANDS];
+        JSONArray arr = call.getArray("gains");
+        for (int i = 0; i < gains.length; i++) gains[i] = arr == null ? 0 : arr.optDouble(i, 0);
+        final EqPrefs.State state = new EqPrefs.State(enabled, preamp, gains);
+        // Persisted first: a service that is not running (or restarts later) reads it on creation.
+        EqPrefs.save(getContext(), state);
+        if (EventHub.serviceAlive()) EventHub.withService(s -> s.cmdSetEq(state));
         call.resolve();
     }
 

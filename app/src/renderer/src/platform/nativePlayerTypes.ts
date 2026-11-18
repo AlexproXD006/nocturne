@@ -28,6 +28,13 @@ export interface NativeSnapshot {
   contextName?: string
 }
 
+/** Equalizer state sent to the Media3 service (10 gains in dB, preamp in dB). */
+export interface NativeEq {
+  enabled: boolean
+  preamp: number
+  gains: number[]
+}
+
 /** Session handed to native secure storage so the service can call the API with no WebView. */
 export interface NativeSession {
   serverUrl: string
@@ -78,6 +85,8 @@ export interface NativePlayer {
   setAuth(session: NativeSession | null): void
   getAuth(): Promise<NativeSession | null>
   setLyricsInCar(enabled: boolean): void
+  /** Equalizer state for the ExoPlayer audio processor; the service also persists it and applies it with the app closed. */
+  setEq(state: NativeEq): void
   getSnapshot(): Promise<NativeSnapshot | null>
   on(listener: (e: NativePlayerEvent) => void): () => void
 }

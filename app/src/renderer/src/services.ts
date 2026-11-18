@@ -9,6 +9,7 @@ import { useLikes } from './store/likes'
 import type { StoredSession } from './api/client'
 import { LrclibClient } from './lyrics/lrclib'
 import { useSettings } from './store/settings'
+import { createEqStore } from './store/eq'
 import { useUi } from './store/ui'
 import { defaultDeviceName } from './lib/deviceName'
 import { resolveTracks } from './player/resolveTracks'
@@ -59,6 +60,26 @@ function scrobbleOff(): boolean {
   return useSession.getState().server?.capabilities?.scrobble === false
 }
 
+/**
+ * Equalizer: per-user state kept on the server and cached locally. It is applied to the Web Audio graph
+ * (web, desktop, iOS) or sent to the Android Media3 service, which also persists it for when the app is closed.
+ */
+export const useEq = createEqStore({
+  api,
+  apply: (state) => {
+    if (platform.nativePlayer) platform.nativePlayer.setEq({ enabled: state.enabled, preamp: state.preamp, gains: state.gains })
+    else engineRef?.setEq(state)
+  }
+})
+useSession.subscribe((s, prev) => {
+  if (s.status === 'signedIn' && prev.status !== 'signedIn') void useEq.getState().load()
+  if (s.status === 'signedOut' && prev.status === 'signedIn') useEq.getState().reset()
+})
+if (platform.nativePlayer) {
+  const st = useEq.getState().snapshot()
+  platform.nativePlayer.setEq({ enabled: st.enabled, preamp: st.preamp, gains: st.gains })
+}
+
 /** Android: the Media3 service plays (and reports plays); null elsewhere, where <audio> does. */
 const nativePlayer = platform.nativePlayer ?? null
 let nativeEngine: NativeEngine | null = null
@@ -69,7 +90,9 @@ export const usePlayer = createPlayerStore({
   onNativePlaying: (playing) => nativeEngine?.setPlaying(playing),
   createEngine: (events) => {
     if (nativePlayer) return (nativeEngine = new NativeEngine(nativePlayer))
-    return (engineRef = new AudioEngine(events))
+    engineRef = new AudioEngine(events)
+    engineRef.setEq(useEq.getState().snapshot())
+    return engineRef
   },
   resolveStream: (trackId) => api.stream(trackId),
   reportPlayed: (trackId, seconds, meta) => {

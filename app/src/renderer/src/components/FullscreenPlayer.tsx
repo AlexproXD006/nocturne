@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, ListMusic, Mic2, Sparkles, Waves, CircleDot } from 'lucide-react'
+import { ChevronDown, ListMusic, Mic2, Sparkles, Waves, CircleDot, SlidersHorizontal } from 'lucide-react'
 import { platform } from '../services'
 import { useIsRemote, useNowContext, useNowStatus, useNowTrack } from '../hooks/useNowPlaying'
 import { DevicesButton, ListeningBar, useDevicesUi } from './Devices'
@@ -114,6 +114,16 @@ export function FullscreenPlayer(): ReactNode {
           {contextName ?? tr('fs.nowPlaying')}
         </p>
         <div className="no-drag flex items-center gap-1">
+          <IconButton
+            label={tr('eq.open')}
+            size="sm"
+            onClick={() => {
+              close()
+              go({ name: 'equalizer' })
+            }}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </IconButton>
           <SleepTimerButton />
           <DevicesButton onClick={() => useDevicesUi.getState().show('sheet')} />
           {STYLES.map((s) => (

@@ -22,7 +22,11 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.datasource.ResolvingDataSource;
+import androidx.media3.common.audio.AudioProcessor;
+import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.audio.AudioSink;
+import androidx.media3.exoplayer.audio.DefaultAudioSink;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.session.CommandButton;
 import androidx.media3.session.DefaultMediaNotificationProvider;
@@ -105,6 +109,9 @@ public final class NocturneMediaService extends MediaLibraryService {
     private String contextName = "";
     private final java.util.concurrent.atomic.AtomicLong uidCounter = new java.util.concurrent.atomic.AtomicLong();
 
+    /** The 10-band equalizer (see EqAudioProcessor); fed by the plugin's setEq and by the persisted state. */
+    private final EqAudioProcessor eqProcessor = new EqAudioProcessor();
+
     // Lyrics line in the car (off by default).
     private boolean lyricsEnabled;
     @Nullable private LrcParser lrc;
@@ -153,7 +160,21 @@ public final class NocturneMediaService extends MediaLibraryService {
                     return dataSpec;
                 }
             );
-            ExoPlayer p = new ExoPlayer.Builder(this)
+            // Equalizer: a custom AudioProcessor inside the DefaultAudioSink. Its last state is persisted natively
+            // (EqPrefs) so it applies on a cold start (app closed, Android Auto) before any JS runs.
+            eqProcessor.setState(EqPrefs.load(this));
+            final Context appCtx = this;
+            DefaultRenderersFactory renderers = new DefaultRenderersFactory(this) {
+                @Override
+                protected AudioSink buildAudioSink(Context context, boolean enableFloatOutput, boolean enableAudioTrackPlaybackParams) {
+                    return new DefaultAudioSink.Builder(appCtx)
+                        .setEnableFloatOutput(enableFloatOutput)
+                        .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                        .setAudioProcessors(new AudioProcessor[] {eqProcessor})
+                        .build();
+                }
+            };
+            ExoPlayer p = new ExoPlayer.Builder(this, renderers)
                 .setMediaSourceFactory(new DefaultMediaSourceFactory(dataSources))
                 .setAudioAttributes(
                     new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
@@ -348,6 +369,12 @@ public final class NocturneMediaService extends MediaLibraryService {
         if (liked) likedIds.add(trackId);
         else likedIds.remove(trackId);
         refreshButtons();
+    }
+
+    /** Applies (and persists) the equalizer state; safe at any time, also while audio is playing. */
+    void cmdSetEq(EqPrefs.State state) {
+        EqPrefs.save(this, state);
+        eqProcessor.setState(state);
     }
 
     void cmdSetLyricsEnabled(boolean enabled) {

@@ -37,6 +37,7 @@ import { MixPage } from './pages/Mix'
 import { PlaylistPage } from './pages/Playlist'
 import { SearchPage } from './pages/Search'
 import { SettingsPage } from './pages/Settings'
+import { EqualizerPage } from './pages/Equalizer'
 import { StatsPage } from './pages/Stats'
 
 /** Ice blue: Midnight Glass's idle accent before a cover colour is known. */
@@ -93,6 +94,8 @@ function RouteView({ route, index }: { route: Route; index: number }): ReactNode
       return <StatsPage />
     case 'settings':
       return <SettingsPage />
+    case 'equalizer':
+      return <EqualizerPage />
     case 'admin':
       return <AdminPage />
   }

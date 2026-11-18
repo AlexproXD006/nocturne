@@ -378,6 +378,27 @@ _MIGRATIONS: list[tuple[int, str]] = [
             PRIMARY KEY (user_id, mix_id)
         );
     """),
+    # 13: per-user equalizer (nocturne_api/eq.py): active state + custom presets
+    (13, """
+        CREATE TABLE IF NOT EXISTS v1_eq_state (
+            user_id    TEXT PRIMARY KEY,
+            enabled    INTEGER NOT NULL DEFAULT 1,
+            preamp     REAL NOT NULL DEFAULT 0,
+            gains      TEXT NOT NULL DEFAULT '[0,0,0,0,0,0,0,0,0,0]',
+            preset_id  TEXT,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS v1_eq_presets (
+            id         TEXT PRIMARY KEY,
+            user_id    TEXT NOT NULL,
+            name       TEXT NOT NULL,
+            preamp     REAL NOT NULL DEFAULT 0,
+            gains      TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_v1_eq_presets_user ON v1_eq_presets(user_id, created_at);
+    """),
 ]
 
 def migrate() -> None:

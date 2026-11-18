@@ -17,6 +17,7 @@ function fakePlugin() {
     setAuth: vi.fn(async () => undefined),
     getAuth: vi.fn(async () => ({ session: { serverUrl: 'https://s', accessToken: 'a', refreshToken: 'r', expiresAt: 5, userId: 'u' } })),
     setLyricsInCar: vi.fn(async () => undefined),
+    setEq: vi.fn(async () => undefined),
     getSnapshot: vi.fn(async () => ({ snapshot: null })),
     addListener: vi.fn(async (_e: string, fn: (e: unknown) => void) => {
       handler = fn
@@ -25,6 +26,16 @@ function fakePlugin() {
   }
   return { plugin: plugin as unknown as NocturneNativePlugin & typeof plugin, fire: (e: unknown) => handler(e) }
 }
+
+describe('equalizer bridge', () => {
+  it('forwards the equalizer state to the plugin', async () => {
+    const { plugin } = fakePlugin()
+    const player = createNativePlayer(Promise.resolve({ plugin }))
+    const gains = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    player.setEq({ enabled: true, preamp: -3, gains })
+    await vi.waitFor(() => expect(plugin.setEq).toHaveBeenCalledWith({ enabled: true, preamp: -3, gains }))
+  })
+})
 
 describe('parseEvent', () => {
   it('accepts well formed events and rejects the rest', () => {

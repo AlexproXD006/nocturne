@@ -1,6 +1,7 @@
 import type { PluginListenerHandle } from '@capacitor/core'
 import type {
   NativePlayer,
+  NativeEq,
   NativePlayerEvent,
   NativeQueueItem,
   NativeRepeat,
@@ -27,6 +28,7 @@ export interface NocturneNativePlugin {
   setAuth(args: { session: NativeSession | null }): Promise<void>
   getAuth(): Promise<{ session: NativeSession | null }>
   setLyricsInCar(args: { enabled: boolean }): Promise<void>
+  setEq(args: NativeEq): Promise<void>
   getSnapshot(): Promise<{ snapshot: NativeSnapshot | null }>
   addListener(event: 'event', listener: (e: unknown) => void): Promise<PluginListenerHandle>
 }
@@ -160,6 +162,7 @@ export function createNativePlayer(box: Promise<{ plugin: NocturneNativePlugin }
       }
     },
     setLyricsInCar: (enabled) => call((p) => p.setLyricsInCar({ enabled })),
+    setEq: (eq) => call((p) => p.setEq({ enabled: eq.enabled, preamp: eq.preamp, gains: eq.gains })),
     async getSnapshot() {
       try {
         const { plugin } = await box

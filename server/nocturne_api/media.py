@@ -88,15 +88,63 @@ async def stream_audio(
 
     ext = Path(file_path).suffix.lower()
     mime = _AUDIO_TYPES.get(ext, "audio/mpeg")
-    # Starlette FileResponse handles Accept-Ranges / 206 Partial Content (requires Starlette >= 0.14)
-    return FileResponse(
-        file_path,
-        media_type=mime,
-        headers={
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "private, max-age=3600",
-        },
-    )
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "private, max-age=3600",
+        # The web/desktop player routes the <audio> element through Web Audio (equalizer,
+        # visualizer), which needs a CORS-enabled stream. The URL is signed, so "*" leaks nothing.
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length",
+    }
+    size = os.path.getsize(file_path)
+    rng = request.headers.get("range")
+    if not rng:
+        return FileResponse(file_path, media_type=mime, headers=headers)
+    span = parse_byte_range(rng, size)
+    if span is None:
+        return Response(status_code=416, headers={**headers, "Content-Range": f"bytes */{size}"})
+    start, end = span
+    length = end - start + 1
+    headers.update({"Content-Range": f"bytes {start}-{end}/{size}", "Content-Length": str(length)})
+    return StreamingResponse(_iter_file(file_path, start, length), status_code=206, media_type=mime, headers=headers)
+
+
+_RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
+
+
+def parse_byte_range(header: str, size: int) -> Optional[tuple[int, int]]:
+    """Parses a single `bytes=a-b` range into inclusive (start, end); None when unsatisfiable or malformed.
+
+    Multi-range requests are not supported (416).
+    """
+    m = _RANGE_RE.match(header.strip())
+    if not m or size <= 0:
+        return None
+    a, b = m.group(1), m.group(2)
+    if a == "" and b == "":
+        return None
+    if a == "":  # suffix: last N bytes
+        n = int(b)
+        if n == 0:
+            return None
+        return max(0, size - n), size - 1
+    start = int(a)
+    end = size - 1 if b == "" else min(int(b), size - 1)
+    if start >= size or end < start:
+        return None
+    return start, end
+
+
+def _iter_file(path: str, start: int, length: int, chunk: int = 256 * 1024):
+    with open(path, "rb") as f:
+        f.seek(start)
+        remaining = length
+        while remaining > 0:
+            data = f.read(min(chunk, remaining))
+            if not data:
+                break
+            remaining -= len(data)
+            yield data
 
 
 @router.get("/media/art/{track_id}")

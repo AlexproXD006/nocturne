@@ -92,6 +92,15 @@ export class FakeAnalyser {
   })
 }
 
+export class FakeBiquad {
+  type = 'peaking'
+  frequency = new FakeParam()
+  Q = new FakeParam()
+  gain = new FakeParam()
+  connect = vi.fn()
+  disconnect = vi.fn()
+}
+
 export class FakeSource {
   connect = vi.fn()
   disconnect = vi.fn()
@@ -107,6 +116,7 @@ export class FakeAudioContext {
   destination = { kind: 'destination' }
   gains: FakeGain[] = []
   analysers: FakeAnalyser[] = []
+  filters: FakeBiquad[] = []
   sources: FakeSource[] = []
   resume = vi.fn(async () => {
     this.state = 'running'
@@ -124,6 +134,12 @@ export class FakeAudioContext {
     const g = new FakeGain()
     this.gains.push(g)
     return g
+  }
+
+  createBiquadFilter(): FakeBiquad {
+    const f = new FakeBiquad()
+    this.filters.push(f)
+    return f
   }
 
   createAnalyser(): FakeAnalyser {

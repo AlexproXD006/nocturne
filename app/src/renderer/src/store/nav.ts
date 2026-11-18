@@ -10,6 +10,7 @@ export type Route =
   | { name: 'mix'; id: string }
   | { name: 'liked' }
   | { name: 'settings' }
+  | { name: 'equalizer' }
   | { name: 'stats' }
   | { name: 'admin'; tab?: AdminTab }
 

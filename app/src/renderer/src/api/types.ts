@@ -542,3 +542,28 @@ export interface StatsHistory {
   period: 'week' | 'month'
   items: StatsHistoryItem[]
 }
+
+/** Per-user equalizer (GET/PUT /v1/me/eq). `updatedAt` is null until the user saved something. */
+export interface EqStateWire {
+  enabled: boolean
+  preamp: number
+  gains: number[]
+  presetId: string | null
+  updatedAt: string | null
+}
+
+/** A user's custom equalizer preset (/v1/me/eq/presets). */
+export interface EqPresetWire {
+  id: string
+  name: string
+  preamp: number
+  gains: number[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EqPresetInput {
+  name: string
+  preamp: number
+  gains: number[]
+}

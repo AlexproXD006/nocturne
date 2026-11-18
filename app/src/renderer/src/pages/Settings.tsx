@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from 'react'
-import { Check, Download, LogOut, RotateCw, ShieldAlert, ShieldCheck, Smartphone } from 'lucide-react'
+import { Check, Download, LogOut, RotateCw, ShieldAlert, ShieldCheck, Smartphone, SlidersHorizontal } from 'lucide-react'
 import { platform, useSession } from '../services'
 import { isAdmin } from '../store/session'
 import { useNav } from '../store/nav'
@@ -304,6 +304,18 @@ export function SettingsPage(): ReactNode {
               <Toggle label={tr('set.lyricsInCar')} checked={lyricsInCar} onChange={(v) => update({ lyricsInCar: v })} />
             </Row>
           )}
+        </Section>
+
+        <Section title={tr('set.eq')}>
+          <Row label={tr('set.eq')} hint={tr('set.eqHint')}>
+            <button
+              type="button"
+              onClick={() => go({ name: 'equalizer' })}
+              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2 text-sm font-semibold hover:bg-white/[0.14]"
+            >
+              <SlidersHorizontal className="h-4 w-4" /> {tr('set.eqOpen')}
+            </button>
+          </Row>
         </Section>
 
         <Section title={tr('set.language')}>

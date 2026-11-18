@@ -2,6 +2,9 @@ import { ApiError } from './errors'
 import { t as tl } from '../i18n'
 import { buildUrl } from '../lib/url'
 import type {
+  EqPresetInput,
+  EqPresetWire,
+  EqStateWire,
   StatsHistory,
   StatsRange,
   StatsSummary,
@@ -413,6 +416,32 @@ export class ApiClient {
   /** Regenerates the mixes now. */
   refreshMixes(): Promise<{ items: Playlist[] }> {
     return this.request('POST', '/v1/mixes/refresh')
+  }
+
+  // ---- equalizer (per user, synced across devices) ----
+
+  eqState(signal?: AbortSignal): Promise<EqStateWire> {
+    return this.request('GET', '/v1/me/eq', { signal })
+  }
+
+  putEqState(state: { enabled: boolean; preamp: number; gains: number[]; presetId: string | null }): Promise<EqStateWire> {
+    return this.request('PUT', '/v1/me/eq', { body: state })
+  }
+
+  eqPresets(signal?: AbortSignal): Promise<{ items: EqPresetWire[] }> {
+    return this.request('GET', '/v1/me/eq/presets', { signal })
+  }
+
+  createEqPreset(input: EqPresetInput): Promise<EqPresetWire> {
+    return this.request('POST', '/v1/me/eq/presets', { body: input })
+  }
+
+  updateEqPreset(id: string, patch: Partial<EqPresetInput>): Promise<EqPresetWire> {
+    return this.request('PUT', `/v1/me/eq/presets/${encodeURIComponent(id)}`, { body: patch })
+  }
+
+  deleteEqPreset(id: string): Promise<void> {
+    return this.request('DELETE', `/v1/me/eq/presets/${encodeURIComponent(id)}`)
   }
 
   playlist(id: string, signal?: AbortSignal): Promise<PlaylistDetail> {
