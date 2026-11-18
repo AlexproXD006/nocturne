@@ -1009,6 +1009,8 @@ export const es: Record<MessageKey, string> = {
   'queue.autoplay': 'Reproducción automática',
   'queue.autoplayHint': 'Canciones parecidas de tu biblioteca, porque tu cola ha terminado.',
   'set.autoplay': 'Reproducir canciones parecidas',
+  'set.lyricsInCar': 'Mostrar la línea de la letra en el coche',
+  'set.lyricsInCarHint': 'Android Auto y la pantalla de bloqueo muestran la línea sincronizada de la letra bajo el título. No es una función oficial de Android Auto: puede verse distinto en cada coche.',
   'set.autoplayHint': 'Cuando se acabe tu cola, sigue sonando música de tu biblioteca parecida a la última canción.',
   'set.integrations': 'Integraciones',
   'lb.intro': 'Envía lo que escuchas a ListenBrainz, un servicio abierto de historial musical. Copia tu token de usuario desde {link} y pégalo aquí.',

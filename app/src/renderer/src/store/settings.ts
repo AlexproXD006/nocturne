@@ -73,6 +73,8 @@ export interface Settings {
   language: LanguagePref
   /** Autoplay: when the queue ends, keep playing similar songs from the library. */
   autoplay: boolean
+  /** Android: show the current synced lyric line as the subtitle in the car / system controls. */
+  lyricsInCar: boolean
   /** Custom Nocturne Connect name for this device ('' = automatic, e.g. "PC (Windows)"). */
   deviceName: string
 }
@@ -89,6 +91,7 @@ export const DEFAULT_SETTINGS: Settings = {
   adaptive: DEFAULT_ADAPTIVE,
   language: 'system',
   autoplay: true,
+  lyricsInCar: false,
   deviceName: ''
 }
 
@@ -134,6 +137,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     // Migration: settings saved before i18n have no language and default to following the system.
     language: isLanguagePref(r.language) ? r.language : DEFAULT_SETTINGS.language,
     autoplay: typeof r.autoplay === 'boolean' ? r.autoplay : DEFAULT_SETTINGS.autoplay,
+    lyricsInCar: typeof r.lyricsInCar === 'boolean' ? r.lyricsInCar : DEFAULT_SETTINGS.lyricsInCar,
     deviceName: typeof r.deviceName === 'string' ? r.deviceName.trim().slice(0, 80) : DEFAULT_SETTINGS.deviceName
   }
 }
@@ -179,6 +183,7 @@ function pick(s: Settings): Settings {
     adaptive: s.adaptive,
     language: s.language,
     autoplay: s.autoplay,
+    lyricsInCar: s.lyricsInCar,
     deviceName: s.deviceName
   }
 }

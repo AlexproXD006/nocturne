@@ -9,4 +9,11 @@
     <string name="nocturne_media_repeat_off">Repeat off</string>
     <string name="nocturne_media_repeat_all">Repeat all</string>
     <string name="nocturne_media_repeat_one">Repeat one</string>
+    <string name="nocturne_media_error">Couldn\'t play this song</string>
+    <string name="nocturne_auto_mixes">Made for you</string>
+    <string name="nocturne_auto_playlists">Playlists</string>
+    <string name="nocturne_auto_liked">Liked songs</string>
+    <string name="nocturne_auto_recent">Recently played</string>
+    <string name="nocturne_auto_albums">Albums</string>
+    <string name="nocturne_auto_artists">Artists</string>
 </resources>

@@ -9,8 +9,10 @@ const media = vi.hoisted(() => {
   let handler: ((e: unknown) => void) | null = null
   return {
     plugin: {
-      update: vi.fn(async () => undefined),
-      clear: vi.fn(async () => undefined),
+      setQueue: vi.fn(async () => undefined),
+      setAuth: vi.fn(async () => undefined),
+      getSnapshot: vi.fn(async () => ({ snapshot: null })),
+      getAuth: vi.fn(async () => ({ session: null })),
       addListener: vi.fn(async (_event: string, fn: (e: unknown) => void) => {
         handler = fn
         return { remove: async () => undefined }
@@ -169,46 +171,27 @@ describe('detectPlatform: android', () => {
     expect(p.kind).toBe('android')
     expect(p.hostedOrigin).toBeNull()
     expect(p.window).toBeNull()
-    expect(p.nativeNowPlaying).not.toBeNull()
+    expect(p.nativeNowPlaying).toBeNull()
+    expect(p.nativePlayer).not.toBeNull()
     await expect(p.secureAtRest()).resolves.toBe(true)
   })
 
-  it('drives the NocturneMedia plugin: extended info out, new commands in', async () => {
+  it('drives the NocturneMedia plugin: queue out, events in', async () => {
     setCapacitor(true)
     const p = (await load()).detectPlatform()
-    const np = p.nativeNowPlaying!
+    const np = p.nativePlayer!
     const got: unknown[] = []
-    const off = np.onCommand((c) => got.push(c))
-    np.update({
-      id: 'q1',
-      title: 'Song',
-      artist: 'Artist',
-      album: 'Album',
-      artworkUrl: 'https://img.example.com/a.jpg',
-      duration: 200,
-      position: 10,
-      playing: true,
-      hasPrev: true,
-      hasNext: true,
-      liked: true,
-      shuffle: false,
-      repeat: 'all'
-    })
-    await vi.waitFor(() => expect(media.plugin.update).toHaveBeenCalled())
+    const off = np.on((e) => got.push(e))
+    np.setQueue([{ uid: 'q1', trackId: 't1', title: 'Song', artist: 'Artist', album: 'Album', artworkUrl: '', duration: 200 }], 0, { play: true })
+    await vi.waitFor(() => expect(media.plugin.setQueue).toHaveBeenCalled())
     expect(media.registerPlugin).toHaveBeenCalledWith('NocturneMedia')
-    expect(media.plugin.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ title: 'Song', liked: true, shuffle: false, repeat: 'all', position: 10, duration: 200 })
-    )
-    await vi.waitFor(() => expect(media.plugin.addListener).toHaveBeenCalledWith('command', expect.any(Function)))
-    media.fire({ kind: 'like' })
-    media.fire({ kind: 'shuffle' })
-    media.fire({ kind: 'repeat' })
-    media.fire({ kind: 'seekTo', position: 42 })
-    media.fire({ kind: 'next' })
-    expect(got).toEqual(['like', 'shuffle', 'repeat', { seekTo: 42 }, 'next'])
+    expect(media.plugin.setQueue).toHaveBeenLastCalledWith(expect.objectContaining({ index: 0, play: true, startAt: 0, reset: false }))
+    await vi.waitFor(() => expect(media.plugin.addListener).toHaveBeenCalledWith('event', expect.any(Function)))
+    media.fire({ type: 'state', status: 'playing' })
+    media.fire({ type: 'index', uid: 'q2' })
+    media.fire({ type: 'bogus' })
+    expect(got).toEqual([{ type: 'state', status: 'playing' }, { type: 'index', uid: 'q2' }])
     off()
-    np.clear()
-    await vi.waitFor(() => expect(media.plugin.clear).toHaveBeenCalled())
   })
 
   it('a non-native Capacitor (browser) is plain web', async () => {

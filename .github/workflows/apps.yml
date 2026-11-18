@@ -6,7 +6,8 @@ name: apps
 
 on:
   push:
-    branches: [main]
+    # android-auto: temporary, so the Android Auto branch builds an APK on every push (drop before merging).
+    branches: [main, android-auto]
     tags: ['v*']
     paths:
       - 'app/**'

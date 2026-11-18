@@ -1,9 +1,11 @@
 import { getLocale } from '../i18n'
 import type { NocturneBridge, WindowState } from '../../../shared/ipc'
-import { createNativeNowPlaying, type NocturneMediaPlugin } from './nocturneMedia'
+import { createNativePlayer, type NocturneNativePlugin } from './nativePlayer'
+import type { NativePlayer } from './nativePlayerTypes'
 import { createNativeUpdates, type NativeUpdates, type NocturneUpdatesPlugin } from './nocturneUpdates'
 
 export type { NativeUpdates } from './nocturneUpdates'
+export type { NativePlayer, NativePlayerEvent, NativeQueueItem, NativeSnapshot, NativeSession } from './nativePlayerTypes'
 
 export type PlatformKind = 'desktop' | 'android' | 'ios' | 'web'
 
@@ -61,6 +63,11 @@ export interface Platform {
   openExternal(url: string): Promise<void>
   /** Native now-playing controls (Android Media3 session). Desktop and iOS use navigator.mediaSession. */
   nativeNowPlaying: NativeNowPlaying | null
+  /**
+   * Android only: the Media3 ExoPlayer service (also serves Android Auto). When set, the player store
+   * drives it instead of the WebView `<audio>` element. Null on desktop, iOS and web.
+   */
+  nativePlayer?: NativePlayer | null
   /** Android only: background update check (WorkManager) + "update available" notification. */
   nativeUpdates?: NativeUpdates | null
   /**
@@ -148,7 +155,7 @@ function androidPlatform(): Platform {
   })
   // App-local Media3 plugin (android/.../media/NocturneMediaPlugin.java), registered in MainActivity.
   const mediaBox = import('@capacitor/core').then(({ registerPlugin }) => ({
-    plugin: registerPlugin<NocturneMediaPlugin>('NocturneMedia')
+    plugin: registerPlugin<NocturneNativePlugin>('NocturneMedia')
   }))
   // App-local update-check plugin (android/.../updates/NocturneUpdatesPlugin.java), registered in MainActivity.
   const updatesBox = import('@capacitor/core').then(({ registerPlugin }) => ({
@@ -174,7 +181,10 @@ function androidPlatform(): Platform {
     openExternal: async (url) => {
       window.open(url, '_blank', 'noopener,noreferrer')
     },
-    nativeNowPlaying: createNativeNowPlaying(mediaBox),
+    // The Media3 service now owns playback and the system controls (see nativePlayer); the legacy
+    // WebView-mirroring now-playing bridge is not used on Android any more.
+    nativeNowPlaying: null,
+    nativePlayer: createNativePlayer(mediaBox),
     nativeUpdates: createNativeUpdates(updatesBox),
     notifyUpdate: null
   }

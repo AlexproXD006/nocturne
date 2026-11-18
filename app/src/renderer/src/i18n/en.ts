@@ -1008,6 +1008,8 @@ export const en = {
   'queue.autoplay': 'Autoplay',
   'queue.autoplayHint': 'Similar songs from your library, playing because your queue ended.',
   'set.autoplay': 'Autoplay similar songs',
+  'set.lyricsInCar': 'Show the current lyric line in the car',
+  'set.lyricsInCarHint': 'Android Auto and the lock screen show the synced lyric line under the title. Not an official Android Auto feature: it may look different in each car.',
   'set.autoplayHint': 'When your queue ends, keep playing songs from your library that sound like the last one.',
   'set.integrations': 'Integrations',
   'lb.intro': 'Send what you listen to ListenBrainz, an open music-history service. Copy your user token from {link} and paste it here.',

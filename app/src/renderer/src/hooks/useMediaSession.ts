@@ -41,9 +41,17 @@ export function useMediaSession(): void {
   const repeat = usePlayer((s) => s.queue.repeat)
   const liked = useLikes((s) => (item ? (s.overrides[item.track.id] ?? item.track.liked === true) : false))
   const playing = status === 'playing' || status === 'buffering'
+  const trackId = item?.track.id
+  const native = platform.nativePlayer ?? null
+
+  // Android: the Media3 service owns the system controls; just keep its heart button in step.
+  useEffect(() => {
+    if (native && trackId) native.setLiked(trackId, liked)
+  }, [native, trackId, liked])
 
   // Action handlers (once).
   useEffect(() => {
+    if (native) return
     const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined
     const p = (): ReturnType<typeof usePlayer.getState> => usePlayer.getState()
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
@@ -92,6 +100,7 @@ export function useMediaSession(): void {
 
   // Metadata + state.
   useEffect(() => {
+    if (native) return
     const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined
     if (!item) {
       if (ms) {
@@ -117,7 +126,7 @@ export function useMediaSession(): void {
   // Native seek bar: the native side extrapolates while playing, so only re-send on jumps
   // (seek, restart) or when the real duration becomes known; no periodic timer.
   useEffect(() => {
-    if (!platform.nativeNowPlaying) return
+    if (native || !platform.nativeNowPlaying) return
     let lastAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
     return usePlayer.subscribe((s, prev) => {
       if (s.position === prev.position && s.duration === prev.duration) return
@@ -133,7 +142,7 @@ export function useMediaSession(): void {
   // Position state for scrubbers in OS widgets.
   useEffect(() => {
     const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined
-    if (!ms?.setPositionState) return
+    if (native || !ms?.setPositionState) return
     return usePlayer.subscribe((s, prev) => {
       if (s.duration <= 0) return
       if (Math.abs(s.position - prev.position) < 0.9 && s.duration === prev.duration) return
