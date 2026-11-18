@@ -2,6 +2,15 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.1-beta.6 — 2026-11-18
+
+**Ecualizador (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Ecualizador de 10 bandas con 18 modos (Más graves, Voces, Reguetón, Coche, Noche…) y modos personalizados que se guardan en tu cuenta y se sincronizan entre dispositivos.
+- En Android el ecualizador funciona también con la app cerrada y en Android Auto.
+
 ## 1.1.1-beta.5 — 2026-11-18
 
 **Portadas más rápidas (beta)** · android, windows, linux, ios
