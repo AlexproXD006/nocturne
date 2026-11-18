@@ -2,6 +2,21 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.0-beta.2 — 2026-11-18
+
+**Más fiable: escuchas, descargas y subidas (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Las escuchas se guardan aunque cierres la app de golpe y se envían al volver (sin duplicados).
+
+### Correcciones
+
+- Las descargas que quedaban 'en cola' para siempre tras un reinicio del servidor ahora se marcan como fallidas y se vigilan.
+- Las subidas grandes ya no cargan el archivo entero en memoria.
+- Búsqueda de letras más respetuosa con LRCLIB cuando limita peticiones.
+- Botón de cerrar del panel de dispositivos en el móvil.
+
 ## 1.1.0-beta.1 — 2026-11-18
 
 **Midnight Glass, iOS y nuevo icono (beta)** · android, windows, linux, ios
