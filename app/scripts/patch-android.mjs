@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 
 export const APP_ID = 'es.alexcloudweb.nocturne'
 export const BACKGROUND = '#070a12'
-export const ICON_PLATE = '#0e0e12'
+export const ICON_PLATE = '#0d1424'
 
 export const PERMISSIONS = [
   'android.permission.INTERNET',
@@ -311,7 +311,7 @@ export function nocturneColors() {
     <color name="nocturne_background">${BACKGROUND}</color>
     <color name="colorPrimary">${BACKGROUND}</color>
     <color name="colorPrimaryDark">${BACKGROUND}</color>
-    <color name="colorAccent">#ff7a73</color>
+    <color name="colorAccent">#8fb4ff</color>
 </resources>
 `
 }
@@ -434,16 +434,26 @@ export function iconPlan() {
     plan.push({ path: `mipmap-${density}/ic_launcher.png`, size: legacy, kind: 'square' })
     plan.push({ path: `mipmap-${density}/ic_launcher_round.png`, size: legacy, kind: 'round' })
     plan.push({ path: `mipmap-${density}/ic_launcher_foreground.png`, size: foreground, kind: 'foreground' })
+    plan.push({ path: `mipmap-${density}/ic_launcher_background.png`, size: foreground, kind: 'background' })
+    plan.push({ path: `mipmap-${density}/ic_launcher_monochrome.png`, size: foreground, kind: 'monochrome' })
   }
   return plan
 }
 
-/** Round legacy icon: full-bleed plate + glyph clipped to a circle. */
-export function roundSvg(svg) {
-  const body = svg.replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '').replace(/<rect width="512" height="512"[^>]*\/>/, '')
-  const defs = /<defs>[\s\S]*?<\/defs>/.exec(body)?.[0] ?? ''
-  const rest = body.replace(defs, '')
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${defs}<clipPath id="round"><circle cx="256" cy="256" r="256"/></clipPath><g clip-path="url(#round)"><rect width="512" height="512" fill="${ICON_PLATE}"/>${rest}</g></svg>`
+/** Layer sources (single source of truth: resources/icon/*.svg, 1024 viewBox). */
+export const ICON_SOURCES = {
+  square: 'icon.svg',
+  foreground: 'foreground.svg',
+  background: 'background.svg',
+  monochrome: 'mono.svg'
+}
+
+const dataUri = (png) => `data:image/png;base64,${png.toString('base64')}`
+
+/** Round legacy icon: circle-clipped background + foreground scaled x1.12 (1024 viewBox). */
+export function roundSvg(backgroundPng, foregroundPng) {
+  const img = (png) => `<image href="${dataUri(png)}" width="1024" height="1024"/>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><clipPath id="round"><circle cx="512" cy="512" r="512"/></clipPath><g clip-path="url(#round)">${img(backgroundPng)}<g transform="translate(512 512) scale(1.12) translate(-512 -512)">${img(foregroundPng)}</g></g></svg>`
 }
 
 async function writeIfChanged(file, content) {
@@ -497,10 +507,12 @@ export async function patchProject({ androidDir = join(ROOT, 'android'), check =
     })
   )
 
-  // Launcher icons, rasterized from the same SVG as the desktop icons.
-  const { renderPng, foregroundSvg, SVG_PATH } = await import('./make-icons.mjs')
-  const svg = await readFile(SVG_PATH, 'utf8')
-  const sources = { square: svg, round: roundSvg(svg), foreground: foregroundSvg(svg) }
+  // Launcher icons, rasterized from resources/icon/*.svg (same icon.svg as the desktop icons).
+  const { renderPng } = await import('./make-icons.mjs')
+  const svgs = {}
+  for (const [kind, name] of Object.entries(ICON_SOURCES)) svgs[kind] = await readFile(join(ROOT, 'resources/icon', name), 'utf8')
+  const roundSource = roundSvg(renderPng(svgs.background, 1024), renderPng(svgs.foreground, 1024))
+  const sources = { ...svgs, round: roundSource }
   for (const { path, size, kind } of iconPlan()) {
     const file = join(res, path)
     const png = renderPng(sources[kind], size)

@@ -25,6 +25,7 @@ import {
   parseLanHosts,
   patchBuildGradle,
   patchLauncherBackground,
+  nocturneColors,
   patchMainActivity,
   mainActivityJava,
   MAIN_ACTIVITY_MARKER,
@@ -289,22 +290,29 @@ test('MainActivity: NocturneUpdates plugin registered after NocturneMedia, befor
 })
 
 test('launcher background colour', () => {
-  assert.match(patchLauncherBackground('<color name="ic_launcher_background">#FFFFFF</color>'), />#0e0e12</)
+  assert.match(patchLauncherBackground('<color name="ic_launcher_background">#FFFFFF</color>'), />#0d1424</)
 })
 
 test('icon plan covers every density and kind', () => {
   const plan = iconPlan()
-  assert.equal(plan.length, 15)
+  assert.equal(plan.length, 25)
   assert.ok(plan.some((p) => p.path === 'mipmap-xxxhdpi/ic_launcher_foreground.png' && p.size === 432))
   assert.ok(plan.some((p) => p.path === 'mipmap-mdpi/ic_launcher_round.png' && p.size === 48))
+  assert.ok(plan.some((p) => p.path === 'mipmap-hdpi/ic_launcher_background.png' && p.size === 162 && p.kind === 'background'))
+  assert.ok(plan.some((p) => p.path === 'mipmap-xxhdpi/ic_launcher_monochrome.png' && p.size === 324 && p.kind === 'monochrome'))
 })
 
-test('roundSvg clips to a circle', () => {
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="g"/></defs><rect width="512" height="512" rx="116" fill="#000"/><path d="M0 0"/></svg>'
-  const out = roundSvg(svg)
+test('colours: ice blue accent and navy plate', () => {
+  assert.match(nocturneColors(), /colorAccent">#8fb4ff</)
+  assert.doesNotMatch(nocturneColors(), /#ff7a73/)
+})
+
+test('roundSvg clips to a circle and scales the foreground', () => {
+  const png = Buffer.from('x')
+  const out = roundSvg(png, png)
   assert.match(out, /clipPath id="round"/)
-  assert.match(out, /<linearGradient id="g"\/>/)
-  assert.doesNotMatch(out, /rx="116"/)
+  assert.match(out, /scale\(1\.12\)/)
+  assert.equal((out.match(/<image /g) || []).length, 2)
 })
 
 test('patchProject applies to a project copy and is idempotent', async (t) => {
