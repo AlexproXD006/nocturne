@@ -617,6 +617,9 @@ def _upload_title_artist(tags: dict, dest: Path, original_filename: str) -> tupl
 # Lyrics
 # ---------------------------------------------------------------------------
 
+LYRICS_MAX_BYTES = 200 * 1024   # lrc / plain
+
+
 class SetLyricsBody(BaseModel):
     format: str
     content: str
@@ -627,11 +630,14 @@ async def set_lyrics(track_id: str, body: SetLyricsBody, account: dict = Depends
     if not nova_db.get_track(track_id):
         raise HTTPException(status_code=404, detail={"message": "Track not found.", "code": "not_found"})
 
-    if body.format not in ("ttml", "lrc"):
-        raise HTTPException(status_code=400, detail={"message": "format must be ttml or lrc.", "code": "bad_request"})
+    if body.format not in ("ttml", "lrc", "plain"):
+        raise HTTPException(status_code=400, detail={"message": "format must be lrc, plain or ttml.", "code": "bad_request"})
 
-    if len(body.content.encode()) > 4 * 1024 * 1024:
+    limit = 4 * 1024 * 1024 if body.format == "ttml" else LYRICS_MAX_BYTES
+    if len(body.content.encode()) > limit:
         raise HTTPException(status_code=413, detail={"message": "Lyrics too large.", "code": "payload_too_large"})
+    if body.format == "plain" and not body.content.strip():
+        raise HTTPException(status_code=400, detail={"message": "Lyrics are empty.", "code": "bad_request"})
 
     # Basic validation
     if body.format == "ttml":
@@ -641,7 +647,7 @@ async def set_lyrics(track_id: str, body: SetLyricsBody, account: dict = Depends
             raise HTTPException(status_code=400, detail={"message": "DOCTYPE/ENTITY not allowed.", "code": "bad_request"})
     elif body.format == "lrc":
         import re
-        if not re.search(r'\[\d+:\d+\.\d+\]', body.content):
+        if not re.search(r'\[\d+:\d+(?:[.:]\d+)?\]', body.content):
             raise HTTPException(status_code=400, detail={"message": "Invalid LRC: no timestamps found.", "code": "bad_request"})
 
     with connect() as conn:
@@ -658,6 +664,8 @@ async def set_lyrics(track_id: str, body: SetLyricsBody, account: dict = Depends
 
 @router.delete("/tracks/{track_id}/lyrics", status_code=204)
 async def delete_lyrics(track_id: str, account: dict = Depends(require_admin)):
+    if not nova_db.get_track(track_id):
+        raise HTTPException(status_code=404, detail={"message": "Track not found.", "code": "not_found"})
     with connect() as conn:
         conn.execute("DELETE FROM v1_lyrics WHERE track_id=?", (track_id,))
     return Response(status_code=204)

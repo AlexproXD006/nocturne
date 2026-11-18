@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Eye, FileText, Loader2, Play, Replace, Search, Trash2, Upload, X } from 'lucide-react'
+import { Eye, FileText, Loader2, PencilLine, Play, Replace, Search, Trash2, Upload, X } from 'lucide-react'
 import type { AdminTrack, LyricsFormat } from '../../api/types'
 import { describeError } from '../../api/errors'
 import { artistNames, formatTime } from '../../lib/format'
@@ -9,6 +9,7 @@ import { usePaged } from '../../hooks/usePaged'
 import { Artwork, EmptyState, ErrorState, Spinner } from '../../components/common'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { BulkImport } from './lyrics/BulkImport'
+import { LyricsEditDialog } from './LyricsEditDialog'
 import { LYRICS_ACCEPT, removeLyrics, uploadLyricsFile } from './lyrics/files'
 import { Button, Card, Chip, ProgressBar, inputClass, useDebounced } from './ui'
 
@@ -189,6 +190,7 @@ export function LyricsTab(): ReactNode {
   const [missingQuery, setMissingQuery] = useState('')
   const [presentQuery, setPresentQuery] = useState('')
   const [pendingRemove, setPendingRemove] = useState<AdminTrack | null>(null)
+  const [editing, setEditing] = useState<AdminTrack | null>(null)
 
   const changed = useCallback((): void => setNonce((n) => n + 1), [])
 
@@ -286,6 +288,9 @@ export function LyricsTab(): ReactNode {
               <Button size="sm" icon={<Upload />} busy={busy === t.id} onClick={() => missingPicker.open(t)} aria-label={`Upload lyrics for ${t.title}`}>
                 Upload
               </Button>
+              <Button size="sm" icon={<PencilLine />} onClick={() => setEditing(t)} aria-label={`Edit lyrics for ${t.title}`}>
+                <span className="max-md:sr-only">Edit</span>
+              </Button>
               <Button size="sm" variant="ghost" icon={<Play />} onClick={() => play(t, 'Admin lyrics')} aria-label={`Play ${t.title}`}>
                 <span className="max-sm:sr-only">Play</span>
               </Button>
@@ -308,6 +313,9 @@ export function LyricsTab(): ReactNode {
               <Button size="sm" variant="ghost" icon={<Eye />} onClick={() => preview(t)} aria-label={`Preview lyrics for ${t.title}`}>
                 <span className="max-md:sr-only">Preview</span>
               </Button>
+              <Button size="sm" icon={<PencilLine />} onClick={() => setEditing(t)} aria-label={`Edit lyrics for ${t.title}`}>
+                <span className="max-md:sr-only">Edit</span>
+              </Button>
               <Button size="sm" icon={<Replace />} busy={busy === t.id} onClick={() => presentPicker.open(t)} aria-label={`Replace lyrics for ${t.title}`}>
                 <span className="max-md:sr-only">Replace</span>
               </Button>
@@ -318,6 +326,35 @@ export function LyricsTab(): ReactNode {
           )}
         />
       </Card>
+
+      {editing && (
+        <LyricsEditDialog
+          track={editing}
+          onClose={() => setEditing(null)}
+          onChanged={(stored) => {
+            const id = editing.id
+            if (stored) {
+              setFormats((f) => ({ ...f, [id]: stored }))
+              setHandled((s) => new Set(s).add(id))
+              setRemoved((s) => {
+                const n = new Set(s)
+                n.delete(id)
+                return n
+              })
+              setPresentRev((r) => r + 1)
+            } else {
+              setRemoved((s) => new Set(s).add(id))
+              setHandled((s) => {
+                const n = new Set(s)
+                n.delete(id)
+                return n
+              })
+              setMissingRev((r) => r + 1)
+            }
+            changed()
+          }}
+        />
+      )}
 
       {pendingRemove && (
         <ConfirmDialog

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Lyrics } from '@/lyrics/service'
-import { parseLrc } from '@/lyrics/lrc'
+import { parseLrc, parsePlain } from '@/lyrics/lrc'
 import { parseTtml } from '@/lyrics/ttml'
 import { LyricsView } from '@/components/LyricsView'
 import { useSettings } from '@/store/settings'
@@ -11,16 +11,17 @@ import { track } from '../helpers/fixtures'
 const h = vi.hoisted(() => ({
   pos: 0,
   seek: vi.fn(),
+  setLyricsOffset: vi.fn(),
   lyricsState: { status: 'idle' } as unknown
 }))
 
-vi.mock('@/hooks/useLyrics', () => ({ useLyrics: () => h.lyricsState }))
+vi.mock('@/hooks/useLyrics', () => ({ useLyrics: () => h.lyricsState, patchCachedOffset: () => undefined }))
 vi.mock('@/hooks/useClock', () => ({ readPosition: () => h.pos, useFrame: vi.fn() }))
 vi.mock('@/services', async () => {
   const state = { seek: h.seek, status: 'paused', duration: 200, position: 0 }
   const usePlayer = Object.assign((sel: (s: typeof state) => unknown) => sel(state), { getState: () => state })
   const { connectMocks } = await import('../helpers/services-mock')
-  return { usePlayer, getEngine: () => null, ...connectMocks(usePlayer) }
+  return { usePlayer, getEngine: () => null, api: { setLyricsOffset: h.setLyricsOffset }, ...connectMocks(usePlayer) }
 })
 
 const NS = 'xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" itunes:timing="Word"'
@@ -268,3 +269,45 @@ describe('word mode', () => {
     expect(line.style.getPropertyValue('--p')).toBe('50%')
   })
 })
+
+describe('LyricsView offset controls', () => {
+  const lrcWithOffset = (offsetMs: number): Lyrics => ({ ...lrcLyrics(), offsetMs }) as Lyrics
+
+  it('shows the server offset and adjusts it in 0.5 s steps with reset', async () => {
+    h.setLyricsOffset.mockReset().mockResolvedValue({ offsetMs: 0 })
+    setLyrics(lrcWithOffset(1000))
+    render(<LyricsView track={T} />)
+    const value = screen.getByTestId('lyrics-offset')
+    expect(value).toHaveTextContent('+1.0s')
+    await userEvent.click(screen.getByRole('button', { name: /0\.5 seconds earlier/i }))
+    await userEvent.click(screen.getByRole('button', { name: /0\.5 seconds earlier/i }))
+    expect(value).toHaveTextContent('0.0s')
+    await userEvent.click(screen.getByRole('button', { name: /0\.5 seconds earlier/i }))
+    expect(value).toHaveTextContent('\u22120.5s')
+    await userEvent.click(screen.getByRole('button', { name: /reset lyrics offset/i }))
+    expect(value).toHaveTextContent('0.0s')
+    expect(screen.getByRole('button', { name: /reset lyrics offset/i })).toBeDisabled()
+  })
+
+  it('offset shifts which line is highlighted', () => {
+    setLyrics(lrcWithOffset(2000))
+    h.pos = 5.5 // line 2 starts at 5 s but is delayed by 2 s
+    const { container } = render(<LyricsView track={T} />)
+    expect(container.querySelector('[data-active]')?.textContent).toBe('first line')
+  })
+
+  it('clicking a line seeks to its shifted time', async () => {
+    setLyrics(lrcWithOffset(1000))
+    render(<LyricsView track={T} />)
+    await userEvent.click(screen.getByText('second line'))
+    expect(h.seek).toHaveBeenCalledWith(6)
+  })
+
+  it('has no offset controls for plain lyrics', () => {
+    setLyrics({ kind: 'plain', parsed: parsePlainForTest(), source: 'server' })
+    render(<LyricsView track={T} />)
+    expect(screen.queryByTestId('lyrics-offset')).toBeNull()
+  })
+})
+
+const parsePlainForTest = () => parsePlain('one\ntwo')

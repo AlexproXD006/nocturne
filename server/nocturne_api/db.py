@@ -284,8 +284,39 @@ _MIGRATIONS: list[tuple[int, str]] = [
             changed_at  TEXT NOT NULL
         );
     """),
-]
+    (7, """
+        -- Lyrics review (nocturne_api/lrc_review.py): tracks whose .lrc file is worse
+        -- than the LRCLIB lyrics are served from v1_lyrics_auto instead. .lrc files
+        -- themselves are never modified.
+        CREATE TABLE IF NOT EXISTS v1_lyrics_prefs (
+            track_id    TEXT PRIMARY KEY,
+            prefer_auto INTEGER NOT NULL DEFAULT 0,
+            reason      TEXT,
+            decided_at  TEXT NOT NULL
+        );
 
+        -- Per-track lyrics timing offset (ms), shared by all users.
+        CREATE TABLE IF NOT EXISTS v1_lyrics_offset (
+            track_id   TEXT PRIMARY KEY,
+            offset_ms  INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            updated_by TEXT
+        );
+    """),
+    (8, """
+        -- Admin lyrics may also be plain text: widen the format CHECK (table rebuild).
+        CREATE TABLE v1_lyrics_new (
+            track_id    TEXT PRIMARY KEY,
+            format      TEXT NOT NULL CHECK(format IN ('ttml','lrc','plain')),
+            content     TEXT NOT NULL,
+            updated_at  TEXT NOT NULL,
+            updated_by  TEXT
+        );
+        INSERT INTO v1_lyrics_new SELECT track_id, format, content, updated_at, updated_by FROM v1_lyrics;
+        DROP TABLE v1_lyrics;
+        ALTER TABLE v1_lyrics_new RENAME TO v1_lyrics;
+    """),
+]
 
 def migrate() -> None:
     """Run all pending additive migrations. Idempotent."""

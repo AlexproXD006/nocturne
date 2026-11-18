@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { FileText, Loader2, Music, Play, Search, Trash2, X } from 'lucide-react'
+import { FileText, Loader2, Music, PencilLine, Play, Search, Trash2, X } from 'lucide-react'
 import type { AdminTrack } from '../../api/types'
 import { describeError } from '../../api/errors'
 import { api, playback } from '../../services'
@@ -11,9 +11,11 @@ import { artistNames, formatTime } from '../../lib/format'
 import { Artwork, EmptyState, ErrorState, IconButton, Spinner } from '../../components/common'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { formatBytes, relativeTime } from './format'
+import { LyricsEditDialog } from './LyricsEditDialog'
+import type { EditFormat } from './lyrics/edit'
 import { Card, Chip, inputClass, useDebounced, useTick } from './ui'
 
-function TrackRow({ t, now, onDelete }: { t: AdminTrack; now: number; onDelete: () => void }): ReactNode {
+function TrackRow({ t, now, onDelete, onEditLyrics }: { t: AdminTrack; now: number; onDelete: () => void; onEditLyrics: () => void }): ReactNode {
   const play = (): void => void playback.playTracks([t], 0, { type: 'tracks', name: 'Admin library' })
   return (
     <li className="flex items-center gap-3 rounded-xl p-2 hover:bg-white/[0.04]">
@@ -31,7 +33,7 @@ function TrackRow({ t, now, onDelete }: { t: AdminTrack; now: number; onDelete: 
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <p className="truncate text-sm font-semibold" title={t.title}>{t.title}</p>
-          {t.lyrics && <Chip tone="accent" className="!px-1.5 !py-px !text-[10px]"><span className="sr-only">Lyrics: </span>{t.lyrics === 'ttml' ? 'TTML' : 'LRC'}</Chip>}
+          {t.lyrics && <Chip tone="accent" className="!px-1.5 !py-px !text-[10px]"><span className="sr-only">Lyrics: </span>{t.lyrics.toUpperCase()}</Chip>}
         </div>
         <p className="truncate text-[13px] text-fg-muted">
           {artistNames(t.artists) || 'Unknown artist'}
@@ -48,6 +50,9 @@ function TrackRow({ t, now, onDelete }: { t: AdminTrack; now: number; onDelete: 
         <span className="w-16 text-right" title="Plays">{(t.playCount ?? 0).toLocaleString()} ▶</span>
         <span className="w-20 text-right">{relativeTime(t.addedAt, now) || '—'}</span>
       </div>
+      <IconButton label={`Edit lyrics for ${t.title}`} size="sm" onClick={onEditLyrics}>
+        <PencilLine className="h-4 w-4" />
+      </IconButton>
       <IconButton label={`Manage lyrics for ${t.title}`} size="sm" onClick={() => useNav.getState().go({ name: 'admin', tab: 'lyrics' })}>
         <FileText className="h-4 w-4" />
       </IconButton>
@@ -64,6 +69,8 @@ export function LibraryTab(): ReactNode {
   const paged = usePaged<AdminTrack>(`admin-tracks:${q}`, (offset, limit, signal) => api.adminTracks({ q: q || undefined, offset, limit, signal }), 50)
   const [removed, setRemoved] = useState<Set<string>>(() => new Set())
   const [pending, setPending] = useState<AdminTrack | null>(null)
+  const [editLyrics, setEditLyrics] = useState<AdminTrack | null>(null)
+  const [lyricsFormat, setLyricsFormat] = useState<Readonly<Record<string, EditFormat | null>>>({})
   const now = useTick()
 
   const items = useMemo(() => paged.items.filter((t) => !removed.has(t.id)), [paged.items, removed])
@@ -117,7 +124,7 @@ export function LibraryTab(): ReactNode {
         <>
           <ul>
             {items.map((t) => (
-              <TrackRow key={t.id} t={t} now={now} onDelete={() => setPending(t)} />
+              <TrackRow key={t.id} t={t.id in lyricsFormat ? { ...t, lyrics: lyricsFormat[t.id] } : t} now={now} onDelete={() => setPending(t)} onEditLyrics={() => setEditLyrics(t)} />
             ))}
           </ul>
           <div ref={paged.sentinel} className="flex h-12 items-center justify-center" aria-hidden={!paged.loading}>
@@ -125,6 +132,14 @@ export function LibraryTab(): ReactNode {
           </div>
           {paged.error && <ErrorState message={paged.error} onRetry={paged.loadMore} />}
         </>
+      )}
+
+      {editLyrics && (
+        <LyricsEditDialog
+          track={{ ...editLyrics, lyrics: editLyrics.id in lyricsFormat ? lyricsFormat[editLyrics.id] : editLyrics.lyrics }}
+          onClose={() => setEditLyrics(null)}
+          onChanged={(stored) => setLyricsFormat((m) => ({ ...m, [editLyrics.id]: stored }))}
+        />
       )}
 
       {pending && (

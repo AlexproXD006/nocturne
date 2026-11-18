@@ -594,13 +594,25 @@ export function createMockServer(options = {}) {
       const track = catalog.trackById.get(params[0])
       if (!track) throw new HttpError(404, 'Track not found.')
       const stored = track.lyricsStored
+      const offsetMs = track.lyricsOffsetMs ?? 0
       if (stored?.format === 'ttml') {
-        sendJson(res, 200, { synced: null, plain: plainFromTtml(stored.content), ttml: stored.content })
+        sendJson(res, 200, { synced: null, plain: plainFromTtml(stored.content), ttml: stored.content, offsetMs })
       } else if (stored?.format === 'lrc') {
-        sendJson(res, 200, { synced: stored.content, plain: plainFromLrc(stored.content), ttml: null })
+        sendJson(res, 200, { synced: stored.content, plain: plainFromLrc(stored.content), ttml: null, source: 'admin', offsetMs })
+      } else if (stored?.format === 'plain') {
+        sendJson(res, 200, { synced: null, plain: stored.content, ttml: null, source: 'admin', offsetMs })
       } else {
-        sendJson(res, 200, { ...lyricsFor(track), ttml: null })
+        sendJson(res, 200, { ...lyricsFor(track), ttml: null, offsetMs })
       }
+    },
+
+    async setLyricsOffset({ req, res, params }) {
+      const track = catalog.trackById.get(params[0])
+      if (!track) throw new HttpError(404, 'Track not found.')
+      const body = await readJson(req, { required: true })
+      if (typeof body.offsetMs !== 'number' || !Number.isFinite(body.offsetMs)) throw new HttpError(400, '"offsetMs" must be a number.')
+      track.lyricsOffsetMs = Math.max(-30000, Math.min(30000, Math.round(body.offsetMs)))
+      sendJson(res, 200, { offsetMs: track.lyricsOffsetMs })
     },
 
     async played({ req, res, user, params }) {
@@ -741,6 +753,7 @@ export function createMockServer(options = {}) {
     [['DELETE'], /^\/v1\/playlists\/([^/]+)\/entries\/([^/]+)$/, handlers.removePlaylistEntry, true],
     [['GET'], /^\/v1\/tracks\/([^/]+)\/stream$/, handlers.stream, true],
     [['GET'], /^\/v1\/tracks\/([^/]+)\/lyrics$/, handlers.lyrics, true],
+    [['PUT'], /^\/v1\/tracks\/([^/]+)\/lyrics\/offset$/, handlers.setLyricsOffset, true],
     [['POST'], /^\/v1\/tracks\/([^/]+)\/played$/, handlers.played, true],
     [['GET'], /^\/media\/([^/]+)$/, handlers.media, false],
     [['GET'], /^\/art\/(album|artist|playlist|user|source|spotify)\/([^/]+)\.svg$/, handlers.art, false],

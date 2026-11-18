@@ -610,7 +610,12 @@ export class ApiClient {
     })
   }
 
-  /** Stores (replaces) the TTML or LRC lyrics of a track. */
+  /** Saves the shared lyrics timing offset of a track (clamped to ±30 s by the server). */
+  setLyricsOffset(trackId: string, offsetMs: number): Promise<{ offsetMs: number }> {
+    return this.request('PUT', `/v1/tracks/${encodeURIComponent(trackId)}/lyrics/offset`, { body: { offsetMs } })
+  }
+
+  /** Stores (replaces) the TTML, LRC or plain-text lyrics of a track. */
   adminSetLyrics(trackId: string, input: SetLyricsInput): Promise<void> {
     return this.request('PUT', `/v1/admin/tracks/${encodeURIComponent(trackId)}/lyrics`, { body: input })
   }

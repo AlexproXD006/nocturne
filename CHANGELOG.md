@@ -2,6 +2,20 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.0.8 — 2026-11-18
+
+**Ajuste de letras y edición de letras en Admin** · web, android, windows, linux
+
+### Novedades
+
+- Botones −0,5 s / +0,5 s en la vista de letras para ajustar la sincronización de cada canción; el ajuste se guarda en el servidor.
+- Editar letras desde Admin: pega el texto o sube un .lrc, con vista previa; tiene prioridad sobre las letras automáticas.
+- Revisor de letras: cuando un .lrc está incompleto o mal sincronizado se usa la letra de LRCLIB (sin tocar tus archivos).
+
+### Correcciones
+
+- El panel de dispositivos en el PC ya se abre hacia arriba y no atraviesa la barra de tareas.
+
 ## 1.0.7 — 2026-11-17
 
 **Nocturne Connect, cola estilo Spotify y temas adaptativos** · web, android, windows, linux

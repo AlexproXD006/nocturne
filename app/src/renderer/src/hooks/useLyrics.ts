@@ -21,6 +21,12 @@ export function invalidateLyrics(trackId: string): void {
   for (const fn of [...listeners]) fn(trackId)
 }
 
+/** Keeps the cached lyrics of a track in step with a locally changed timing offset. */
+export function patchCachedOffset(trackId: string, offsetMs: number): void {
+  const hit = cache.get(trackId)
+  if (hit && hit.kind !== 'none') cache.set(trackId, { ...hit, offsetMs })
+}
+
 export function useLyrics(track: Track | null | undefined, enabled = true): LyricsState {
   const serverLyrics = useSession((s) => s.server?.capabilities?.lyrics === true)
   const [state, setState] = useState<LyricsState>({ status: 'idle' })

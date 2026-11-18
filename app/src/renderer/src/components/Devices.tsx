@@ -219,13 +219,13 @@ function PanelBody(): ReactNode {
 
 function Popover({ anchor, onClose }: { anchor: HTMLElement; onClose: () => void }): ReactNode {
   const ref = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState({ left: 0, top: 0 })
+  const [pos, setPos] = useState({ left: 0, bottom: 0 })
 
   useLayoutEffect(() => {
     const r = anchor.getBoundingClientRect()
     const width = 340
     const left = Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8))
-    setPos({ left, top: r.top - 8 })
+    setPos({ left, bottom: Math.max(8, window.innerHeight - r.top + 8) })
   }, [anchor])
 
   useEffect(() => {
@@ -247,7 +247,7 @@ function Popover({ anchor, onClose }: { anchor: HTMLElement; onClose: () => void
       ref={ref}
       role="dialog"
       aria-label="Devices"
-      style={{ left: pos.left, top: pos.top, width: 340, transform: 'translateY(-100%)' }}
+      style={{ left: pos.left, bottom: pos.bottom, width: 340 }}
       className="fade-up fixed z-[100] max-h-[70vh] overflow-y-auto rounded-xl border border-line bg-ink-800/95 p-3 shadow-2xl shadow-black/60 backdrop-blur-xl"
     >
       <PanelBody />

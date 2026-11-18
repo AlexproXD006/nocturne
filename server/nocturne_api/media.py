@@ -18,6 +18,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
 
 from .auth import require_user
 from .signing import sign_stream_url, verify_media_url
@@ -163,8 +164,66 @@ async def serve_art(
     )
 
 
+OFFSET_MAX_MS = 30000
+
+
+def _lyrics_offset(track_id: str) -> int:
+    from .db import connect
+    nc = connect()
+    try:
+        r = nc.execute("SELECT offset_ms FROM v1_lyrics_offset WHERE track_id=?", (track_id,)).fetchone()
+    except Exception:
+        return 0
+    finally:
+        nc.close()
+    return int(r["offset_ms"]) if r else 0
+
+
+def _prefer_auto(track_id: str) -> bool:
+    from .db import connect
+    nc = connect()
+    try:
+        r = nc.execute("SELECT prefer_auto FROM v1_lyrics_prefs WHERE track_id=?", (track_id,)).fetchone()
+    except Exception:
+        return False
+    finally:
+        nc.close()
+    return bool(r and r["prefer_auto"])
+
+
 @router.get("/tracks/{track_id}/lyrics")
 async def get_lyrics(track_id: str, account: dict = Depends(require_user)):
+    resp = dict(await _lyrics_payload(track_id))
+    resp["offsetMs"] = _lyrics_offset(track_id)
+    return resp
+
+
+class LyricsOffsetBody(BaseModel):
+    offsetMs: int
+
+
+@router.put("/tracks/{track_id}/lyrics/offset")
+async def put_lyrics_offset(track_id: str, body: LyricsOffsetBody, account: dict = Depends(require_user)):
+    if not nova_db.get_track(track_id):
+        raise HTTPException(status_code=404, detail={"message": "Track not found.", "code": "not_found"})
+    ms = max(-OFFSET_MAX_MS, min(OFFSET_MAX_MS, int(body.offsetMs)))
+    from datetime import datetime, timezone
+    from .db import connect
+    nc = connect()
+    try:
+        nc.execute(
+            """INSERT INTO v1_lyrics_offset(track_id, offset_ms, updated_at, updated_by) VALUES (?,?,?,?)
+               ON CONFLICT(track_id) DO UPDATE SET offset_ms=excluded.offset_ms,
+               updated_at=excluded.updated_at, updated_by=excluded.updated_by""",
+            (track_id, ms, datetime.now(timezone.utc).isoformat(), account.get("id")),
+        )
+        nc.commit()
+    finally:
+        nc.close()
+    return {"offsetMs": ms}
+
+
+async def _lyrics_payload(track_id: str) -> dict:
     row = nova_db.get_track(track_id)
     if not row:
         raise HTTPException(status_code=404, detail={"message": "Track not found.", "code": "not_found"})
@@ -183,13 +242,25 @@ async def get_lyrics(track_id: str, account: dict = Depends(require_user)):
         if fmt == "ttml":
             return {"synced": None, "plain": None, "ttml": content}
         elif fmt == "lrc":
-            return {"synced": content, "plain": None, "ttml": None}
+            return {"synced": content, "plain": None, "ttml": None, "source": "admin"}
+        elif fmt == "plain":
+            return {"synced": None, "plain": content, "ttml": None, "source": "admin"}
 
     # .lrc next to the audio: a real (user-provided) one keeps priority. NOVA-made
     # ones (invented 10-s grid / NOVA header) rank below the LRCLIB lyrics and are
     # only used when nothing better exists - a fake grid as plain text.
     from . import lyrics_auto
     lrc = lyrics_auto.read_lrc(row.get("file_path") or "")
+    # prefer_auto (set by `python -m nocturne_api.lrc_review --apply`): the .lrc is worse
+    # than the LRCLIB lyrics; it stays on disk and is used only as a fallback.
+    if lrc and lrc[0] == lyrics_auto.LRC_USER and _prefer_auto(track_id):
+        auto0 = None
+        try:
+            auto0 = lyrics_auto.get_auto(track_id)
+        except Exception:
+            pass
+        if auto0 and auto0.get("status") == lyrics_auto.STATUS_FOUND and auto0.get("synced"):
+            return lyrics_auto.response_from_row(auto0)
     if lrc and lrc[0] == lyrics_auto.LRC_USER:
         return {"synced": lrc[1], "plain": None, "ttml": None}
 

@@ -8,6 +8,8 @@ import { lyricLines } from './lyrics.mjs'
 import { escapeXml } from './util.mjs'
 
 export const LYRICS_MAX_BYTES = 1024 * 1024
+/** LRC / plain-text lyrics (the real server's limit). */
+export const PLAIN_LRC_MAX_BYTES = 200 * 1024
 
 // ---- Generation ----------------------------------------------------------------------
 
@@ -200,12 +202,13 @@ const LRC_STAMP = /\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]/
  * @throws {HttpError} 400 when the format/content is not acceptable.
  */
 export function validateLyrics(format, content) {
-  if (format !== 'ttml' && format !== 'lrc') throw new HttpError(400, 'format must be "ttml" or "lrc".')
+  if (format !== 'ttml' && format !== 'lrc' && format !== 'plain') throw new HttpError(400, 'format must be "ttml", "lrc" or "plain".')
   if (typeof content !== 'string' || content.trim() === '') throw new HttpError(400, 'content must be a non-empty string.')
-  if (Buffer.byteLength(content, 'utf8') > LYRICS_MAX_BYTES) throw new HttpError(400, 'Lyrics are limited to 1 MiB.')
+  if (format === 'ttml' && Buffer.byteLength(content, 'utf8') > LYRICS_MAX_BYTES) throw new HttpError(400, 'Lyrics are limited to 1 MiB.')
+  if (format !== 'ttml' && Buffer.byteLength(content, 'utf8') > PLAIN_LRC_MAX_BYTES) throw new HttpError(413, 'Lyrics are limited to 200 KB.')
   const text = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
   if (format === 'ttml') validateTtml(text)
-  else if (!LRC_STAMP.test(text)) throw new HttpError(400, 'Invalid LRC: at least one [mm:ss.xx] timestamp is required.')
+  else if (format === 'lrc' && !LRC_STAMP.test(text)) throw new HttpError(400, 'Invalid LRC: at least one [mm:ss.xx] timestamp is required.')
   return text
 }
 

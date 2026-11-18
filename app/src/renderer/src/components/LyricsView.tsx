@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { ImagePlus, Mic2, Share2, X } from 'lucide-react'
 import type { Track } from '../api/types'
 import { useLyrics } from '../hooks/useLyrics'
+import { useLyricsOffset } from '../hooks/useLyricsOffset'
 import { readPosition, useFrame } from '../hooks/useClock'
 import { findActiveLine, lineProgress, type LyricLine, type LyricWord } from '../lyrics/lrc'
+import { OFFSET_STEP_MS, formatOffset, lyricsTime, seekTimeFor } from '../lyrics/offset'
 import { computeGaps, findActiveWord, findGap, wordProgress } from '../lyrics/timing'
 import { playback } from '../services'
 import { useNowDuration, useNowPositionTick, useNowStatus } from '../hooks/useNowPlaying'
@@ -78,6 +80,7 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
   const lyrics = state.status === 'ready' ? state.lyrics : null
   const synced = lyrics?.kind === 'synced' ? lyrics.parsed.lines : null
   const lines = useMemo(() => (lyrics && (lyrics.kind === 'synced' || lyrics.kind === 'plain') ? lyrics.parsed.lines : []), [lyrics])
+  const { offsetMs, nudge, reset } = useLyricsOffset(track?.id, lyrics && lyrics.kind !== 'none' ? lyrics.offsetMs : undefined)
   const wordSynced = lyrics?.kind === 'synced' && lyrics.parsed.wordSynced === true
   const gaps = useMemo(() => (synced ? computeGaps(synced) : []), [synced])
   const gapBefore = useMemo(() => {
@@ -118,7 +121,7 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
 
   const tick = (): void => {
     if (!synced) return
-    const ms = readPosition() * 1000 + LEAD_MS
+    const ms = lyricsTime(readPosition() * 1000 + LEAD_MS, offsetMs)
     const i = findActiveLine(synced, ms)
     const gi = gaps.length ? findGap(gaps, ms) : -1
     const next: Cursor = { cursor: i, active: gi >= 0 ? -1 : i, gap: gi }
@@ -236,7 +239,7 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
         ref={(el) => {
           lineRefs.current[i] = el
         }}
-        onClick={selecting ? (selectable ? () => toggleShareLine(i) : undefined) : synced ? () => seek(line.time / 1000) : undefined}
+        onClick={selecting ? (selectable ? () => toggleShareLine(i) : undefined) : synced ? () => seek(seekTimeFor(line.time, offsetMs)) : undefined}
         data-line={i}
         data-active={isActive || undefined}
         role={selectable ? 'button' : undefined}
@@ -323,6 +326,47 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
         {lyrics.source === 'ttml' && <p className="mt-10 text-xs font-normal text-fg-subtle">Lyrics from your library (TTML)</p>}
       </div>
     </div>
+
+      {/* Timing offset (synced lyrics only): shared per track on the server. */}
+      {synced && !selecting && (
+        <div
+          role="group"
+          aria-label="Lyrics timing offset"
+          className="no-drag absolute left-3 top-3 z-20 inline-flex items-center gap-0.5 rounded-full bg-ink-800/70 px-1 py-1 text-xs text-fg-muted shadow-lg shadow-black/30 backdrop-blur"
+        >
+          <button
+            type="button"
+            aria-label="Lyrics 0.5 seconds earlier"
+            title="Lyrics earlier"
+            onClick={() => nudge(-OFFSET_STEP_MS)}
+            className="h-7 rounded-full px-2 font-semibold tabular-nums transition-colors hover:bg-white/10 hover:text-fg active:scale-95"
+          >
+            {'\u2212'}0.5s
+          </button>
+          <span data-testid="lyrics-offset" aria-live="polite" className="min-w-[3.2rem] text-center font-semibold tabular-nums text-fg">
+            {formatOffset(offsetMs)}
+          </span>
+          <button
+            type="button"
+            aria-label="Lyrics 0.5 seconds later"
+            title="Lyrics later"
+            onClick={() => nudge(OFFSET_STEP_MS)}
+            className="h-7 rounded-full px-2 font-semibold tabular-nums transition-colors hover:bg-white/10 hover:text-fg active:scale-95"
+          >
+            +0.5s
+          </button>
+          <button
+            type="button"
+            aria-label="Reset lyrics offset"
+            title="Reset offset"
+            disabled={offsetMs === 0}
+            onClick={reset}
+            className="h-7 rounded-full px-2 font-semibold transition-colors hover:bg-white/10 hover:text-fg disabled:opacity-35 disabled:hover:bg-transparent"
+          >
+            reset
+          </button>
+        </div>
+      )}
 
       {/* Share-as-image controls (overlay, do not scroll with lyrics). */}
       {!selecting && (

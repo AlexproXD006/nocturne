@@ -246,7 +246,9 @@ def _auto_row(tid):
 async def _get(client, token, tid):
     r = await client.get(f"/tracks/{tid}/lyrics", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
-    return r.json()
+    body = r.json()
+    assert body.pop("offsetMs") == 0
+    return body
 
 
 async def test_endpoint_lazy_lookup_stores_and_reuses(client, user_token, lrclib):

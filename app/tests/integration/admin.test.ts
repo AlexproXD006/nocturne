@@ -512,7 +512,7 @@ describe.skipIf(!available)('admin API (real ApiClient over HTTP)', () => {
 
       const listed = await admin.api.adminTracks!({ q: 'paper moons' })
       expect(listed.items.some((t: any) => t.id === track.id)).toBe(true)
-      expect((await admin.api.lyrics!(track.id))).toEqual({ synced: null, plain: null, ttml: null })
+      expect((await admin.api.lyrics!(track.id))).toEqual({ synced: null, plain: null, ttml: null, offsetMs: 0 })
     })
 
     it('falls back to "Unknown Artist" and accepts every supported container', async () => {
@@ -600,6 +600,27 @@ describe.skipIf(!available)('admin API (real ApiClient over HTTP)', () => {
       await admin.api.adminDeleteLyrics!(plainTrack) // idempotent
     })
 
+    it('stores plain text (top priority), enforces 200 KB for LRC / plain and clears it again', async () => {
+      await admin.api.adminSetLyrics!(plainTrack, { format: 'plain', content: 'line one\nline two' })
+      expect(await admin.api.lyrics!(plainTrack)).toMatchObject({ synced: null, plain: 'line one\nline two', source: 'admin' })
+      const row = (await admin.api.adminTracks!({ lyrics: 'present', limit: 200 })).items.find((t: any) => t.id === plainTrack)
+      expect(row.lyrics).toBe('plain')
+      const t = admin.session.current!.accessToken
+      const big = await rig.raw(t, 'PUT', `/v1/admin/tracks/${plainTrack}/lyrics`, { format: 'plain', content: 'x'.repeat(200 * 1024 + 1) })
+      expect(big.status).toBe(413)
+      const stampless = await rig.raw(t, 'PUT', `/v1/admin/tracks/${plainTrack}/lyrics`, { format: 'lrc', content: 'no stamps' })
+      expect(stampless.status).toBe(400)
+      await admin.api.adminDeleteLyrics!(plainTrack)
+    })
+
+    it('saves the per-track lyrics offset for any user, clamped to +-30 s', async () => {
+      expect(await guest.api.setLyricsOffset!(plainTrack, 1500)).toEqual({ offsetMs: 1500 })
+      expect((await admin.api.lyrics!(plainTrack)).offsetMs).toBe(1500)
+      expect(await guest.api.setLyricsOffset!(plainTrack, -99999)).toEqual({ offsetMs: -30000 })
+      expect(await guest.api.setLyricsOffset!(plainTrack, 0)).toEqual({ offsetMs: 0 })
+      await expect(guest.api.setLyricsOffset!('tr-does-not-exist', 5)).rejects.toMatchObject({ status: 404 })
+    })
+
     it('stores LRC in "synced" and reports the lrc format', async () => {
       await admin.api.adminSetLyrics!(plainTrack, { format: 'lrc', content: GOOD_LRC })
       const lyr = await admin.api.lyrics!(plainTrack)
@@ -631,7 +652,7 @@ describe.skipIf(!available)('admin API (real ApiClient over HTTP)', () => {
         ['ENTITY only', { format: 'ttml', content: '<tt><!ENTITY x "y"><p begin="1">x</p></tt>' }],
         ['custom entity', { format: 'ttml', content: '<tt><p begin="1">&lol;</p></tt>' }],
         ['unquoted attribute', { format: 'ttml', content: '<tt><p begin=1>x</p></tt>' }],
-        ['too large', { format: 'lrc', content: `[00:01.00]${'a'.repeat(1024 * 1024)}` }]
+        ['too large', { format: 'ttml', content: `<tt><body><p begin="1">${'a'.repeat(1024 * 1024)}</p></body></tt>` }]
       ]
       for (const [name, body] of bad) {
         const res = await put(body)
@@ -644,11 +665,11 @@ describe.skipIf(!available)('admin API (real ApiClient over HTTP)', () => {
       expect((await admin.api.lyrics!(plainTrack)).ttml).toBeNull()
     })
 
-    it('accepts prefixed TTML with entities, a BOM and 1 MiB documents', async () => {
+    it('accepts prefixed TTML with entities, a BOM and 190 KB LRC documents', async () => {
       const prefixed = '﻿<?xml version="1.0"?>\n<!-- c --><tt:tt xmlns:tt="http://www.w3.org/ns/ttml"><tt:body><tt:p begin="0:01.500">A &amp; B &#233;</tt:p></tt:body></tt:tt>'
       await admin.api.adminSetLyrics!(plainTrack, { format: 'ttml', content: prefixed })
       expect((await admin.api.lyrics!(plainTrack)).plain).toBe('A & B é')
-      const big = `[00:01.00]${'b'.repeat(1024 * 1024 - 10)}`
+      const big = `[00:01.00]${'b'.repeat(190 * 1024)}`
       await admin.api.adminSetLyrics!(plainTrack, { format: 'lrc', content: big })
       await admin.api.adminDeleteLyrics!(plainTrack)
     })

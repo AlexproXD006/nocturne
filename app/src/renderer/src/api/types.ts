@@ -349,9 +349,13 @@ export interface ServerLyrics {
    * over every other source when present. Optional for older servers.
    */
   ttml?: string | null
+  /** Shared per-track timing offset in ms (positive = lyrics later). Optional for older servers. */
+  offsetMs?: number
+  /** "admin" when synced / plain come from admin-stored lyrics (top priority, beats LRCLIB). */
+  source?: string
 }
 
-export type LyricsFormat = 'ttml' | 'lrc'
+export type LyricsFormat = 'ttml' | 'lrc' | 'plain'
 
 // ---- Admin (/v1/admin/*, role 'admin' only) -------------------------------
 
@@ -449,6 +453,6 @@ export interface AdminTrack extends Track {
 
 export interface SetLyricsInput {
   format: LyricsFormat
-  /** Full TTML or LRC document, UTF-8, ≤ 1 MiB. */
+  /** TTML document (≤ 1 MiB), LRC text with timestamps or plain text (≤ 200 KB), UTF-8. */
   content: string
 }

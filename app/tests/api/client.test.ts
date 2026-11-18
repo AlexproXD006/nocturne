@@ -575,6 +575,19 @@ describe('endpoints', () => {
     expect(f.calls.every((c) => c.method === 'GET')).toBe(true)
   })
 
+  it('setLyricsOffset PUTs {offsetMs} to the encoded track path; adminSetLyrics accepts plain', async () => {
+    const f = fakeFetch(() => jsonResponse({ offsetMs: 500 }))
+    const { client } = harness(f)
+    expect(await client.setLyricsOffset('a/b', 500)).toEqual({ offsetMs: 500 })
+    expect(f.calls[0]!.url).toBe(`${BASE}/v1/tracks/a%2Fb/lyrics/offset`)
+    expect(f.calls[0]!.method).toBe('PUT')
+    expect(f.calls[0]!.body).toEqual({ offsetMs: 500 })
+    const g = fakeFetch(() => emptyResponse())
+    await harness(g).client.adminSetLyrics('t1', { format: 'plain', content: 'la la' })
+    expect(g.calls[0]!.url).toBe(`${BASE}/v1/admin/tracks/t1/lyrics`)
+    expect(g.calls[0]!.body).toEqual({ format: 'plain', content: 'la la' })
+  })
+
   it('setLiked uses PUT to like and DELETE to unlike, with an encoded id', async () => {
     const f = fakeFetch(() => emptyResponse())
     const { client } = harness(f)
