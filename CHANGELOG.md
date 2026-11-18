@@ -2,6 +2,14 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.1-beta.2 — 2026-11-18
+
+**Recordar lo que sonaba (beta)** · android, windows, linux, ios
+
+### Correcciones
+
+- Al cerrar la app la música sigue sonando, y al volver a abrirla recupera la canción, la cola y el punto donde ibas (también tras reiniciar el móvil).
+
 ## 1.1.1-beta.1 — 2026-11-18
 
 **Android Auto (beta)** · android, windows, linux, ios
