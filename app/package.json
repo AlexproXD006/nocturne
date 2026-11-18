@@ -28,9 +28,13 @@
     "android:sync": "npm run build:web && cap sync android && node scripts/patch-android.mjs",
     "android:open": "cap open android",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease",
+    "ios:icons": "node scripts/ios-icons.mjs",
+    "ios:sync": "npm run build:web && cap sync ios",
+    "ios:open": "cap open ios",
+    "ios:altstore": "node scripts/altstore-source.mjs",
     "icons": "node scripts/make-icons.mjs",
     "validate:builder": "node scripts/validate-builder-config.mjs",
-    "test:scripts": "node --test scripts/patch-android.test.mjs",
+    "test:scripts": "node --test scripts/patch-android.test.mjs scripts/altstore-source.test.mjs",
     "kit": "npm run build:hosted && node scripts/make-server-kit.mjs"
   },
   "dependencies": {
@@ -38,6 +42,7 @@
     "@capacitor/android": "^8.6.0",
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.2",
     "@capacitor/status-bar": "^8.0.4",
     "@fontsource-variable/inter": "^5.3.0",
     "capacitor-music-controls-plugin": "^8.0.0",

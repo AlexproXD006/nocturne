@@ -31,7 +31,17 @@ async function setupAndroid(): Promise<void> {
   }
 }
 
+async function setupIos(): Promise<void> {
+  try {
+    const { StatusBar, Style } = await import('@capacitor/status-bar')
+    await StatusBar.setStyle({ style: Style.Dark })
+  } catch {
+    /* status bar plugin unavailable */
+  }
+}
+
 if (platform.kind === 'android') void setupAndroid()
+else if (platform.kind === 'ios') void setupIos()
 
 // "New version available" system notifications (Android background check + desktop). No-op on web.
 try {

@@ -1,6 +1,6 @@
 /** Friendly Connect device names ("PC (Windows)", "Android phone", "Web browser (Chrome on macOS)"). */
 
-export type DeviceKind = 'desktop' | 'android' | 'web' | string
+export type DeviceKind = 'desktop' | 'android' | 'ios' | 'web' | string
 
 function osOf(ua: string): string {
   return /Windows/.test(ua) ? 'Windows'
@@ -26,6 +26,7 @@ export function defaultDeviceName(kind: DeviceKind, ua: string): string {
   const os = osOf(ua)
   if (kind === 'desktop') return os === 'macOS' ? 'Mac' : `PC (${os || 'Desktop'})`
   if (kind === 'android') return /Tablet|SM-T|Pad/.test(ua) ? 'Android tablet' : 'Android phone'
+  if (kind === 'ios') return /iPad/.test(ua) ? 'iPad' : 'iPhone'
   const browser = browserOf(ua)
   const detail = [browser, os].filter(Boolean).join(' on ')
   if (os === 'Android' || os === 'iOS') return detail ? `Phone browser (${detail})` : 'Phone browser'
@@ -50,6 +51,7 @@ export function platformLabel(platform: string): string {
   const p = platform.toLowerCase()
   if (p === 'desktop') return 'Desktop app'
   if (p === 'android') return 'Android app'
+  if (p === 'ios') return 'iOS app'
   if (p === 'web') return 'Web player'
   return platform
 }

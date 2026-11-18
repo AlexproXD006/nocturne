@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { api, platform, useSession } from '../services'
 import { buildUrl } from '../lib/url'
 import { isNewerVersion, isPrerelease } from '../lib/version'
+import { iosUpdateUrl } from '../platform/iosUpdates'
 
 /** One platform entry from GET /v1/updates/{platform}. */
 export interface LatestInfo {
@@ -41,6 +42,9 @@ export function targetPlatform(installed: string = installedVersion()): string |
   if (platform.hostedOrigin) return null
   if (platform.kind === 'android') return isPrerelease(installed) ? 'android-beta' : 'android'
   if (platform.kind === 'desktop') return 'desktop'
+  // iOS has no feed of its own yet: the server's `desktop` feed carries the release version (the
+  // download link is overridden below, so only the version number is used).
+  if (platform.kind === 'ios') return 'desktop'
   return null // web: the browser app updates itself
 }
 
@@ -65,7 +69,10 @@ export const useUpdates = create<UpdatesState>((set, get) => ({
       const s = useSession.getState()
       const serverUrl = s.session?.serverUrl || s.lastServerUrl
       const available = isNewerVersion(latest.version, installedVersion())
-      const downloadUrl = serverUrl && latest.url ? buildUrl(serverUrl, latest.url) : null
+      // iOS cannot install in-app: point at the release page / AltStore source instead.
+      const downloadUrl = platform.kind === 'ios'
+        ? iosUpdateUrl(isPrerelease(installedVersion()))
+        : serverUrl && latest.url ? buildUrl(serverUrl, latest.url) : null
       set({ latest, available, downloadUrl, checking: false, checked: true })
     } catch {
       // Offline / 404 / feed unavailable: stay quiet.

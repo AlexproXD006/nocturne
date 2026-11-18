@@ -20,6 +20,11 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: process.env['NOCTURNE_DEBUG_WEBVIEW'] === '1',
     backgroundColor: '#08080b'
   },
+  // iOS: WKWebView cannot serve https, so the app origin is capacitor://localhost (allowed by the
+  // server's default NOCTURNE_CORS_ORIGINS). Background audio is configured in ios/App/App/AppDelegate.swift.
+  ios: {
+    backgroundColor: '#08080b'
+  },
   plugins: {
     StatusBar: {
       overlaysWebView: true,

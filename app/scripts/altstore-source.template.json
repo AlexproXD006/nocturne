@@ -1,0 +1,25 @@
+{
+  "name": "Nocturne",
+  "identifier": "es.alexcloudweb.nocturne.source",
+  "subtitle": "Nocturne for iOS, built from the public GitHub releases.",
+  "description": "Unsigned Nocturne builds for sideloading with AltStore or SideStore. Add this source once and updates show up in the app.",
+  "website": "https://nocturne.alexcloudweb.es",
+  "iconURL": "https://raw.githubusercontent.com/AlexproXD006/nocturne/main/app/build/icon-512.png",
+  "tintColor": "#ff7a85",
+  "apps": [
+    {
+      "name": "Nocturne",
+      "bundleIdentifier": "es.alexcloudweb.nocturne",
+      "developerName": "Alex",
+      "subtitle": "A clean player for your own music server.",
+      "localizedDescription": "A clean, lightweight music player for your own Nocturne server. No ads, no clutter. Background playback and lock-screen controls included.",
+      "iconURL": "https://raw.githubusercontent.com/AlexproXD006/nocturne/main/app/build/icon-512.png",
+      "tintColor": "#ff7a85",
+      "category": "entertainment",
+      "screenshots": [],
+      "appPermissions": { "entitlements": [], "privacy": {} },
+      "versions": []
+    }
+  ],
+  "news": []
+}
