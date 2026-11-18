@@ -1,0 +1,144 @@
+name: ios
+
+# Builds an UNSIGNED iOS .ipa (for sideloading with AltStore / SideStore / Sideloadly, which
+# re-sign it with the user's own Apple ID) on a macOS runner (free for public repos), plus the
+# AltStore source JSON. On a version tag the files are attached to the GitHub Release.
+# Independent of ci.yml / apps.yml.
+
+on:
+  push:
+    tags: ['v*']
+    # Test branch for the iOS pipeline itself (no GitHub token is needed to trigger it).
+    branches: [ios-build]
+    paths:
+      - 'app/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  CI: 'true'
+
+jobs:
+  ipa:
+    name: Unsigned iOS .ipa
+    runs-on: macos-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - name: Build web bundle
+        run: npm run build:web
+      - name: Sync Capacitor iOS project
+        run: npx cap sync ios
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+      - name: Archive (unsigned)
+        id: archive
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -o pipefail
+          version=$(node -p "require('./package.json').version")
+          # CFBundleShortVersionString cannot carry a pre-release suffix (1.1.0-beta.1 -> 1.1.0).
+          marketing=${version%%-*}
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/build"
+          set +e
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/build/Nocturne.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -skipPackagePluginValidation -skipMacroValidation \
+            MARKETING_VERSION="$marketing" \
+            CURRENT_PROJECT_VERSION="$RUN_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            # Surface the failure as annotations (readable without logging in).
+            grep -E "error:|Could not|failed" "$RUNNER_TEMP/xcodebuild.log" | head -30 | while IFS= read -r line; do echo "::error title=xcodebuild::${line:0:400}"; done
+            exit "$status"
+          fi
+      - name: Package .ipa
+        run: |
+          version="${{ steps.archive.outputs.version }}"
+          app="$RUNNER_TEMP/build/Nocturne.xcarchive/Products/Applications/App.app"
+          test -d "$app"
+          mkdir -p dist-ios/Payload
+          cp -R "$app" dist-ios/Payload/
+          (cd dist-ios && zip -qry "Nocturne-${version}-unsigned.ipa" Payload && rm -rf Payload)
+          ls -l dist-ios
+          # Sanity: the plist must carry the bundle id and the background-audio mode.
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes' "$app/Info.plist"
+      - name: Build AltStore source
+        run: |
+          version="${{ steps.archive.outputs.version }}"
+          tag="${GITHUB_REF_NAME}"
+          case "$GITHUB_REF" in refs/tags/v*) ;; *) tag="v${version}" ;; esac
+          # Keep previously published versions when the live source is reachable.
+          curl -fsSL --max-time 20 -o "$RUNNER_TEMP/existing.json" https://nocturne.alexcloudweb.es/altstore.json || rm -f "$RUNNER_TEMP/existing.json"
+          args=(--version "$version" --tag "$tag" --repo "$GITHUB_REPOSITORY" --ipa "dist-ios/Nocturne-${version}-unsigned.ipa" --out dist-ios/altstore.json)
+          [ -f "$RUNNER_TEMP/existing.json" ] && args+=(--existing "$RUNNER_TEMP/existing.json")
+          node scripts/altstore-source.mjs "${args[@]}"
+          cat dist-ios/altstore.json | head -c 1500
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nocturne-ios
+          path: |
+            app/dist-ios/*.ipa
+            app/dist-ios/altstore.json
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release:
+    name: Attach to GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ipa]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nocturne-ios
+          path: artifacts
+      - run: ls -lh artifacts
+      # apps.yml creates the release for the same tag too; softprops creates it if missing or
+      # just adds these assets when it already exists.
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          # vX.Y.Z-beta.N tags are pre-releases (beta channel), never "Latest".
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true

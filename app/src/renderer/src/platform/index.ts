@@ -4,7 +4,7 @@ import { createNativeUpdates, type NativeUpdates, type NocturneUpdatesPlugin } f
 
 export type { NativeUpdates } from './nocturneUpdates'
 
-export type PlatformKind = 'desktop' | 'android' | 'web'
+export type PlatformKind = 'desktop' | 'android' | 'ios' | 'web'
 
 export type RepeatMode = 'off' | 'all' | 'one'
 
@@ -58,7 +58,7 @@ export interface Platform {
   hostedOrigin: string | null
   window: NocturneBridge['window'] | null
   openExternal(url: string): Promise<void>
-  /** Native now-playing controls (Android Media3 session). Desktop uses navigator.mediaSession. */
+  /** Native now-playing controls (Android Media3 session). Desktop and iOS use navigator.mediaSession. */
   nativeNowPlaying: NativeNowPlaying | null
   /** Android only: background update check (WorkManager) + "update available" notification. */
   nativeUpdates?: NativeUpdates | null
@@ -69,9 +69,17 @@ export interface Platform {
   notifyUpdate?: ((info: { version: string; url: string }) => Promise<boolean>) | null
 }
 
-function isAndroid(): boolean {
+function isCapacitor(name: 'android' | 'ios'): boolean {
   const cap = (globalThis as { Capacitor?: { getPlatform?: () => string; isNativePlatform?: () => boolean } }).Capacitor
-  return Boolean(cap?.isNativePlatform?.() && cap.getPlatform?.() === 'android')
+  return Boolean(cap?.isNativePlatform?.() && cap.getPlatform?.() === name)
+}
+
+function isAndroid(): boolean {
+  return isCapacitor('android')
+}
+
+function isIos(): boolean {
+  return isCapacitor('ios')
 }
 
 /** Dev/web fallback: tokens live in sessionStorage only (cleared with the tab). */
@@ -171,6 +179,42 @@ function androidPlatform(): Platform {
   }
 }
 
+/**
+ * iOS (Capacitor, sideloaded .ipa). Keychain secure storage; background audio is the WKWebView
+ * <audio> element (AVAudioSession .playback, see AppDelegate.swift) and the lock-screen /
+ * Control Center controls come from navigator.mediaSession, so there is no native now-playing
+ * plugin. No in-app install or background update check: the update banner opens the release page.
+ */
+function iosPlatform(): Platform {
+  const storageBox = import('@aparajita/capacitor-secure-storage').then(async ({ SecureStorage }) => {
+    await SecureStorage.setKeyPrefix('nocturne_')
+    return { plugin: SecureStorage }
+  })
+  return {
+    kind: 'ios',
+    secure: {
+      get: async (key) => {
+        const { plugin: s } = await storageBox
+        const v = await s.get(key)
+        return typeof v === 'string' ? v : null
+      },
+      set: async (key, value) => (await storageBox).plugin.set(key, value),
+      delete: async (key) => {
+        await (await storageBox).plugin.remove(key)
+      }
+    },
+    secureAtRest: async () => true,
+    hostedOrigin: null,
+    window: null,
+    openExternal: async (url) => {
+      window.open(url, '_blank', 'noopener,noreferrer')
+    },
+    nativeNowPlaying: null,
+    nativeUpdates: null,
+    notifyUpdate: null
+  }
+}
+
 function webPlatform(): Platform {
   const hostedOrigin = import.meta.env.VITE_HOSTED === 'true' && typeof location !== 'undefined' ? location.origin : null
   return {
@@ -191,6 +235,7 @@ function webPlatform(): Platform {
 export function detectPlatform(): Platform {
   if (typeof window !== 'undefined' && window.nocturne) return desktopPlatform(window.nocturne)
   if (isAndroid()) return androidPlatform()
+  if (isIos()) return iosPlatform()
   return webPlatform()
 }
 
