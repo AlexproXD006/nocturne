@@ -147,6 +147,17 @@ export function trackFromNative(it: NativeSnapshot['items'][number]): Track {
   }
 }
 
+/** Structural sharing: a track the queue already holds keeps its object (and artwork array) so views don't re-render or reload covers. */
+export function keepTrack(q: Q.QueueState, next: Track): Track {
+  const old = q.items.find((it) => it.track.id === next.id)?.track
+  if (!old) return next
+  const oa = old.artwork ?? []
+  const na = next.artwork ?? []
+  if (oa.length > na.length) return old // native only knew the basics
+  const same = oa.length === na.length && oa.every((im, i) => im.url === na[i]!.url)
+  return same ? { ...next, artwork: oa } : next
+}
+
 const uidSig = (q: Q.QueueState): string => q.items.map((it) => it.uid).join(',')
 
 export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<PlayerState>> {
@@ -659,7 +670,7 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
       const sameQueue = cur.items.length === uids.length && cur.items.every((it, i) => it.uid === uids[i])
       const queue = sameQueue
         ? { ...cur, index: Math.min(Math.max(0, snap.index), cur.items.length - 1), repeat: snap.repeat }
-        : Q.createQueue(snap.items.map(trackFromNative), snap.index, {
+        : Q.createQueue(snap.items.map((it) => keepTrack(cur, trackFromNative(it))), snap.index, {
             repeat: snap.repeat,
             uid: () => uids[k++] ?? Q.makeUid(),
             context: snap.contextName ? { type: 'tracks', name: snap.contextName } : null

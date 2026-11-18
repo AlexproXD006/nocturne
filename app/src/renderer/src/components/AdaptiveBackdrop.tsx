@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { getEngine, usePlayer } from '../services'
 import { useNowTrack } from '../hooks/useNowPlaying'
 import { pickImage } from '../lib/url'
@@ -73,13 +73,13 @@ export type BackdropVariant = 'app' | 'embedded' | 'preview'
  * Display only (an <img>, never read into a canvas), so no CORS is needed here;
  * the palette comes from lib/color's cached sampling (same as the accent).
  */
-export function AdaptiveBackdrop({ variant = 'app', settings }: { variant?: BackdropVariant; settings?: AdaptiveSettings }): ReactNode {
+export const AdaptiveBackdrop = memo(function AdaptiveBackdrop({ variant = 'app', settings }: { variant?: BackdropVariant; settings?: AdaptiveSettings }): ReactNode {
   const theme = useSettings((st) => st.theme)
   const stored = useSettings((st) => st.adaptive)
   // Mount nothing (no palette work, no loops) when the app-wide layer is off.
   if (variant === 'app' && !showAppBackdrop(theme, stored)) return null
   return <Backdrop variant={variant} s={settings ?? stored} />
-}
+})
 
 function Backdrop({ variant, s }: { variant: BackdropVariant; s: AdaptiveSettings }): ReactNode {
   const env = useDeviceEnv()

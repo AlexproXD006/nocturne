@@ -757,7 +757,7 @@ public final class NocturneMediaService extends MediaLibraryService {
 
     private String buttonsKey() {
         ExoPlayer p = player;
-        return (currentLiked() ? "L" : "l") + (shuffleOn ? "S" : "s") + (p == null ? 0 : p.getRepeatMode());
+        return (shuffleOn ? "S" : "s") + (p == null ? 0 : p.getRepeatMode());
     }
 
     private void refreshButtons() {
@@ -776,17 +776,11 @@ public final class NocturneMediaService extends MediaLibraryService {
         return mode == Player.REPEAT_MODE_ONE ? "one" : mode == Player.REPEAT_MODE_ALL ? "all" : "off";
     }
 
-    /** Like, Shuffle, Repeat (in that order; stock Android 13+ shows the first two beside prev/next). */
+    /** Shuffle and Repeat, so Previous / Play-Pause / Next always keep their slots. */
     private ImmutableList<CommandButton> buttons() {
         ExoPlayer p = player;
-        boolean liked = currentLiked();
         boolean shuffle = shuffleOn;
         int mode = p == null ? Player.REPEAT_MODE_OFF : p.getRepeatMode();
-        CommandButton like = new CommandButton.Builder(liked ? CommandButton.ICON_HEART_FILLED : CommandButton.ICON_HEART_UNFILLED)
-            .setCustomIconResId(liked ? R.drawable.ic_media_heart_filled : R.drawable.ic_media_heart_outline)
-            .setDisplayName(getString(liked ? R.string.nocturne_media_unlike : R.string.nocturne_media_like))
-            .setSessionCommand(LIKE)
-            .build();
         CommandButton shuf = new CommandButton.Builder(shuffle ? CommandButton.ICON_SHUFFLE_ON : CommandButton.ICON_SHUFFLE_OFF)
             .setCustomIconResId(shuffle ? R.drawable.ic_media_shuffle_on : R.drawable.ic_media_shuffle_off)
             .setDisplayName(getString(shuffle ? R.string.nocturne_media_shuffle_on : R.string.nocturne_media_shuffle_off))
@@ -813,7 +807,9 @@ public final class NocturneMediaService extends MediaLibraryService {
             .setDisplayName(getString(repeatLabel))
             .setSessionCommand(REPEAT)
             .build();
-        return ImmutableList.of(like, shuf, repeat);
+        // The heart is deliberately not a button: it took the slot of "Next" on Samsung's media panel.
+        // (The LIKE command stays registered for controllers that send it, e.g. Android Auto custom UIs.)
+        return ImmutableList.of(shuf, repeat);
     }
 
     @Nullable
@@ -1004,6 +1000,11 @@ public final class NocturneMediaService extends MediaLibraryService {
             SessionCommands commands = defaults.availableSessionCommands.buildUpon().add(LIKE).add(SHUFFLE).add(REPEAT).build();
             return new MediaSession.ConnectionResult.AcceptedResultBuilder(mediaSession, controller)
                 .setAvailableSessionCommands(commands)
+                // "Next" must be offered even at the end of the queue (autoplay / repeat decide what it does).
+                .setAvailablePlayerCommands(defaults.availablePlayerCommands.buildUpon()
+                    .add(Player.COMMAND_SEEK_TO_NEXT)
+                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                    .build())
                 .setMediaButtonPreferences(buttons())
                 .build();
         }

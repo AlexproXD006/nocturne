@@ -24,6 +24,9 @@ export function useAccent(url: string | undefined): Rgb {
  * Palette (dominant / vibrant / muted) + luminance of an artwork, sampled once
  * per URL (shared cache with useAccent). Null until loaded or when unreadable.
  */
+/** Wait before sampling a cover that is not cached yet (rapid skipping samples only the track you stop on). */
+export const PALETTE_DEBOUNCE_MS = 120
+
 export function usePalette(url: string | undefined): ImagePalette | null {
   const [state, setState] = useState<{ url: string | undefined; palette: ImagePalette | null }>(() => ({
     url,
@@ -31,15 +34,24 @@ export function usePalette(url: string | undefined): ImagePalette | null {
   }))
   useEffect(() => {
     if (!url) {
-      setState({ url, palette: null })
+      setState((s) => (s.palette === null && s.url === url ? s : { url, palette: null }))
+      return
+    }
+    const hit = cachedPalette(url)
+    if (hit) {
+      setState((s) => (s.palette === hit && s.url === url ? s : { url, palette: hit }))
       return
     }
     let alive = true
-    void extractPalette(url).then((palette) => {
-      if (alive) setState({ url, palette })
-    })
+    const id = setTimeout(() => {
+      void extractPalette(url).then((palette) => {
+        // Unreadable / failed cover: keep the last good palette (no flash to the fallback colours).
+        if (alive && palette) setState({ url, palette })
+      })
+    }, PALETTE_DEBOUNCE_MS)
     return () => {
       alive = false
+      clearTimeout(id)
     }
   }, [url])
   // Keep showing the previous cover's palette until the new one is ready (no flash to fallback).

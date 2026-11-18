@@ -147,7 +147,7 @@ export function FullscreenPlayer(): ReactNode {
               status === 'playing' ? 'scale-100' : 'scale-[0.94]'
             )}
           >
-            <Artwork images={track.artwork} size={640} alt={`${track.title} cover`} className="h-full w-full shadow-[0_30px_90px_-20px_rgba(0,0,0,0.75)]" rounded="rounded-2xl" />
+            <Artwork images={track.artwork} size={640} eager alt={`${track.title} cover`} className="h-full w-full shadow-[0_30px_90px_-20px_rgba(0,0,0,0.75)]" rounded="rounded-2xl" />
           </div>
           <div className="mt-8 flex w-full max-w-[520px] items-center justify-between gap-4">
             <div className="min-w-0">

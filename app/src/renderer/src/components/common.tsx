@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { memo, useEffect, useState, type ReactNode } from 'react'
 import { AlertCircle, Disc3, Heart, Loader2, RotateCcw } from 'lucide-react'
 import type { Image } from '../api/types'
 import { pickImage } from '../lib/url'
@@ -12,13 +12,17 @@ export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
 }
 
-export function Artwork({
+/** One automatic retry after this long when a cover fails to load (slow thumbnail generation, flaky network). */
+export const ARTWORK_RETRY_MS = 1500
+
+export const Artwork = memo(function Artwork({
   images,
   size,
   alt = '',
   className,
   rounded = 'rounded-lg',
-  round = false
+  round = false,
+  eager = false
 }: {
   images: Image[] | undefined
   size: number
@@ -26,11 +30,21 @@ export function Artwork({
   className?: string
   rounded?: string
   round?: boolean
+  /** Skip lazy loading (the fullscreen cover: a lazy image inside an animated layer can stay unloaded on WebViews). */
+  eager?: boolean
 }): ReactNode {
   const url = pickImage(images, size * (typeof devicePixelRatio === 'number' ? Math.min(2, devicePixelRatio) : 1))
-  const [failed, setFailed] = useState(false)
+  // Failure state is tied to the URL it happened for: a new track's cover always gets a fresh attempt.
+  const [err, setErr] = useState<{ url: string; n: number }>({ url: '', n: 0 })
+  const failures = err.url === url ? err.n : 0
   const shape = round ? 'rounded-full' : rounded
-  if (!url || failed) {
+  useEffect(() => {
+    if (!url || failures !== 1) return
+    const id = setTimeout(() => setErr((e) => (e.url === url && e.n === 1 ? { url, n: 0.5 } : e)), ARTWORK_RETRY_MS)
+    return () => clearTimeout(id)
+  }, [url, failures])
+  // n: 0 = loading/ok, 1 = failed once (placeholder, retry pending), 0.5 = retrying, 2 = gave up.
+  if (!url || failures === 1 || failures === 2) {
     return (
       <div
         className={cx('flex items-center justify-center bg-gradient-to-br from-ink-700 to-ink-800 text-fg-subtle', shape, className)}
@@ -44,17 +58,18 @@ export function Artwork({
   }
   return (
     <img
+      key={failures}
       src={url}
       alt={alt}
-      loading="lazy"
+      loading={eager ? 'eager' : 'lazy'}
       decoding="async"
       draggable={false}
       referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
+      onError={() => setErr({ url, n: failures === 0.5 ? 2 : 1 })}
       className={cx('bg-ink-800 object-cover', shape, className)}
     />
   )
-}
+})
 
 export function Spinner({ className }: { className?: string }): ReactNode {
   const t = useT()

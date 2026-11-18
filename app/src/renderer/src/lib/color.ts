@@ -187,25 +187,43 @@ export function paletteAccent(p: ImagePalette | null, source: AccentSource = 'do
 }
 
 const paletteCache = new Map<string, ImagePalette | null>()
+const inflight = new Map<string, Promise<ImagePalette | null>>()
+/** Failed loads are not cached for good (a slow / flaky thumbnail may work a moment later). */
+const failedAt = new Map<string, number>()
+const FAIL_TTL_MS = 15_000
 
 /** Synchronous cache lookup (undefined = not sampled yet). */
 export function cachedPalette(url: string): ImagePalette | null | undefined {
   return paletteCache.get(url)
 }
 
+/** Test hook: forget every cached palette / failure. */
+export function clearPaletteCache(): void {
+  paletteCache.clear()
+  inflight.clear()
+  failedAt.clear()
+}
+
 /**
  * Loads an image (CORS) and samples it once at 48x48 for its palette and
- * luminance. Cached per URL; resolves null when the image can't be read.
+ * luminance. Cached per URL (successes for good, load errors for a short while);
+ * concurrent calls for a URL share one request; resolves null when unreadable.
  */
 export function extractPalette(url: string): Promise<ImagePalette | null> {
   if (paletteCache.has(url)) return Promise.resolve(paletteCache.get(url) ?? null)
-  return new Promise((resolve) => {
+  const failed = failedAt.get(url)
+  if (failed !== undefined && Date.now() - failed < FAIL_TTL_MS) return Promise.resolve(null)
+  const pending = inflight.get(url)
+  if (pending) return pending
+  const p = new Promise<ImagePalette | null>((resolve) => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.decoding = 'async'
-    const done = (p: ImagePalette | null): void => {
-      paletteCache.set(url, p)
-      resolve(p)
+    const done = (pal: ImagePalette | null, loadError = false): void => {
+      inflight.delete(url)
+      if (loadError) failedAt.set(url, Date.now())
+      else paletteCache.set(url, pal)
+      resolve(pal)
     }
     img.onload = () => {
       try {
@@ -221,9 +239,11 @@ export function extractPalette(url: string): Promise<ImagePalette | null> {
         done(null)
       }
     }
-    img.onerror = () => done(null)
+    img.onerror = () => done(null, true)
     img.src = url
   })
+  inflight.set(url, p)
+  return p
 }
 
 /** Loads an image (CORS) and extracts its accent. Falls back gracefully. */
