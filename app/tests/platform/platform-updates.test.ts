@@ -53,7 +53,7 @@ describe('platform: update notifications wiring', () => {
     expect(p.kind).toBe('desktop')
     expect(p.nativeUpdates).toBeNull()
     await expect(p.notifyUpdate!({ version: '2.0.0', url: 'https://s.example/dl' })).resolves.toBe(true)
-    expect(notifyUpdate).toHaveBeenCalledWith({ version: '2.0.0', url: 'https://s.example/dl' })
+    expect(notifyUpdate).toHaveBeenCalledWith({ version: '2.0.0', url: 'https://s.example/dl', locale: 'en' })
 
     notifyUpdate.mockRejectedValueOnce(new Error('ipc'))
     await expect(p.notifyUpdate!({ version: '2.0.0', url: 'https://s.example/dl' })).resolves.toBe(false)

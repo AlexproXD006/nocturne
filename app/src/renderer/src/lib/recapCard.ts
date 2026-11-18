@@ -6,6 +6,7 @@
  */
 import type { RecapData } from './stats'
 import { formatBigMinutes } from './stats'
+import { t } from '../i18n'
 
 export const RECAP_W = 1080
 export const RECAP_H = 1920
@@ -160,10 +161,10 @@ export function drawRecapCard(
   const bigBottom = 262 + 40 + size * 0.86
   ctx.fillStyle = 'rgba(255,255,255,0.9)'
   ctx.font = `700 46px ${FONT}`
-  ctx.fillText('minutes listened', PAD, bigBottom + 62)
+  ctx.fillText(t('recapcard.minutesListened'), PAD, bigBottom + 62)
 
   let y = bigBottom + 62
-  const sub = [`${data.plays.toLocaleString('en-US')} ${data.plays === 1 ? 'play' : 'plays'}`, data.delta?.text].filter(Boolean).join('  ·  ')
+  const sub = [t('common.play', { count: data.plays }), data.delta?.text].filter(Boolean).join('  ·  ')
   ctx.fillStyle = 'rgba(255,255,255,0.58)'
   ctx.font = `500 34px ${FONT}`
   ctx.fillText(sub, PAD, y + 52)
@@ -172,7 +173,7 @@ export function drawRecapCard(
   // Top artists.
   ctx.fillStyle = 'rgba(255,255,255,0.55)'
   ctx.font = `700 30px ${FONT}`
-  ctx.fillText('TOP ARTISTS', PAD, y)
+  ctx.fillText(t('recapcard.topArtists'), PAD, y)
   y += 34
   const rowH = 132
   const photo = 108
@@ -192,7 +193,7 @@ export function drawRecapCard(
     ctx.fillText(ellipsize(ctx, a.name, w - PAD - tx), tx, top + photo / 2 + (i === 0 ? 2 : 0))
     ctx.fillStyle = 'rgba(255,255,255,0.55)'
     ctx.font = `500 30px ${FONT}`
-    ctx.fillText(`${formatBigMinutes(a.minutes)} min`, tx, top + photo / 2 + 42)
+    ctx.fillText(t('recapcard.min', { n: Math.round(a.minutes) }), tx, top + photo / 2 + 42)
   })
   y += count * rowH + 24
 
@@ -202,7 +203,7 @@ export function drawRecapCard(
     ctx.textAlign = 'left'
     ctx.fillStyle = 'rgba(255,255,255,0.55)'
     ctx.font = `700 30px ${FONT}`
-    ctx.fillText('TOP TRACK', PAD, y)
+    ctx.fillText(t('recapcard.topTrack'), PAD, y)
     y += 28
     const cover = 220
     drawPhoto(ctx, images.cover, PAD, y, cover, false, data.topTrack.title, accent)
@@ -216,14 +217,14 @@ export function drawRecapCard(
     ctx.fillText(ellipsize(ctx, data.topTrack.artist, maxW), tx, y + 144)
     ctx.fillStyle = `rgb(${r},${g},${b})`
     ctx.font = `700 32px ${FONT}`
-    ctx.fillText(`${data.topTrack.plays.toLocaleString('en-US')} ${data.topTrack.plays === 1 ? 'play' : 'plays'}`, tx, y + 200)
+    ctx.fillText(t('common.play', { count: data.topTrack.plays }), tx, y + 200)
   }
 
   // Footer.
   ctx.textAlign = 'center'
   ctx.fillStyle = 'rgba(255,255,255,0.4)'
   ctx.font = `500 28px ${FONT}`
-  ctx.fillText('Made with Nocturne', w / 2, h - 70)
+  ctx.fillText(t('recapcard.madeWith'), w / 2, h - 70)
   ctx.textAlign = 'left'
 }
 

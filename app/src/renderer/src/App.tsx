@@ -1,5 +1,6 @@
 import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react'
 import { RotateCw, X } from 'lucide-react'
+import { t, useT } from './i18n'
 import { useSession } from './services'
 import { useNav, type Route } from './store/nav'
 import { useUi } from './store/ui'
@@ -55,13 +56,13 @@ class RouteBoundary extends Component<{ children: ReactNode }, { error: Error | 
     if (!this.state.error) return this.props.children
     return (
       <div className="flex h-full flex-col items-center justify-center">
-        <ErrorState message="Something went wrong while showing this page." />
+        <ErrorState message={t('err.pageCrashed')} />
         <button
           type="button"
           onClick={() => window.location.reload()}
           className="-mt-12 inline-flex items-center gap-2 rounded-full bg-white/8 px-4 py-2 text-sm font-medium hover:bg-white/12"
         >
-          <RotateCw className="h-4 w-4" /> Reload
+          <RotateCw className="h-4 w-4" /> {t('app.reload')}
         </button>
       </div>
     )
@@ -95,18 +96,19 @@ function RouteView({ route, index }: { route: Route; index: number }): ReactNode
 }
 
 function SidePanel(): ReactNode {
+  const t = useT()
   const panel = useUi((s) => s.panel)
   const closePanel = useUi((s) => s.closePanel)
   const track = useNowTrack()
   if (!panel) return null
   return (
     <aside
-      aria-label={panel === 'queue' ? 'Queue' : 'Lyrics'}
+      aria-label={panel === 'queue' ? t('app.queue') : t('app.lyrics')}
       className="app-main g-side fade-up m-2 ml-0 hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-2xl bg-ink-900 md:flex"
     >
       <div className="flex h-14 shrink-0 items-center justify-between pr-2 pl-5">
-        <h2 className="text-base font-bold tracking-tight">{panel === 'queue' ? 'Queue' : 'Lyrics'}</h2>
-        <IconButton label="Close panel" onClick={closePanel} size="sm">
+        <h2 className="text-base font-bold tracking-tight">{panel === 'queue' ? t('app.queue') : t('app.lyrics')}</h2>
+        <IconButton label={t('app.closePanel')} onClick={closePanel} size="sm">
           <X className="h-4 w-4" />
         </IconButton>
       </div>
@@ -178,8 +180,9 @@ function SignedInShell(): ReactNode {
 }
 
 function Splash(): ReactNode {
+  const t = useT()
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 bg-ink-950" role="status" aria-label="Loading Nocturne">
+    <div className="flex h-full flex-col items-center justify-center gap-6 bg-ink-950" role="status" aria-label={t('app.loading')}>
       <Logo className="h-16 w-16" />
       <Spinner />
     </div>
@@ -187,6 +190,7 @@ function Splash(): ReactNode {
 }
 
 export function App(): ReactNode {
+  useT() // re-render the whole tree on language change
   const status = useSession((s) => s.status)
 
   useTheme()

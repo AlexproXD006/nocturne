@@ -11,6 +11,7 @@ import { cx } from '../../../components/common'
 import { Button, Chip, inputClass, useDebounced, type ChipTone } from '../ui'
 import { createPool, findCandidates, selectBest, type SearchFn } from './bulk'
 import { LYRICS_ACCEPT, loadLyricsFile, saveLyrics } from './files'
+import { t as t_, useT } from '../../../i18n'
 
 type Status = 'reading' | 'matching' | 'ready' | 'saving' | 'saved' | 'error' | 'invalid'
 
@@ -33,17 +34,18 @@ let nextId = 1
 
 const search: SearchFn = (q, signal) => api.adminTracks({ q, limit: 8, signal }).then((p) => p.items)
 
-const trackLabel = (t: AdminTrack): string => `${t.title} — ${artistNames(t.artists) || 'Unknown artist'}`
+const trackLabel = (t: AdminTrack): string => `${t.title} — ${artistNames(t.artists) || t_('bulk.unknownArtist')}`
 
 function confidenceChip(item: Item): { tone: ChipTone; label: string } {
-  if (!item.selected) return { tone: 'bad', label: 'No match' }
-  if (item.manual) return { tone: 'accent', label: 'Manual' }
+  if (!item.selected) return { tone: 'bad', label: t_('bulk.noMatch') }
+  if (item.manual) return { tone: 'accent', label: t_('bulk.manual') }
   const c = confidenceOf(item.score)
-  return c === 'auto' ? { tone: 'good', label: 'Auto' } : c === 'review' ? { tone: 'warn', label: 'Review' } : { tone: 'bad', label: 'No match' }
+  return c === 'auto' ? { tone: 'good', label: t_('bulk.auto') } : c === 'review' ? { tone: 'warn', label: t_('bulk.review') } : { tone: 'bad', label: t_('bulk.noMatch') }
 }
 
 /** Inline track search used to pick a match that the automatic search did not offer. */
 function TrackFinder({ onPick, onClose }: { onPick: (t: AdminTrack) => void; onClose: () => void }): ReactNode {
+  const tr = useT()
   const [text, setText] = useState('')
   const q = useDebounced(text.trim(), 300)
   const [results, setResults] = useState<AdminTrack[] | null>(null)
@@ -71,18 +73,18 @@ function TrackFinder({ onPick, onClose }: { onPick: (t: AdminTrack) => void; onC
         <input
           type="search"
           autoFocus
-          aria-label="Search for a track"
-          placeholder="Search by title or artist"
+          aria-label={tr('bulk.searchTrack')}
+          placeholder={tr('bulk.searchPlaceholder')}
           className={`${inputClass} !py-1.5 text-sm`}
           value={text}
           onChange={(e) => setText(e.target.value)}
           autoComplete="off"
           spellCheck={false}
         />
-        <Button size="sm" variant="ghost" aria-label="Close search" onClick={onClose} icon={<X />} />
+        <Button size="sm" variant="ghost" aria-label={tr('bulk.closeSearch')} onClick={onClose} icon={<X />} />
       </div>
       {error && <p role="alert" className="mt-1 text-[13px] text-[#ff9b9b]">{error}</p>}
-      {results && results.length === 0 && <p className="mt-2 px-1 text-[13px] text-fg-muted">No tracks found.</p>}
+      {results && results.length === 0 && <p className="mt-2 px-1 text-[13px] text-fg-muted">{tr('bulk.noTracks')}</p>}
       {results && results.length > 0 && (
         <ul className="mt-1">
           {results.map((t) => (
@@ -116,6 +118,7 @@ function Row({
   onChoose: (t: AdminTrack | null) => void
   onRemove: () => void
 }): ReactNode {
+  const tr = useT()
   const [finding, setFinding] = useState(false)
   const { desc } = item
   const chip = confidenceChip(item)
@@ -129,7 +132,7 @@ function Row({
         <input
           type="checkbox"
           className="mt-1.5 h-4 w-4 shrink-0 accent-[var(--color-accent,#1ed760)]"
-          aria-label={`Save ${item.name}`}
+          aria-label={tr('bulk.saveLabel', { name: item.name })}
           checked={item.checked}
           disabled={!item.selected || !canPick}
           onChange={onToggle}
@@ -139,45 +142,45 @@ function Row({
             <FileText className="h-4 w-4 shrink-0 text-fg-subtle" aria-hidden />
             <p className="min-w-0 truncate text-sm font-semibold" title={item.name}>{item.name}</p>
             {desc && <Chip>{desc.format}</Chip>}
-            {desc?.valid && desc.wordSynced && <Chip tone="accent">Word sync</Chip>}
-            {item.status === 'reading' && <Chip>Reading</Chip>}
+            {desc?.valid && desc.wordSynced && <Chip tone="accent">{tr('bulk.wordSync')}</Chip>}
+            {item.status === 'reading' && <Chip>{tr('bulk.reading')}</Chip>}
             {item.status === 'matching' && (
               <Chip>
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden />
-                Matching
+                {tr('bulk.matching')}
               </Chip>
             )}
             {item.status === 'ready' && <Chip tone={chip.tone}>{chip.label}</Chip>}
-            {item.status === 'saving' && <Chip>Saving</Chip>}
-            {item.status === 'saved' && <Chip tone="good">Saved</Chip>}
-            {item.status === 'error' && <Chip tone="bad">Failed</Chip>}
-            {item.status === 'invalid' && <Chip tone="bad">Invalid</Chip>}
-            {item.selected?.lyrics && !locked && <Chip tone="warn">Replaces {item.selected.lyrics}</Chip>}
-            {duplicate && <Chip tone="warn">Same track as another file</Chip>}
+            {item.status === 'saving' && <Chip>{tr('bulk.saving')}</Chip>}
+            {item.status === 'saved' && <Chip tone="good">{tr('bulk.saved')}</Chip>}
+            {item.status === 'error' && <Chip tone="bad">{tr('bulk.failed')}</Chip>}
+            {item.status === 'invalid' && <Chip tone="bad">{tr('bulk.invalid')}</Chip>}
+            {item.selected?.lyrics && !locked && <Chip tone="warn">{tr('bulk.replaces', { format: item.selected.lyrics })}</Chip>}
+            {duplicate && <Chip tone="warn">{tr('bulk.duplicate')}</Chip>}
           </div>
-          {detected && <p className="mt-0.5 truncate text-[13px] text-fg-muted">Detected: {detected}</p>}
+          {detected && <p className="mt-0.5 truncate text-[13px] text-fg-muted">{tr('bulk.detected', { what: detected })}</p>}
           {item.error && <p className="mt-1 text-[13px] text-[#ff9b9b] [overflow-wrap:anywhere]">{item.error}</p>}
 
           {(item.status === 'ready' || item.status === 'error' || item.status === 'saving' || item.status === 'saved') && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <select
-                aria-label={`Track for ${item.name}`}
+                aria-label={tr('bulk.trackFor', { name: item.name })}
                 className={cx(inputClass, 'min-w-0 flex-1 !py-1.5 text-sm')}
                 value={item.selected?.id ?? ''}
                 disabled={!canPick}
                 onChange={(e) => onChoose(item.candidates.find((c) => c.id === e.target.value) ?? null)}
               >
-                <option value="">No match</option>
+                <option value="">{tr('bulk.noMatch')}</option>
                 {item.candidates.map((c) => (
                   <option key={c.id} value={c.id}>
                     {trackLabel(c)}
-                    {c.lyrics ? ` (has ${c.lyrics})` : ''}
+                    {c.lyrics ? ` (${tr('bulk.has', { format: c.lyrics })})` : ''}
                   </option>
                 ))}
               </select>
               {canPick && (
                 <Button size="sm" variant="ghost" icon={<Search />} onClick={() => setFinding((v) => !v)} aria-expanded={finding}>
-                  Find track
+                  {tr('bulk.find')}
                 </Button>
               )}
             </div>
@@ -193,7 +196,7 @@ function Row({
           )}
         </div>
         {!locked && (
-          <Button size="sm" variant="ghost" icon={<X />} aria-label={`Remove ${item.name}`} onClick={onRemove} />
+          <Button size="sm" variant="ghost" icon={<X />} aria-label={tr('bulk.removeFile', { name: item.name })} onClick={onRemove} />
         )}
       </div>
     </li>
@@ -201,6 +204,7 @@ function Row({
 }
 
 export function BulkImport({ onSaved }: { onSaved: (trackIds: string[]) => void }): ReactNode {
+  const tr = useT()
   const [items, setItems] = useState<Item[]>([])
   const [dragging, setDragging] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -237,10 +241,10 @@ export function BulkImport({ onSaved }: { onSaved: (trackIds: string[]) => void 
       candidates = await findCandidates(loaded.desc, search, signal)
     } catch (err) {
       if (signal.aborted || isAbort(err)) return
-      error = `Search failed: ${describeError(err)}`
+      error = t_('bulk.searchFailed', { error: describeError(err) })
     }
     if (signal.aborted) return
-    if (!loaded.desc.title) error ??= 'No title found in the file or its name — pick the track yourself.'
+    if (!loaded.desc.title) error ??= t_('bulk.noTitle')
     const sel = selectBest(loaded.desc, candidates, AUTO_THRESHOLD)
     patch(id, { status: 'ready', candidates, selected: sel.selected, score: sel.score, checked: sel.checked, error })
   }
@@ -318,8 +322,8 @@ export function BulkImport({ onSaved }: { onSaved: (trackIds: string[]) => void 
       onSaved(saved)
     }
     const ui = useUi.getState()
-    if (saved.length > 0) ui.toast(`Saved lyrics for ${saved.length} ${saved.length === 1 ? 'track' : 'tracks'}${failed ? ` · ${failed} failed` : ''}`)
-    else if (failed > 0) ui.toast(`${failed} ${failed === 1 ? 'file' : 'files'} could not be saved`, 'error')
+    if (saved.length > 0) ui.toast(t_('bulk.savedToast', { count: saved.length }) + (failed ? ` · ${t_('bulk.failedSuffix', { count: failed })}` : ''))
+    else if (failed > 0) ui.toast(t_('bulk.notSaved', { count: failed }), 'error')
   }
 
   const selectAuto = (): void =>
@@ -356,19 +360,19 @@ export function BulkImport({ onSaved }: { onSaved: (trackIds: string[]) => void 
         )}
       >
         <UploadCloud className={cx('h-8 w-8', dragging ? 'text-accent' : 'text-fg-subtle')} strokeWidth={1.5} aria-hidden />
-        <p className="text-sm font-semibold">{dragging ? 'Drop to match' : 'Drag .ttml and .lrc files here'}</p>
+        <p className="text-sm font-semibold">{dragging ? tr('bulk.dropMatch') : tr('bulk.dragHere')}</p>
         <p className="max-w-md text-[13px] text-fg-muted">
-          Files are matched to tracks by their embedded title and artist, or by a name like “Artist - Title.ttml”. You review the matches before anything is saved.
+          {tr('bulk.help')}
         </p>
         <Button className="mt-1" onClick={() => inputRef.current?.click()}>
-          Choose files
+          {tr('bulk.chooseFiles')}
         </Button>
         <input
           ref={inputRef}
           type="file"
           multiple
           accept={LYRICS_ACCEPT}
-          aria-label="Choose lyrics files to import"
+          aria-label={tr('bulk.chooseLabel')}
           className="sr-only"
           tabIndex={-1}
           data-testid="lyrics-bulk-input"
@@ -383,17 +387,17 @@ export function BulkImport({ onSaved }: { onSaved: (trackIds: string[]) => void 
         <div className="mt-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-[13px] text-fg-muted tabular-nums" aria-live="polite">
-              {matching > 0 ? `Matching ${matching} of ${items.length}…` : `${items.length} ${items.length === 1 ? 'file' : 'files'} · ${autoCount} matched automatically`}
+              {matching > 0 ? tr('bulk.matchingProgress', { done: matching, total: items.length }) : tr('bulk.summary', { count: items.length, auto: autoCount })}
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="ghost" icon={<Sparkles />} onClick={selectAuto} disabled={autoCount === 0 || saving}>
-                Select auto matches
+                {tr('bulk.selectAuto')}
               </Button>
               <Button size="sm" variant="ghost" onClick={clearAll} disabled={saving}>
-                Clear
+                {tr('bulk.clear')}
               </Button>
               <Button variant="primary" size="sm" icon={<Check />} busy={saving} disabled={targets.length === 0} onClick={() => void save()}>
-                Save {targets.length}
+                {tr('bulk.saveN', { count: targets.length })}
               </Button>
             </div>
           </div>

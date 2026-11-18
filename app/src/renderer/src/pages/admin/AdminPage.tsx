@@ -14,15 +14,16 @@ import { LyricsTab } from './LyricsTab'
 import { OverviewTab } from './OverviewTab'
 import { UsersTab } from './UsersTab'
 import { useJobs } from './useJobs'
+import { useT, type MessageKey } from '../../i18n'
 
-const TABS: TabDef<AdminTab>[] = [
-  { id: 'overview', label: 'Overview', icon: <LayoutDashboard /> },
-  { id: 'add', label: 'Add music', icon: <Plus /> },
-  { id: 'jobs', label: 'Jobs', icon: <ListChecks /> },
-  { id: 'library', label: 'Library', icon: <Database /> },
-  { id: 'lyrics', label: 'Lyrics', icon: <FileText /> },
-  { id: 'users', label: 'Users', icon: <Users /> },
-  { id: 'backups', label: 'Backups', icon: <Archive /> }
+const TABS: (Omit<TabDef<AdminTab>, 'label'> & { label: MessageKey })[] = [
+  { id: 'overview', label: 'adm.tab.overview', icon: <LayoutDashboard /> },
+  { id: 'add', label: 'adm.tab.add', icon: <Plus /> },
+  { id: 'jobs', label: 'adm.tab.jobs', icon: <ListChecks /> },
+  { id: 'library', label: 'adm.tab.library', icon: <Database /> },
+  { id: 'lyrics', label: 'adm.tab.lyrics', icon: <FileText /> },
+  { id: 'users', label: 'adm.tab.users', icon: <Users /> },
+  { id: 'backups', label: 'adm.tab.backups', icon: <Archive /> }
 ]
 const PREFIX = 'admin'
 
@@ -31,16 +32,18 @@ function isTab(v: unknown): v is AdminTab {
 }
 
 function JobsBadge(): ReactNode {
+  const tr = useT()
   const { active } = useJobs()
   if (active.length === 0) return null
   return (
-    <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-ink-950 tabular-nums" aria-label={`${active.length} active jobs`}>
+    <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-ink-950 tabular-nums" aria-label={tr('adm.activeJobs', { count: active.length })}>
       {active.length}
     </span>
   )
 }
 
 export function AdminPage(): ReactNode {
+  const tr = useT()
   const allowed = useSession(isAdmin)
   const server = useSession((s) => s.server)
   const route = useNav((s) => s.route)
@@ -49,7 +52,7 @@ export function AdminPage(): ReactNode {
   if (!allowed) {
     return (
       <Page>
-        <ErrorState message="You don't have access to this section." />
+        <ErrorState message={tr('adm.noAccess')} />
       </Page>
     )
   }
@@ -61,7 +64,7 @@ export function AdminPage(): ReactNode {
   return (
     <Page>
       <header className="fade-up mb-4 flex flex-wrap items-end gap-x-4 gap-y-1">
-        <h1 className="text-3xl font-extrabold tracking-tight">Admin</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight">{tr('adm.title')}</h1>
         {server && (
           <p className="pb-1 text-sm text-fg-muted">
             {server.name} <span className="text-fg-subtle tabular-nums">v{server.version}</span>
@@ -70,7 +73,7 @@ export function AdminPage(): ReactNode {
       </header>
       <div className="mb-5 flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <Tabs tabs={TABS} value={tab} onChange={select} label="Admin sections" idPrefix={PREFIX} />
+          <Tabs tabs={TABS.map((x) => ({ ...x, label: tr(x.label) }))} value={tab} onChange={select} label={tr('adm.sections')} idPrefix={PREFIX} />
         </div>
         <JobsBadge />
       </div>

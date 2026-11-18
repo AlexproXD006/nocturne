@@ -9,33 +9,37 @@ import { formatBytes, usageFraction } from './format'
 import { JobRow } from './JobRow'
 import { startBackup, startRescan, useJobs } from './useJobs'
 import { Button, Card, ProgressBar, useTick } from './ui'
+import { useT } from '../../i18n'
+import { formatNumber } from '../../i18n/format'
 
 function Tile({ icon, label, value }: { icon: ReactNode; label: string; value: number }): ReactNode {
+  const tr = useT()
   return (
     <div className="g-card fade-up rounded-2xl bg-ink-850 p-4">
       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-fg-muted [&>svg]:h-4 [&>svg]:w-4" aria-hidden>
         {icon}
       </span>
-      <p className="mt-3 text-2xl font-extrabold tracking-tight tabular-nums">{value.toLocaleString()}</p>
-      <p className="text-[13px] text-fg-muted">{label}</p>
+      <p className="mt-3 text-2xl font-extrabold tracking-tight tabular-nums">{formatNumber(value)}</p>
+      <p className="truncate text-[13px] text-fg-muted" title={label}>{label}</p>
     </div>
   )
 }
 
 function StorageCard({ stats }: { stats: AdminStats }): ReactNode {
+  const tr = useT()
   const fraction = usageFraction(stats.storageBytes, stats.freeBytes)
   const pct = fraction === null ? null : Math.round(fraction * 100)
   return (
-    <Card id="storage-title" title="Storage">
+    <Card id="storage-title" title={tr('adm.ov.storage')}>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div>
           <p className="text-2xl font-extrabold tracking-tight tabular-nums">{formatBytes(stats.storageBytes)}</p>
-          <p className="text-[13px] text-fg-muted">Used by the music library</p>
+          <p className="text-[13px] text-fg-muted">{tr('adm.ov.used')}</p>
         </div>
         {stats.freeBytes !== undefined && (
           <div className="text-right">
             <p className="text-2xl font-extrabold tracking-tight tabular-nums">{formatBytes(stats.freeBytes)}</p>
-            <p className="text-[13px] text-fg-muted">Free on the volume</p>
+            <p className="text-[13px] text-fg-muted">{tr('adm.ov.free')}</p>
           </div>
         )}
       </div>
@@ -43,10 +47,10 @@ function StorageCard({ stats }: { stats: AdminStats }): ReactNode {
         <div className="mt-4">
           <ProgressBar
             value={fraction}
-            label="Storage used"
+            label={tr('adm.ov.storageUsed')}
             tone={fraction > 0.95 ? 'bad' : fraction > 0.85 ? 'warn' : 'accent'}
           />
-          <p className="mt-1.5 text-xs text-fg-subtle tabular-nums">{pct}% of the volume is used by the library</p>
+          <p className="mt-1.5 text-xs text-fg-subtle tabular-nums">{tr('adm.ov.pctUsed', { pct: pct ?? 0 })}</p>
         </div>
       )}
     </Card>
@@ -54,6 +58,7 @@ function StorageCard({ stats }: { stats: AdminStats }): ReactNode {
 }
 
 export function OverviewTab({ onNavigate }: { onNavigate: (tab: AdminTab) => void }): ReactNode {
+  const tr = useT()
   const stats = useResource<AdminStats>('admin:stats', (signal) => api.adminStats(signal))
   const { active } = useJobs()
   const now = useTick()
@@ -88,7 +93,7 @@ export function OverviewTab({ onNavigate }: { onNavigate: (tab: AdminTab) => voi
       a.remove()
       setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (e) {
-      setKsError(e instanceof Error ? e.message : 'Download failed')
+      setKsError(e instanceof Error ? e.message : tr('adm.ov.dlFailed'))
     } finally {
       setKsBusy(false)
     }
@@ -102,41 +107,40 @@ export function OverviewTab({ onNavigate }: { onNavigate: (tab: AdminTab) => voi
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <Tile icon={<Music />} label="Tracks" value={s.tracks} />
-        <Tile icon={<Disc3 />} label="Albums" value={s.albums} />
-        <Tile icon={<MicVocal />} label="Artists" value={s.artists} />
-        <Tile icon={<ListMusic />} label="Playlists" value={s.playlists} />
-        <Tile icon={<Users />} label="Users" value={s.users} />
-        <Tile icon={<PlayCircle />} label="Plays" value={s.plays} />
+        <Tile icon={<Music />} label={tr('adm.ov.tracks')} value={s.tracks} />
+        <Tile icon={<Disc3 />} label={tr('adm.ov.albums')} value={s.albums} />
+        <Tile icon={<MicVocal />} label={tr('adm.ov.artists')} value={s.artists} />
+        <Tile icon={<ListMusic />} label={tr('adm.ov.playlists')} value={s.playlists} />
+        <Tile icon={<Users />} label={tr('adm.ov.users')} value={s.users} />
+        <Tile icon={<PlayCircle />} label={tr('adm.ov.plays')} value={s.plays} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <StorageCard stats={s} />
-        <Card id="actions-title" title="Quick actions">
+        <Card id="actions-title" title={tr('adm.ov.quick')}>
           <div className="flex flex-wrap gap-2">
             <Button variant="primary" icon={<Plus />} onClick={() => onNavigate('add')}>
-              Add music
+              {tr('adm.ov.addMusic')}
             </Button>
             <Button icon={<RefreshCw />} busy={busy === 'scan'} onClick={() => run('scan', startRescan)}>
-              Rescan library
+              {tr('adm.ov.rescan')}
             </Button>
             <Button icon={<Archive />} busy={busy === 'backup'} onClick={() => run('backup', startBackup)}>
-              Create backup
+              {tr('adm.ov.backup')}
             </Button>
           </div>
-          <p className="mt-3 text-[13px] text-fg-muted">Rescanning picks up files you copied into the music folder by hand.</p>
+          <p className="mt-3 text-[13px] text-fg-muted">{tr('adm.ov.rescanHint')}</p>
         </Card>
       </div>
 
-      <Card id="signing-title" title="App signing keystore">
+      <Card id="signing-title" title={tr('adm.ov.keystore')}>
         <p className="text-[13px] text-fg-muted">
-          Backup of the Android release signing key. It is needed to publish app updates.{' '}
-          <strong className="text-fg">Keep several copies and never lose it</strong> — if it is lost, you can no longer update the
-          installed app (users would have to reinstall).
+          {tr('adm.ov.keystoreBody')}{' '}
+          <strong className="text-fg">{tr('adm.ov.keystoreWarn')}</strong> — {tr('adm.ov.keystoreWarn2')}
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button icon={<KeyRound />} busy={ksBusy} onClick={() => void downloadKeystore()}>
-            Download keystore backup
+            {tr('adm.ov.keystoreDl')}
           </Button>
         </div>
         {ksError && <p className="mt-2 text-[13px] text-rose-400">{ksError}</p>}
@@ -144,21 +148,21 @@ export function OverviewTab({ onNavigate }: { onNavigate: (tab: AdminTab) => voi
 
       <Card
         id="active-jobs-title"
-        title="Active jobs"
+        title={tr('adm.ov.activeJobs')}
         action={
           <Button size="sm" variant="ghost" onClick={() => onNavigate('jobs')}>
-            View all jobs
+            {tr('adm.ov.viewJobs')}
           </Button>
         }
       >
         {active.length === 0 ? (
-          <p className="py-2 text-sm text-fg-muted">Nothing is running right now.</p>
+          <p className="py-2 text-sm text-fg-muted">{tr('adm.ov.idle')}</p>
         ) : (
           <ul className="space-y-2" aria-live="polite">
             {active.slice(0, 5).map((j) => (
               <JobRow key={j.id} job={j} now={now} compact />
             ))}
-            {active.length > 5 && <li className="px-1 pt-1 text-xs text-fg-subtle">and {active.length - 5} more…</li>}
+            {active.length > 5 && <li className="px-1 pt-1 text-xs text-fg-subtle">{tr('adm.ov.more', { count: active.length - 5 })}</li>}
           </ul>
         )}
       </Card>

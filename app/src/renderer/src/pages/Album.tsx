@@ -8,17 +8,19 @@ import { TrackList } from '../components/TrackList'
 import { formatTotal, plural } from '../lib/format'
 import { HeroHeader, Page, PlayButtons, useTint } from './Page'
 import { AddToPlaylistButton } from '../components/Playlists'
+import { useT, type MessageKey } from '../i18n'
 
-const KIND_LABEL: Record<NonNullable<AlbumDetail['type']>, string> = {
-  album: 'Album',
-  single: 'Single',
-  ep: 'EP',
-  compilation: 'Compilation'
+const KIND_LABEL: Record<NonNullable<AlbumDetail['type']>, MessageKey> = {
+  album: 'album.album',
+  single: 'album.single',
+  ep: 'album.ep',
+  compilation: 'album.compilation'
 }
 
 export function PageSkeleton({ round = false }: { round?: boolean }): ReactNode {
+  const tr = useT()
   return (
-    <div aria-busy="true" aria-label="Loading">
+    <div aria-busy="true" aria-label={tr('ui.loading')}>
       <div className="flex flex-col items-center gap-6 pt-2 md:flex-row md:items-end">
         <div className={`skeleton h-48 w-48 shrink-0 md:h-56 md:w-56 ${round ? 'rounded-full' : 'rounded-lg'}`} />
         <div className="w-full max-w-md space-y-3">
@@ -37,6 +39,7 @@ export function PageSkeleton({ round = false }: { round?: boolean }): ReactNode 
 }
 
 export function AlbumPage({ id }: { id: string }): ReactNode {
+  const tr = useT()
   const res = useResource<AlbumDetail>(`album:${id}`, (s) => api.album(id, s))
   const go = useNav((s) => s.go)
   const album = res.data
@@ -68,7 +71,7 @@ export function AlbumPage({ id }: { id: string }): ReactNode {
       {album.year ? <span>{album.year}</span> : null}
       <span aria-hidden>•</span>
       <span>
-        {plural(count, 'song')}
+        {plural(count)}
         {total > 0 && <span className="text-fg-muted">, {formatTotal(total)}</span>}
       </span>
     </p>
@@ -76,7 +79,7 @@ export function AlbumPage({ id }: { id: string }): ReactNode {
 
   return (
     <Page tint={tint}>
-      <HeroHeader images={album.artwork} kind={KIND_LABEL[album.type ?? 'album']} title={album.title} meta={meta} />
+      <HeroHeader images={album.artwork} kind={tr(KIND_LABEL[album.type ?? 'album'])} title={album.title} meta={meta} />
       <PlayButtons tracks={album.tracks} context={context}>
         <AddToPlaylistButton tracks={album.tracks} label={album.title} size="lg" />
       </PlayButtons>

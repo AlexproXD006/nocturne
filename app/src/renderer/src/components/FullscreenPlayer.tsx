@@ -17,16 +17,18 @@ import { LyricsView } from './LyricsView'
 import { QueuePanel } from './QueuePanel'
 import { Visualizer } from './Visualizer'
 import { AddToPlaylistButton } from './Playlists'
+import { useT, type MessageKey } from '../i18n'
 
-const STYLES: { id: VisualizerStyle; label: string; icon: ReactNode }[] = [
-  { id: 'aurora', label: 'Aurora', icon: <Sparkles className="h-4 w-4" /> },
-  { id: 'spectrum', label: 'Spectrum ring', icon: <Waves className="h-4 w-4" /> },
-  { id: 'minimal', label: 'Minimal', icon: <CircleDot className="h-4 w-4" /> }
+const STYLES: { id: VisualizerStyle; label: MessageKey; icon: ReactNode }[] = [
+  { id: 'aurora', label: 'vis.aurora', icon: <Sparkles className="h-4 w-4" /> },
+  { id: 'spectrum', label: 'vis.spectrum', icon: <Waves className="h-4 w-4" /> },
+  { id: 'minimal', label: 'vis.minimal', icon: <CircleDot className="h-4 w-4" /> }
 ]
 
 type MobileTab = 'player' | 'lyrics' | 'queue'
 
 export function FullscreenPlayer(): ReactNode {
+  const tr = useT()
   const track = useNowTrack()
   const remote = useIsRemote()
   const setFullscreen = useUi((s) => s.setFullscreen)
@@ -77,7 +79,7 @@ export function FullscreenPlayer(): ReactNode {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Now playing"
+      aria-label={tr('fs.nowPlaying')}
       onPointerMove={wake}
       onPointerDown={wake}
       className={cx('fs-open fixed inset-0 z-50 flex flex-col overflow-hidden bg-ink-950 text-fg fade-up', idle && 'cursor-none')}
@@ -104,16 +106,16 @@ export function FullscreenPlayer(): ReactNode {
           idle && 'opacity-0'
         )}
       >
-        <IconButton label="Close now playing" onClick={close}>
+        <IconButton label={tr('fs.close')} onClick={close}>
           <ChevronDown className="h-6 w-6" />
         </IconButton>
         <p className="truncate px-4 text-center text-xs font-semibold tracking-widest text-fg/70 uppercase">
-          {contextName ?? 'Now playing'}
+          {contextName ?? tr('fs.nowPlaying')}
         </p>
         <div className="no-drag flex items-center gap-1">
           <DevicesButton onClick={() => useDevicesUi.getState().show('sheet')} />
           {STYLES.map((s) => (
-            <IconButton key={s.id} label={`Visualizer: ${s.label}`} active={visualizer === s.id} onClick={() => update({ visualizer: s.id })} size="sm">
+            <IconButton key={s.id} label={tr('fs.visualizer', { name: tr(s.label) })} active={visualizer === s.id} onClick={() => update({ visualizer: s.id })} size="sm">
               {s.icon}
             </IconButton>
           ))}
@@ -121,14 +123,14 @@ export function FullscreenPlayer(): ReactNode {
       </header>
 
       {/* Mobile tabs */}
-      <nav className="g-seg relative z-10 mx-auto mb-2 flex gap-1 rounded-full bg-white/8 p-1 lg:hidden" aria-label="Now playing views">
+      <nav className="g-seg relative z-10 mx-auto mb-2 flex gap-1 rounded-full bg-white/8 p-1 lg:hidden" aria-label={tr('fs.views')}>
         {(['player', 'lyrics', 'queue'] as MobileTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={cx('rounded-full px-4 py-1.5 text-sm font-medium capitalize transition', tab === t ? 'bg-white/15 text-fg' : 'text-fg-muted')}
           >
-            {t === 'player' ? 'Song' : t}
+            {t === 'player' ? tr('fs.song') : tr(t === 'lyrics' ? 'app.lyrics' : 'app.queue')}
           </button>
         ))}
       </nav>
@@ -183,10 +185,10 @@ export function FullscreenPlayer(): ReactNode {
             width (long queue titles), pushing the queue off-screen instead of truncating it. */}
         <section className={cx('min-h-0 min-w-0 flex-1 flex-col lg:flex', tab === 'player' ? 'hidden' : 'flex')}>
           <div className={cx('mb-2 hidden gap-1 self-end transition-opacity duration-500 lg:flex', idle && 'opacity-0')}>
-            <IconButton label="Lyrics" active={sidePane === 'lyrics'} onClick={() => setSidePane('lyrics')} size="sm">
+            <IconButton label={tr('app.lyrics')} active={sidePane === 'lyrics'} onClick={() => setSidePane('lyrics')} size="sm">
               <Mic2 className="h-4 w-4" />
             </IconButton>
-            <IconButton label="Queue" active={sidePane === 'queue'} onClick={() => setSidePane('queue')} size="sm">
+            <IconButton label={tr('app.queue')} active={sidePane === 'queue'} onClick={() => setSidePane('queue')} size="sm">
               <ListMusic className="h-4 w-4" />
             </IconButton>
           </div>

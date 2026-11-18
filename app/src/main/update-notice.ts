@@ -8,6 +8,17 @@ export interface UpdateNotice {
   body: string
 }
 
+/** Notification text per UI language (the renderer sends its active language as `locale`; unknown values fall back to English). */
+const NOTICE_TEXT = {
+  en: { title: (v: string) => `Nocturne ${v} available`, body: 'Click to download the update' },
+  es: { title: (v: string) => `Nocturne ${v} disponible`, body: 'Haz clic para descargar la actualización' }
+} as const
+
+function localeOf(raw: unknown): keyof typeof NOTICE_TEXT {
+  const base = typeof raw === 'string' ? raw.toLowerCase().split(/[-_]/)[0] : ''
+  return base === 'es' ? 'es' : 'en'
+}
+
 const VERSION_RE = /^v?[0-9A-Za-z.+-]{1,64}$/
 
 /**
@@ -20,5 +31,6 @@ export function parseUpdateNotice(raw: unknown): UpdateNotice | null {
   if (typeof version !== 'string' || !VERSION_RE.test(version.trim())) return null
   if (!isSafeExternalUrl(url)) return null
   const v = version.trim()
-  return { version: v, url, title: `Nocturne ${v} available`, body: 'Click to download the update' }
+  const text = NOTICE_TEXT[localeOf((raw as { locale?: unknown }).locale)]
+  return { version: v, url, title: text.title(v), body: text.body }
 }

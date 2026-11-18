@@ -7,6 +7,7 @@ import { useUi } from '../../store/ui'
 import { detectSource } from './format'
 import { SOURCE_LABEL } from './SourceSearch'
 import { Button, Card, Field, InlineError, inputClass } from './ui'
+import { t, useT } from '../../i18n'
 
 function useLinkForm(sources: AdminSource[], run: (url: string, source: AdminSource) => Promise<AdminJob>, doneMessage: string, upsert: (j: AdminJob) => void) {
   const [value, setValue] = useState('')
@@ -18,9 +19,9 @@ function useLinkForm(sources: AdminSource[], run: (url: string, source: AdminSou
   const problem = !value.trim()
     ? null
     : !detected
-      ? 'That doesn’t look like a Spotify or YouTube link.'
+      ? t('link.invalid')
       : unsupported
-        ? `This server can’t fetch from ${SOURCE_LABEL[detected.source]}.`
+        ? t('link.unsupported', { source: SOURCE_LABEL[detected.source] })
         : null
 
   const submit = async (e: FormEvent): Promise<void> => {
@@ -49,7 +50,8 @@ function LinkForm({ id, label, placeholder, buttonLabel, icon, form }: {
   icon: ReactNode
   form: ReturnType<typeof useLinkForm>
 }): ReactNode {
-  const hint = form.problem ?? (form.detected ? `${SOURCE_LABEL[form.detected.source]} link detected` : undefined)
+  const tr = useT()
+  const hint = form.problem ?? (form.detected ? tr('link.detected', { source: SOURCE_LABEL[form.detected.source] }) : undefined)
   return (
     <form onSubmit={(e) => void form.submit(e)} noValidate>
       <Field label={label} htmlFor={id} hint={<span className={form.problem ? 'text-[#ff9b9b]' : undefined}>{hint}</span>}>
@@ -78,17 +80,18 @@ function LinkForm({ id, label, placeholder, buttonLabel, icon, form }: {
 }
 
 export function LinkImport({ sources, upsert }: { sources: AdminSource[]; upsert: (job: AdminJob) => void }): ReactNode {
+  const tr = useT()
   const linkId = useId()
   const importId = useId()
-  const link = useLinkForm(sources, (url, source) => api.adminStartDownload({ source, url }), 'Download queued', upsert)
-  const playlist = useLinkForm(sources, (url) => api.adminImportPlaylist(url), 'Playlist import queued', upsert)
+  const link = useLinkForm(sources, (url, source) => api.adminStartDownload({ source, url }), t('link.downloadQueued'), upsert)
+  const playlist = useLinkForm(sources, (url) => api.adminImportPlaylist(url), t('link.importQueued'), upsert)
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card id="paste-title" title="Paste a link">
-        <LinkForm id={linkId} label="Song or album link" placeholder="https://open.spotify.com/track/…" buttonLabel="Download" icon={<Link2 />} form={link} />
+      <Card id="paste-title" title={tr('link.pasteTitle')}>
+        <LinkForm id={linkId} label={tr('link.songLabel')} placeholder="https://open.spotify.com/track/…" buttonLabel={tr('link.download')} icon={<Link2 />} form={link} />
       </Card>
-      <Card id="import-title" title="Import a playlist">
-        <LinkForm id={importId} label="Playlist link" placeholder="https://music.youtube.com/playlist?list=…" buttonLabel="Import" icon={<ListPlus />} form={playlist} />
+      <Card id="import-title" title={tr('link.importTitle')}>
+        <LinkForm id={importId} label={tr('link.playlistLabel')} placeholder="https://music.youtube.com/playlist?list=…" buttonLabel={tr('link.import')} icon={<ListPlus />} form={playlist} />
       </Card>
     </div>
   )

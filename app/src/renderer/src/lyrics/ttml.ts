@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import type { LyricLine, LyricWord, ParsedLyrics } from './lrc'
 
 /** Largest TTML / LRC document accepted (matches the server limit). */
@@ -36,27 +37,27 @@ function utf8Length(s: string): number {
 
 /** Returns a rejection reason, or null when the raw document is acceptable to parse. */
 function precheck(xml: unknown): string | null {
-  if (typeof xml !== 'string' || xml.trim() === '') return 'The file is empty.'
-  if (utf8Length(xml) > MAX_LYRICS_BYTES) return 'The file is larger than 1 MiB.'
-  if (DOCTYPE_OR_ENTITY.test(xml)) return 'DOCTYPE and ENTITY declarations are not allowed.'
+  if (typeof xml !== 'string' || xml.trim() === '') return t('lfile.empty')
+  if (utf8Length(xml) > MAX_LYRICS_BYTES) return t('lfile.tooBig')
+  if (DOCTYPE_OR_ENTITY.test(xml)) return t('lfile.doctype')
   return null
 }
 
 function loadDocument(xml: string): { doc: Document } | { error: string } {
   const bad = precheck(xml)
   if (bad) return { error: bad }
-  if (typeof DOMParser === 'undefined') return { error: 'XML parsing is not available here.' }
+  if (typeof DOMParser === 'undefined') return { error: t('lfile.noXml') }
   let doc: Document
   try {
     doc = new DOMParser().parseFromString(xml, 'application/xml')
   } catch {
-    return { error: 'The file is not well-formed XML.' }
+    return { error: t('lfile.badXml') }
   }
   const root = doc.documentElement
   if (!root || root.localName === 'parsererror' || doc.getElementsByTagName('parsererror').length > 0) {
-    return { error: 'The file is not well-formed XML.' }
+    return { error: t('lfile.badXml') }
   }
-  if (root.localName !== 'tt') return { error: 'The root element must be <tt>.' }
+  if (root.localName !== 'tt') return { error: t('lfile.badRoot') }
   return { doc }
 }
 
@@ -595,7 +596,7 @@ export function inspectTtml(xml: string): TtmlInspection {
     lyrics = buildLyrics(root)
     metadata = metadataOf(root)
   } catch {
-    return { error: 'The TTML could not be read.', lyrics: EMPTY, metadata: {}, timedParagraphs }
+    return { error: t('lfile.ttmlUnreadable'), lyrics: EMPTY, metadata: {}, timedParagraphs }
   }
   return { lyrics, metadata, timedParagraphs }
 }
@@ -619,7 +620,7 @@ export function readTtmlMetadata(xml: string): TtmlMetadata {
 export function validateTtml(xml: string): ValidationResult {
   const r = inspectTtml(xml)
   if (r.error) return { ok: false, message: r.error }
-  if (r.timedParagraphs === 0) return { ok: false, message: 'The TTML needs at least one <p> with a begin time.' }
+  if (r.timedParagraphs === 0) return { ok: false, message: t('lfile.ttmlNeedsP') }
   return { ok: true }
 }
 
@@ -627,8 +628,8 @@ const LRC_STAMP = /\[\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?\]/
 
 /** Same acceptance rules as the server (§6): at least one [mm:ss.xx] timestamp, at most 1 MiB. */
 export function validateLrc(text: string): ValidationResult {
-  if (typeof text !== 'string' || text.trim() === '') return { ok: false, message: 'The file is empty.' }
-  if (utf8Length(text) > MAX_LYRICS_BYTES) return { ok: false, message: 'The file is larger than 1 MiB.' }
-  if (!LRC_STAMP.test(text)) return { ok: false, message: 'No [mm:ss.xx] timestamps found in the LRC file.' }
+  if (typeof text !== 'string' || text.trim() === '') return { ok: false, message: t('lfile.empty') }
+  if (utf8Length(text) > MAX_LYRICS_BYTES) return { ok: false, message: t('lfile.tooBig') }
+  if (!LRC_STAMP.test(text)) return { ok: false, message: t('lfile.noStamps') }
   return { ok: true }
 }

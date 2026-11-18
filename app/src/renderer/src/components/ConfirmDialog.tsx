@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 import { describeError } from '../api/errors'
+import { useT } from '../i18n'
 import { Modal } from './Modal'
 
 export interface ConfirmDialogProps {
@@ -19,13 +20,14 @@ export interface ConfirmDialogProps {
 export function ConfirmDialog({
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   tone = 'default',
   requireText,
   onConfirm,
   onClose
 }: ConfirmDialogProps): ReactNode {
+  const t = useT()
   const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +67,7 @@ export function ConfirmDialog({
             onClick={onClose}
             className="h-10 rounded-full bg-white/[0.08] px-5 text-sm font-semibold hover:bg-white/[0.14] disabled:opacity-50"
           >
-            {cancelLabel}
+            {cancelLabel ?? t('common.cancel')}
           </button>
           <button
             type="submit"
@@ -76,7 +78,7 @@ export function ConfirmDialog({
             }`}
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            {confirmLabel}
+            {confirmLabel ?? t('ui.confirm')}
           </button>
         </>
       }
@@ -85,7 +87,7 @@ export function ConfirmDialog({
         {requireText && (
           <div>
             <label htmlFor={inputId} className="mb-1.5 block text-xs font-semibold text-fg-muted">
-              Type <span className="font-mono text-fg">{requireText}</span> to confirm
+              {t('ui.typeToConfirm', { text: '\u0000' }).split('\u0000').flatMap((part, i) => (i === 0 ? [part] : [<span key="t" className="font-mono text-fg">{requireText}</span>, part]))}
             </label>
             <input
               id={inputId}

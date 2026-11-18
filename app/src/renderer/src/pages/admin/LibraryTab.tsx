@@ -14,15 +14,18 @@ import { formatBytes, relativeTime } from './format'
 import { LyricsEditDialog } from './LyricsEditDialog'
 import type { EditFormat } from './lyrics/edit'
 import { Card, Chip, inputClass, useDebounced, useTick } from './ui'
+import { useT } from '../../i18n'
+import { formatNumber } from '../../i18n/format'
 
 function TrackRow({ t, now, onDelete, onEditLyrics }: { t: AdminTrack; now: number; onDelete: () => void; onEditLyrics: () => void }): ReactNode {
+  const tr = useT()
   const play = (): void => void playback.playTracks([t], 0, { type: 'tracks', name: 'Admin library' })
   return (
     <li className="flex items-center gap-3 rounded-xl p-2 hover:bg-white/[0.04]">
       <button
         type="button"
         onClick={play}
-        aria-label={`Play ${t.title}`}
+        aria-label={tr('card.play', { title: t.title })}
         className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-lg"
       >
         <Artwork images={t.artwork} size={44} className="h-11 w-11" />
@@ -33,30 +36,30 @@ function TrackRow({ t, now, onDelete, onEditLyrics }: { t: AdminTrack; now: numb
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <p className="truncate text-sm font-semibold" title={t.title}>{t.title}</p>
-          {t.lyrics && <Chip tone="accent" className="!px-1.5 !py-px !text-[10px]"><span className="sr-only">Lyrics: </span>{t.lyrics.toUpperCase()}</Chip>}
+          {t.lyrics && <Chip tone="accent" className="!px-1.5 !py-px !text-[10px]"><span className="sr-only">{tr('albl.lyrics')} </span>{t.lyrics.toUpperCase()}</Chip>}
         </div>
         <p className="truncate text-[13px] text-fg-muted">
-          {artistNames(t.artists) || 'Unknown artist'}
+          {artistNames(t.artists) || tr('albl.unknownArtist')}
           {t.album ? ` · ${t.album.title}` : ''}
         </p>
         <p className="mt-0.5 text-xs text-fg-subtle tabular-nums md:hidden">
-          {[t.format?.toUpperCase(), t.sizeBytes ? formatBytes(t.sizeBytes) : '', `${(t.playCount ?? 0).toLocaleString()} plays`].filter(Boolean).join(' · ')}
+          {[t.format?.toUpperCase(), t.sizeBytes ? formatBytes(t.sizeBytes) : '', tr('albl.playsN', { count: t.playCount ?? 0 })].filter(Boolean).join(' · ')}
         </p>
       </div>
       <div className="hidden shrink-0 items-center gap-5 text-[13px] text-fg-muted tabular-nums md:flex">
         {t.format && <Chip>{t.format}</Chip>}
         <span className="w-10 text-right">{formatTime(t.duration)}</span>
         <span className="w-16 text-right">{t.sizeBytes ? formatBytes(t.sizeBytes) : '—'}</span>
-        <span className="w-16 text-right" title="Plays">{(t.playCount ?? 0).toLocaleString()} ▶</span>
+        <span className="w-16 text-right" title={tr('albl.plays')}>{formatNumber(t.playCount ?? 0)} ▶</span>
         <span className="w-20 text-right">{relativeTime(t.addedAt, now) || '—'}</span>
       </div>
-      <IconButton label={`Edit lyrics for ${t.title}`} size="sm" onClick={onEditLyrics}>
+      <IconButton label={tr('albl.editLyrics', { title: t.title })} size="sm" onClick={onEditLyrics}>
         <PencilLine className="h-4 w-4" />
       </IconButton>
-      <IconButton label={`Manage lyrics for ${t.title}`} size="sm" onClick={() => useNav.getState().go({ name: 'admin', tab: 'lyrics' })}>
+      <IconButton label={tr('albl.manageLyrics', { title: t.title })} size="sm" onClick={() => useNav.getState().go({ name: 'admin', tab: 'lyrics' })}>
         <FileText className="h-4 w-4" />
       </IconButton>
-      <IconButton label={`Delete ${t.title}`} size="sm" onClick={onDelete} className="hover:text-[#ff8f93]">
+      <IconButton label={tr('albl.delete', { title: t.title })} size="sm" onClick={onDelete} className="hover:text-[#ff8f93]">
         <Trash2 className="h-4 w-4" />
       </IconButton>
     </li>
@@ -64,6 +67,7 @@ function TrackRow({ t, now, onDelete, onEditLyrics }: { t: AdminTrack; now: numb
 }
 
 export function LibraryTab(): ReactNode {
+  const tr = useT()
   const [query, setQuery] = useState('')
   const q = useDebounced(query.trim(), 300)
   const paged = usePaged<AdminTrack>(`admin-tracks:${q}`, (offset, limit, signal) => api.adminTracks({ q: q || undefined, offset, limit, signal }), 50)
@@ -81,7 +85,7 @@ export function LibraryTab(): ReactNode {
     try {
       await api.adminDeleteTrack(t.id)
       resources.invalidate('')
-      useUi.getState().toast(`Deleted “${t.title}”`)
+      useUi.getState().toast(tr('albl.deleted', { title: t.title }))
     } catch (err) {
       setRemoved((s) => {
         const n = new Set(s)
@@ -93,22 +97,22 @@ export function LibraryTab(): ReactNode {
   }
 
   return (
-    <Card id="library-title" title="Library" action={<span className="text-[13px] text-fg-muted tabular-nums">{paged.loading && items.length === 0 ? '' : `${total.toLocaleString()} ${total === 1 ? 'track' : 'tracks'}`}</span>}>
+    <Card id="library-title" title={tr('albl.title')} action={<span className="text-[13px] text-fg-muted tabular-nums">{paged.loading && items.length === 0 ? '' : tr('albl.trackCount', { count: total })}</span>}>
       <div className="relative mb-3">
         <Search className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
         <input
           type="search"
           role="searchbox"
-          aria-label="Search the library"
+          aria-label={tr('albl.searchLabel')}
           className={`${inputClass} pl-11`}
-          placeholder="Search by title, artist or album"
+          placeholder={tr('albl.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoComplete="off"
           spellCheck={false}
         />
         {query && (
-          <button type="button" aria-label="Clear search" onClick={() => setQuery('')} className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1.5 text-fg-subtle hover:text-fg">
+          <button type="button" aria-label={tr('search.clear')} onClick={() => setQuery('')} className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1.5 text-fg-subtle hover:text-fg">
             <X className="h-4 w-4" />
           </button>
         )}
@@ -119,7 +123,7 @@ export function LibraryTab(): ReactNode {
       ) : paged.loading && items.length === 0 ? (
         <div className="flex justify-center py-16"><Spinner /></div>
       ) : items.length === 0 ? (
-        <EmptyState icon={<Music className="h-8 w-8" strokeWidth={1.5} />} title={q ? 'No matching tracks' : 'The library is empty'} hint={q ? `Nothing matched “${q}”.` : 'Add music from the “Add music” tab.'} />
+        <EmptyState icon={<Music className="h-8 w-8" strokeWidth={1.5} />} title={q ? tr('albl.noMatch') : tr('albl.empty')} hint={q ? tr('albl.nothingMatched', { q }) : tr('albl.addFromTab')} />
       ) : (
         <>
           <ul>
@@ -144,10 +148,10 @@ export function LibraryTab(): ReactNode {
 
       {pending && (
         <ConfirmDialog
-          title="Delete this track?"
+          title={tr('albl.deleteQ')}
           tone="danger"
-          confirmLabel="Delete track"
-          message={<>“{pending.title}” will be removed from the server along with its file and any playlist entries. This can’t be undone.</>}
+          confirmLabel={tr('albl.deleteConfirm')}
+          message={tr('albl.deleteMsg', { title: pending.title })}
           onConfirm={() => void remove(pending)}
           onClose={() => setPending(null)}
         />

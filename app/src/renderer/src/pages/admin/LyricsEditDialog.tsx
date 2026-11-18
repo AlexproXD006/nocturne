@@ -9,6 +9,8 @@ import { artistNames } from '../../lib/format'
 import { Button, inputClass } from './ui'
 import { removeLyrics, saveLyrics } from './lyrics/files'
 import { EDIT_FILE_ACCEPT, EDIT_MAX_BYTES, checkEditLyrics, detectEditFormat, type EditFormat } from './lyrics/edit'
+import { useT } from '../../i18n'
+import { formatNumber } from '../../i18n/format'
 
 /**
  * Admin "Edit lyrics" dialog: paste text or pick a .lrc / .txt file, preview, save or remove.
@@ -24,6 +26,7 @@ export function LyricsEditDialog({
   /** Called after lyrics were saved or removed. */
   onChanged?: (stored: EditFormat | null) => void
 }): ReactNode {
+  const tr = useT()
   const stored = track.lyrics ?? null
   const [text, setText] = useState('')
   const [format, setFormat] = useState<EditFormat>('plain')
@@ -57,7 +60,7 @@ export function LyricsEditDialog({
   const onFile = async (file: File): Promise<void> => {
     setError(null)
     if (file.size > EDIT_MAX_BYTES) {
-      setError('The file is larger than 200 KB.')
+      setError(tr('led.fileTooBig'))
       return
     }
     try {
@@ -65,7 +68,7 @@ export function LyricsEditDialog({
       setText(content)
       setAuto(true)
     } catch {
-      setError('Could not read the file.')
+      setError(tr('lfile.unreadable'))
     }
   }
 
@@ -75,7 +78,7 @@ export function LyricsEditDialog({
     setError(null)
     try {
       await saveLyrics(track.id, effective, text)
-      useUi.getState().toast(`Saved lyrics for “${track.title}”`)
+      useUi.getState().toast(tr('led.saved', { title: track.title }))
       onChanged?.(effective)
       onClose()
     } catch (err) {
@@ -90,7 +93,7 @@ export function LyricsEditDialog({
     setError(null)
     try {
       await removeLyrics(track.id)
-      useUi.getState().toast(`Removed lyrics from “${track.title}”`)
+      useUi.getState().toast(tr('ly.removed', { title: track.title }))
       onChanged?.(null)
       onClose()
     } catch (err) {
@@ -101,39 +104,39 @@ export function LyricsEditDialog({
 
   return (
     <Modal
-      title="Edit lyrics"
+      title={tr('led.title')}
       size="md"
       dismissible={!busy}
       onClose={onClose}
       description={
         <>
-          {track.title} &middot; {artistNames(track.artists) || 'Unknown artist'}
+          {track.title} &middot; {artistNames(track.artists) || tr('ly.unknownArtist')}
         </>
       }
       footer={
         <>
           {stored && (
             <Button variant="danger" icon={<Trash2 />} busy={busy === 'remove'} disabled={busy === 'save'} onClick={() => void remove()} className="mr-auto">
-              Remove lyrics
+              {tr('led.remove')}
             </Button>
           )}
           <Button onClick={onClose} disabled={busy !== null}>
-            Cancel
+            {tr('common.cancel')}
           </Button>
           <Button variant="primary" busy={busy === 'save'} disabled={!check.ok || busy === 'remove' || loading} onClick={() => void save()}>
-            Save lyrics
+            {tr('led.save')}
           </Button>
         </>
       }
     >
       <div className="space-y-3">
-        {stored === 'ttml' && <p className="text-[13px] text-fg-muted">This track has TTML lyrics. Saving here replaces them.</p>}
+        {stored === 'ttml' && <p className="text-[13px] text-fg-muted">{tr('led.hasTtml')}</p>}
         <div className="flex flex-wrap items-center gap-2">
           <input
             ref={fileRef}
             type="file"
             accept={EDIT_FILE_ACCEPT}
-            aria-label="Choose a lyrics file"
+            aria-label={tr('ly.chooseFile')}
             className="sr-only"
             tabIndex={-1}
             data-testid="lyrics-edit-file"
@@ -144,9 +147,9 @@ export function LyricsEditDialog({
             }}
           />
           <Button size="sm" icon={<FileUp />} onClick={() => fileRef.current?.click()}>
-            Choose .lrc file
+            {tr('led.chooseLrc')}
           </Button>
-          <div role="radiogroup" aria-label="Lyrics format" className="ml-auto inline-flex rounded-full bg-white/[0.08] p-0.5 text-[13px] font-semibold">
+          <div role="radiogroup" aria-label={tr('led.format')} className="ml-auto inline-flex rounded-full bg-white/[0.08] p-0.5 text-[13px] font-semibold">
             {(['lrc', 'plain'] as const).map((f) => (
               <button
                 key={f}
@@ -159,13 +162,13 @@ export function LyricsEditDialog({
                 }}
                 className={`rounded-full px-3 py-1 ${effective === f ? 'bg-accent text-ink-950' : 'text-fg-muted hover:text-fg'}`}
               >
-                {f === 'lrc' ? 'Synced (LRC)' : 'Plain text'}
+                {f === 'lrc' ? tr('led.synced') : tr('led.plain')}
               </button>
             ))}
           </div>
         </div>
         <label htmlFor={areaId} className="sr-only">
-          Lyrics text
+          {tr('led.text')}
         </label>
         <textarea
           id={areaId}
@@ -175,16 +178,16 @@ export function LyricsEditDialog({
           onChange={(e) => setText(e.target.value)}
           rows={9}
           spellCheck={false}
-          placeholder={'Paste lyrics here.\n[00:12.50] Synced lines start with a timestamp\nOr plain text, one line per row.'}
+          placeholder={tr('led.placeholder')}
           className={`${inputClass} resize-y font-mono text-[13px] leading-relaxed`}
         />
-        <div aria-label="Preview" data-testid="lyrics-edit-preview" className="rounded-xl bg-ink-900 p-3 text-[13px]">
+        <div aria-label={tr('led.preview')} data-testid="lyrics-edit-preview" className="rounded-xl bg-ink-900 p-3 text-[13px]">
           {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-fg-muted" aria-label="Loading" />
+            <Loader2 className="h-4 w-4 animate-spin text-fg-muted" aria-label={tr('ui.loading')} />
           ) : check.preview.length ? (
             <>
               <p className="mb-1.5 text-xs text-fg-subtle tabular-nums">
-                {check.lines} lines &middot; {(check.bytes / 1024).toFixed(1)} KB &middot; {effective === 'lrc' ? 'time-synced' : 'plain text'}
+                {tr('led.stats', { lines: check.lines, count: check.lines, kb: formatNumber(check.bytes / 1024, { minimumFractionDigits: 1, maximumFractionDigits: 1 }), kind: effective === 'lrc' ? tr('led.timeSynced') : tr('led.plainKind') })}
               </p>
               <ul className="space-y-0.5 text-fg-muted">
                 {check.preview.map((l, i) => (
@@ -195,7 +198,7 @@ export function LyricsEditDialog({
               </ul>
             </>
           ) : (
-            <p className="text-fg-subtle">Nothing to preview yet.</p>
+            <p className="text-fg-subtle">{tr('led.nothing')}</p>
           )}
         </div>
         <p role="alert" className={`min-h-5 text-sm text-[#ff9b9b] ${error || (text && check.error) ? '' : 'sr-only'}`}>

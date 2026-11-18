@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { readJson, writeJson } from '../lib/storage'
+import { isLanguagePref, setLanguagePref, type LanguagePref, type MessageKey } from '../i18n'
 import { applyAdaptivePatch, DEFAULT_ADAPTIVE, sanitizeAdaptive, type AdaptiveSettings } from '../lib/adaptive'
 
 export type { AdaptiveSettings } from '../lib/adaptive'
@@ -24,31 +25,31 @@ export type AccentPresetId = 'coral' | 'purple' | 'blue' | 'green' | 'pink' | 'a
 export type AccentId = 'adaptive' | AccentPresetId
 
 /** Selectable interface themes, in display order. */
-export const THEMES: { id: ThemeId; label: string }[] = [
-  { id: 'glass', label: 'Midnight Glass' },
-  { id: 'dark', label: 'Dark' },
-  { id: 'adaptive', label: 'Adaptive' },
-  { id: 'oled', label: 'OLED' },
-  { id: 'dim', label: 'Dim' },
-  { id: 'midnight', label: 'Midnight' },
-  { id: 'dracula', label: 'Dracula' },
-  { id: 'nord', label: 'Nord' },
-  { id: 'tokyonight', label: 'Tokyo Night' },
-  { id: 'catppuccin', label: 'Catppuccin' },
-  { id: 'rosepine', label: 'Rosé Pine' },
-  { id: 'gruvbox', label: 'Gruvbox' }
+export const THEMES: { id: ThemeId; labelKey: MessageKey }[] = [
+  { id: 'glass', labelKey: 'theme.glass' },
+  { id: 'dark', labelKey: 'theme.dark' },
+  { id: 'adaptive', labelKey: 'theme.adaptive' },
+  { id: 'oled', labelKey: 'theme.oled' },
+  { id: 'dim', labelKey: 'theme.dim' },
+  { id: 'midnight', labelKey: 'theme.midnight' },
+  { id: 'dracula', labelKey: 'theme.dracula' },
+  { id: 'nord', labelKey: 'theme.nord' },
+  { id: 'tokyonight', labelKey: 'theme.tokyonight' },
+  { id: 'catppuccin', labelKey: 'theme.catppuccin' },
+  { id: 'rosepine', labelKey: 'theme.rosepine' },
+  { id: 'gruvbox', labelKey: 'theme.gruvbox' }
 ]
 
 /** Accent presets. `rgb` is a space-separated "R G B" string for --accent-rgb. */
-export const ACCENTS: Record<AccentPresetId, { label: string; rgb: string }> = {
-  coral: { label: 'Coral', rgb: '255 122 92' },
-  purple: { label: 'Purple', rgb: '189 147 249' },
-  blue: { label: 'Blue', rgb: '122 162 247' },
-  green: { label: 'Green', rgb: '74 222 128' },
-  pink: { label: 'Pink', rgb: '255 121 198' },
-  amber: { label: 'Amber', rgb: '250 189 47' },
-  teal: { label: 'Teal', rgb: '136 192 208' },
-  iris: { label: 'Iris', rgb: '196 167 231' }
+export const ACCENTS: Record<AccentPresetId, { labelKey: MessageKey; rgb: string }> = {
+  coral: { labelKey: 'accent.coral', rgb: '255 122 92' },
+  purple: { labelKey: 'accent.purple', rgb: '189 147 249' },
+  blue: { labelKey: 'accent.blue', rgb: '122 162 247' },
+  green: { labelKey: 'accent.green', rgb: '74 222 128' },
+  pink: { labelKey: 'accent.pink', rgb: '255 121 198' },
+  amber: { labelKey: 'accent.amber', rgb: '250 189 47' },
+  teal: { labelKey: 'accent.teal', rgb: '136 192 208' },
+  iris: { labelKey: 'accent.iris', rgb: '196 167 231' }
 }
 
 /** The fixed "R G B" for a preset accent, or null for 'adaptive' (artwork-driven). */
@@ -68,6 +69,8 @@ export interface Settings {
   accent: AccentId
   /** Adaptive theme background options (see lib/adaptive.ts). */
   adaptive: AdaptiveSettings
+  /** UI language: 'system' follows the browser/OS language list. */
+  language: LanguagePref
   /** Custom Nocturne Connect name for this device ('' = automatic, e.g. "PC (Windows)"). */
   deviceName: string
 }
@@ -82,6 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'glass',
   accent: 'adaptive',
   adaptive: DEFAULT_ADAPTIVE,
+  language: 'system',
   deviceName: ''
 }
 
@@ -124,6 +128,8 @@ export function sanitizeSettings(raw: unknown): Settings {
     accent:
       r.accent === 'adaptive' || (typeof r.accent === 'string' && r.accent in ACCENTS) ? (r.accent as AccentId) : DEFAULT_SETTINGS.accent,
     adaptive: sanitizeAdaptive(r.adaptive),
+    // Migration: settings saved before i18n have no language and default to following the system.
+    language: isLanguagePref(r.language) ? r.language : DEFAULT_SETTINGS.language,
     deviceName: typeof r.deviceName === 'string' ? r.deviceName.trim().slice(0, 80) : DEFAULT_SETTINGS.deviceName
   }
 }
@@ -141,6 +147,7 @@ export const useSettings = create<SettingsStore>((set, get) => ({
     const next = sanitizeSettings({ ...pick(get()), ...patch })
     set(next)
     writeJson(KEY, next)
+    setLanguagePref(next.language)
   },
   updateAdaptive(patch) {
     get().update({ adaptive: applyAdaptivePatch(get().adaptive, patch) })
@@ -148,8 +155,12 @@ export const useSettings = create<SettingsStore>((set, get) => ({
   reset() {
     set(DEFAULT_SETTINGS)
     writeJson(KEY, DEFAULT_SETTINGS)
+    setLanguagePref(DEFAULT_SETTINGS.language)
   }
 }))
+
+// Apply the saved language (and <html lang>) as soon as the store exists.
+setLanguagePref(useSettings.getState().language)
 
 function pick(s: Settings): Settings {
   return {
@@ -162,6 +173,7 @@ function pick(s: Settings): Settings {
     theme: s.theme,
     accent: s.accent,
     adaptive: s.adaptive,
+    language: s.language,
     deviceName: s.deviceName
   }
 }

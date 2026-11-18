@@ -7,21 +7,24 @@ import { Artwork, EmptyState, ErrorState, IconButton, SectionHeader, cx } from '
 import { RecapCard } from '../components/RecapCard'
 import { useNav } from '../store/nav'
 import { artistNames } from '../lib/format'
-import { RANGE_TABS, barRatios, buildRecapData, canGoForward, describeDelta, formatBigMinutes, formatMinutes, shortDate } from '../lib/stats'
+import { RANGE_TABS, periodLabel, barRatios, buildRecapData, canGoForward, describeDelta, formatBigMinutes, formatMinutes, shortDate } from '../lib/stats'
 import { Page } from './Page'
+import { useT } from '../i18n'
+import { formatNumber } from '../i18n/format'
 
 function historyFor(range: StatsRange): { period: 'week' | 'month'; count: number } {
   return range === 'week' ? { period: 'week', count: 26 } : { period: 'month', count: range === 'month' ? 12 : 24 }
 }
 
 function HistoryChart({ data, summary }: { data: StatsHistory; summary: StatsSummary | undefined }): ReactNode {
+  const tr = useT()
   const bars = useMemo(() => barRatios(data.items), [data.items])
   if (bars.length === 0) return null
   const H = 120
   const step = 12
   const inPeriod = (start: string): boolean =>
     !!summary && (summary.start == null || (start >= summary.start && (summary.end == null || start < summary.end)))
-  const label = data.period === 'week' ? 'Minutes per week' : 'Minutes per month'
+  const label = tr(data.period === 'week' ? 'st.perWeek' : 'st.perMonth')
   return (
     <figure className="mt-2">
       <svg viewBox={`0 0 ${bars.length * step} ${H}`} preserveAspectRatio="none" className="h-36 w-full" role="img" aria-label={label}>
@@ -58,6 +61,7 @@ function Row({ rank, images, round, title, subtitle, plays, minutes, onOpen }: {
   minutes: number
   onOpen?: () => void
 }): ReactNode {
+  const tr = useT()
   return (
     <li>
       <button
@@ -74,7 +78,7 @@ function Row({ rank, images, round, title, subtitle, plays, minutes, onOpen }: {
         </span>
         <span className="shrink-0 text-right text-sm text-fg-muted tabular-nums">
           <span className="block">{formatMinutes(minutes)}</span>
-          <span className="block text-xs text-fg-subtle">{plays} {plays === 1 ? 'play' : 'plays'}</span>
+          <span className="block text-xs text-fg-subtle">{tr('common.play', { count: plays })}</span>
         </span>
       </button>
     </li>
@@ -82,6 +86,7 @@ function Row({ rank, images, round, title, subtitle, plays, minutes, onOpen }: {
 }
 
 export function StatsPage(): ReactNode {
+  const tr = useT()
   const [range, setRange] = useState<StatsRange>('week')
   const [offset, setOffset] = useState(0)
   const [sharing, setSharing] = useState(false)
@@ -103,8 +108,8 @@ export function StatsPage(): ReactNode {
   return (
     <Page>
       <div className="fade-up flex flex-wrap items-center justify-between gap-3 pt-2">
-        <h1 className="text-3xl font-extrabold tracking-tight">Stats</h1>
-        <div role="tablist" aria-label="Period" className="g-seg inline-flex rounded-full bg-ink-900 p-1">
+        <h1 className="text-3xl font-extrabold tracking-tight">{tr('st.title')}</h1>
+        <div role="tablist" aria-label={tr('st.period')} className="g-seg inline-flex rounded-full bg-ink-900 p-1">
           {RANGE_TABS.map((t) => (
             <button
               key={t.id}
@@ -117,7 +122,7 @@ export function StatsPage(): ReactNode {
                 range === t.id ? 'bg-accent text-ink-950' : 'text-fg-muted hover:text-fg'
               )}
             >
-              {t.label}
+              {tr(t.labelKey)}
             </button>
           ))}
         </div>
@@ -125,13 +130,13 @@ export function StatsPage(): ReactNode {
 
       <div className="mt-6 flex items-center gap-2">
         {range !== 'all' && (
-          <IconButton label="Previous period" onClick={() => setOffset((o) => o + 1)}>
+          <IconButton label={tr('st.prev')} onClick={() => setOffset((o) => o + 1)}>
             <ChevronLeft className="h-5 w-5" />
           </IconButton>
         )}
-        <p className="min-w-0 flex-1 truncate text-lg font-semibold" aria-live="polite">{data?.label ?? ' '}</p>
+        <p className="min-w-0 flex-1 truncate text-lg font-semibold" aria-live="polite">{data ? periodLabel(data) : ' '}</p>
         {range !== 'all' && (
-          <IconButton label="Next period" onClick={() => setOffset((o) => Math.max(0, o - 1))} disabled={!canGoForward(range, offset)}>
+          <IconButton label={tr('st.next')} onClick={() => setOffset((o) => Math.max(0, o - 1))} disabled={!canGoForward(range, offset)}>
             <ChevronRight className="h-5 w-5" />
           </IconButton>
         )}
@@ -141,7 +146,7 @@ export function StatsPage(): ReactNode {
             onClick={() => setSharing(true)}
             className="ml-1 inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-ink-950 transition-transform active:scale-95"
           >
-            <Share2 className="h-4 w-4" /> Share recap
+            <Share2 className="h-4 w-4" /> {tr('st.share')}
           </button>
         )}
       </div>
@@ -149,9 +154,9 @@ export function StatsPage(): ReactNode {
       {summary.error && !data && <ErrorState message={summary.error} onRetry={summary.reload} />}
 
       {data && (
-        <section className="fade-up mt-4 mb-8" aria-label="Totals">
+        <section className="fade-up mt-4 mb-8" aria-label={tr('st.totals')}>
           <p className="text-6xl leading-none font-extrabold tracking-tight tabular-nums md:text-7xl">{formatBigMinutes(data.totals.minutes)}</p>
-          <p className="mt-2 text-fg-muted">minutes listened</p>
+          <p className="mt-2 text-fg-muted">{tr('st.minutes')}</p>
           {delta && (
             <p
               className={cx(
@@ -166,9 +171,9 @@ export function StatsPage(): ReactNode {
             </p>
           )}
           <dl className="mt-5 grid max-w-md grid-cols-3 gap-4 text-sm">
-            <div><dt className="text-fg-subtle">Plays</dt><dd className="text-lg font-bold tabular-nums">{data.totals.plays.toLocaleString()}</dd></div>
-            <div><dt className="text-fg-subtle">Tracks</dt><dd className="text-lg font-bold tabular-nums">{data.totals.distinctTracks.toLocaleString()}</dd></div>
-            <div><dt className="text-fg-subtle">Artists</dt><dd className="text-lg font-bold tabular-nums">{data.totals.distinctArtists.toLocaleString()}</dd></div>
+            <div><dt className="text-fg-subtle">{tr('st.plays')}</dt><dd className="text-lg font-bold tabular-nums">{formatNumber(data.totals.plays)}</dd></div>
+            <div><dt className="text-fg-subtle">{tr('st.tracks')}</dt><dd className="text-lg font-bold tabular-nums">{formatNumber(data.totals.distinctTracks)}</dd></div>
+            <div><dt className="text-fg-subtle">{tr('st.artists')}</dt><dd className="text-lg font-bold tabular-nums">{formatNumber(data.totals.distinctArtists)}</dd></div>
           </dl>
         </section>
       )}
@@ -177,14 +182,14 @@ export function StatsPage(): ReactNode {
 
       {empty && (
         <div className="mt-8">
-          <EmptyState icon={<TrendingUp className="h-8 w-8" />} title="Nothing played in this period" hint="Listen to some music and your stats will show up here." />
+          <EmptyState icon={<TrendingUp className="h-8 w-8" />} title={tr('st.emptyTitle')} hint={tr('st.emptyHint')} />
         </div>
       )}
 
       {data && !empty && (
         <div className="mt-10 grid gap-10 lg:grid-cols-2">
-          <section aria-label="Top tracks">
-            <SectionHeader title="Top tracks" />
+          <section aria-label={tr('st.topTracks')}>
+            <SectionHeader title={tr('st.topTracks')} />
             <ol>
               {data.topTracks.map((t, i) => (
                 <Row
@@ -200,8 +205,8 @@ export function StatsPage(): ReactNode {
               ))}
             </ol>
           </section>
-          <section aria-label="Top artists">
-            <SectionHeader title="Top artists" />
+          <section aria-label={tr('st.topArtists')}>
+            <SectionHeader title={tr('st.topArtists')} />
             <ol>
               {data.topArtists.map((a, i) => (
                 <Row
@@ -218,8 +223,8 @@ export function StatsPage(): ReactNode {
             </ol>
           </section>
           {data.topAlbums.length > 0 && (
-            <section aria-label="Top albums">
-              <SectionHeader title="Top albums" />
+            <section aria-label={tr('st.topAlbums')}>
+              <SectionHeader title={tr('st.topAlbums')} />
               <ol>
                 {data.topAlbums.map((a, i) => (
                   <Row

@@ -10,10 +10,12 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { formatBytes, formatDateTime } from './format'
 import { startBackup, useJobs } from './useJobs'
 import { Button, Card, Chip } from './ui'
+import { useT } from '../../i18n'
 
 const KEY = 'admin:backups'
 
 export function BackupsTab(): ReactNode {
+  const tr = useT()
   const backups = useResource<Backup[]>(KEY, async (signal) => (await api.adminBackups(signal)).backups)
   const { jobs, upsert } = useJobs()
   const [creating, setCreating] = useState(false)
@@ -38,7 +40,7 @@ export function BackupsTab(): ReactNode {
   return (
     <Card
       id="backups-title"
-      title="Backups"
+      title={tr('bk.title')}
       action={
         <Button
           variant="primary"
@@ -49,12 +51,12 @@ export function BackupsTab(): ReactNode {
             void startBackup().finally(() => setCreating(false))
           }}
         >
-          Create backup
+          {tr('bk.create')}
         </Button>
       }
     >
       {list.length === 0 ? (
-        <EmptyState icon={<Archive className="h-8 w-8" strokeWidth={1.5} />} title="No backups yet" hint="Create one before making big changes to your library or users." />
+        <EmptyState icon={<Archive className="h-8 w-8" strokeWidth={1.5} />} title={tr('bk.none')} hint={tr('bk.noneHint')} />
       ) : (
         <ul className="space-y-2">
           {list.map((b) => (
@@ -69,8 +71,8 @@ export function BackupsTab(): ReactNode {
                   {b.label && <Chip>{b.label}</Chip>}
                 </p>
               </div>
-              <Button size="sm" icon={<History />} aria-label={`Restore backup from ${formatDateTime(b.createdAt)}`} onClick={() => setRestoring(b)}>
-                Restore
+              <Button size="sm" icon={<History />} aria-label={tr('bk.restoreLabel', { date: formatDateTime(b.createdAt) })} onClick={() => setRestoring(b)}>
+                {tr('bk.restore')}
               </Button>
             </li>
           ))}
@@ -79,19 +81,19 @@ export function BackupsTab(): ReactNode {
 
       {restoring && (
         <ConfirmDialog
-          title="Restore this backup?"
+          title={tr('bk.restoreQ')}
           tone="danger"
-          confirmLabel="Restore backup"
-          requireText="RESTORE"
+          confirmLabel={tr('bk.restoreConfirm')}
+          requireText={tr('bk.restoreWord')}
           message={
             <>
-              This <strong className="text-fg">replaces all current data</strong> with the backup from {formatDateTime(restoring.createdAt)}. Anything added or changed since then is lost.
+              {tr('bk.restoreMsg1', { strong: '\u0000', date: formatDateTime(restoring.createdAt) }).split('\u0000').flatMap((part, i) => (i === 0 ? [part] : [<strong key="s" className="text-fg">{tr('bk.restoreStrong')}</strong>, part]))}
             </>
           }
           onConfirm={async () => {
             const job = await api.adminRestoreBackup(restoring.id)
             upsert(job)
-            useUi.getState().toast('Restore started')
+            useUi.getState().toast(tr('bk.restoreStarted'))
           }}
           onClose={() => setRestoring(null)}
         />

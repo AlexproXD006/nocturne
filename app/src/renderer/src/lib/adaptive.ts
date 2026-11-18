@@ -5,6 +5,7 @@
  * and DOM so it is unit-testable and cheap to call on every render.
  */
 import { contrastRatio, relativeLuminance, type AccentSource, type Rgb } from './color'
+import { type MessageKey } from '../i18n'
 
 export type AdaptiveStyle = 'cover' | 'aurora' | 'solid'
 export type AdaptiveMotion = 'static' | 'drift' | 'spin' | 'pulse'
@@ -88,31 +89,31 @@ export type AdaptivePreset = Pick<AdaptiveSettings, PresetField>
 const pickLook = (s: AdaptiveSettings): AdaptivePreset =>
   Object.fromEntries(PRESET_FIELDS.map((k) => [k, s[k]])) as AdaptivePreset
 
-export const ADAPTIVE_PRESETS: Record<AdaptivePresetId, { label: string; hint: string; values: AdaptivePreset }> = {
-  classic: { label: 'Classic', hint: 'The original Adaptive look', values: pickLook(DEFAULT_ADAPTIVE) },
+export const ADAPTIVE_PRESETS: Record<AdaptivePresetId, { labelKey: MessageKey; hintKey: MessageKey; values: AdaptivePreset }> = {
+  classic: { labelKey: 'preset.classic', hintKey: 'preset.classic.hint', values: pickLook(DEFAULT_ADAPTIVE) },
   subtle: {
-    label: 'Subtle',
-    hint: 'A faint wash of colour',
+    labelKey: 'preset.subtle',
+    hintKey: 'preset.subtle.hint',
     values: { style: 'cover', visibility: 32, blur: 72, saturation: 120, dimMode: 'manual', dim: 55, motion: 'static', speed: 'slow', glow: 30, grain: false, vignette: false, glass: 45 }
   },
   immersive: {
-    label: 'Immersive',
-    hint: 'Big, bright and slowly drifting',
+    labelKey: 'preset.immersive',
+    hintKey: 'preset.immersive.hint',
     values: { style: 'cover', visibility: 78, blur: 44, saturation: 165, dimMode: 'auto', dim: 35, motion: 'drift', speed: 'medium', glow: 70, grain: true, vignette: true, glass: 75 }
   },
   vinyl: {
-    label: 'Vinyl',
-    hint: 'The cover turns like a record',
+    labelKey: 'preset.vinyl',
+    hintKey: 'preset.vinyl.hint',
     values: { style: 'cover', visibility: 62, blur: 36, saturation: 140, dimMode: 'auto', dim: 45, motion: 'spin', speed: 'slow', glow: 45, grain: true, vignette: true, glass: 65 }
   },
   concert: {
-    label: 'Concert',
-    hint: 'Colour that breathes with the bass',
+    labelKey: 'preset.concert',
+    hintKey: 'preset.concert.hint',
     values: { style: 'aurora', visibility: 80, blur: 64, saturation: 175, dimMode: 'auto', dim: 40, motion: 'pulse', speed: 'fast', glow: 90, grain: false, vignette: true, glass: 70 }
   },
   reading: {
-    label: 'Reading',
-    hint: 'Maximum legibility',
+    labelKey: 'preset.reading',
+    hintKey: 'preset.reading.hint',
     values: { style: 'cover', visibility: 28, blur: 80, saturation: 100, dimMode: 'auto', dim: 70, motion: 'static', speed: 'slow', glow: 20, grain: false, vignette: false, glass: 20 }
   }
 }

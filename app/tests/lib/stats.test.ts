@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { barRatios, buildRecapData, canGoForward, describeDelta, formatBigMinutes, formatMinutes, shortDate } from '@/lib/stats'
+import { setLanguagePref } from '@/i18n'
+import { barRatios, periodLabel, buildRecapData, canGoForward, describeDelta, formatBigMinutes, formatMinutes, shortDate } from '@/lib/stats'
 import type { StatsSummary } from '@/api/types'
 
 const track = (id: string, title: string) => ({
@@ -99,5 +100,28 @@ describe('buildRecapData', () => {
     expect(d.topTrack).toBeNull()
     expect(d.artists).toEqual([])
     expect(d.delta).toBeNull()
+  })
+})
+
+describe('localised stats (es)', () => {
+  it('keeps the server label in English and formats periods with Intl otherwise', () => {
+    const week = summary({ range: 'week', start: '2026-11-16', end: '2026-11-23' })
+    expect(periodLabel(week)).toBe('Nov 16 – 22, 2026')
+    setLanguagePref('es')
+    expect(periodLabel(week)).toMatch(/^16\s?[–-]\s?22 nov 2026$/)
+    expect(periodLabel(summary({ range: 'month', start: '2026-11-01', end: '2026-12-01' }))).toBe('noviembre de 2026')
+    expect(periodLabel(summary({ range: 'year', start: '2026-01-01', end: '2027-01-01' }))).toBe('2026')
+    expect(periodLabel(summary({ range: 'all', start: null, end: null }))).toBe('Todo el tiempo')
+    expect(periodLabel(summary({ range: 'week', start: null, end: null, label: 'raw' }))).toBe('raw')
+  })
+
+  it('localises the delta text, recap heading and short dates', () => {
+    setLanguagePref('es')
+    expect(describeDelta({ minutes: 50, minutesPct: 23, plays: 5 }, 'week')?.text).toBe('+23% respecto a la semana pasada')
+    expect(describeDelta({ minutes: 0, minutesPct: 0, plays: 0 }, 'month')?.text).toBe('Igual que el mes pasado')
+    expect(buildRecapData(summary()).heading).toBe('Resumen semanal')
+    expect(shortDate('2026-11-16')).toBe('16 nov')
+    expect(formatBigMinutes(1234.4)).toBe('1234')
+    expect(formatBigMinutes(12345)).toBe('12.345')
   })
 })

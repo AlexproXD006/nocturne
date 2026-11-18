@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach } from 'vitest'
+import { setLanguagePref } from '../src/renderer/src/i18n'
 
 // Node-environment suites (src/main) have no DOM; only wire DOM helpers when present.
 const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined'
@@ -17,6 +18,8 @@ if (hasDom) {
 }
 
 beforeEach(() => {
+  // Tests assert English by default; individual suites switch language explicitly.
+  setLanguagePref('en')
   if (!hasDom) return
   try {
     localStorage.clear()

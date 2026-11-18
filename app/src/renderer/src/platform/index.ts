@@ -1,3 +1,4 @@
+import { getLocale } from '../i18n'
 import type { NocturneBridge, WindowState } from '../../../shared/ipc'
 import { createNativeNowPlaying, type NocturneMediaPlugin } from './nocturneMedia'
 import { createNativeUpdates, type NativeUpdates, type NocturneUpdatesPlugin } from './nocturneUpdates'
@@ -130,7 +131,7 @@ function desktopPlatform(bridge: NocturneBridge): Platform {
     nativeUpdates: null,
     notifyUpdate: async (info) => {
       try {
-        return typeof bridge.app.notifyUpdate === 'function' ? (await bridge.app.notifyUpdate(info)) === true : false
+        return typeof bridge.app.notifyUpdate === 'function' ? (await bridge.app.notifyUpdate({ ...info, locale: getLocale() })) === true : false
       } catch {
         return false
       }

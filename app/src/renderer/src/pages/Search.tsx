@@ -10,14 +10,15 @@ import { Artwork, EmptyState, ErrorState, Spinner, cx } from '../components/comm
 import { TrackList } from '../components/TrackList'
 import { artistNames } from '../lib/format'
 import { Page } from './Page'
+import { useT, type MessageKey } from '../i18n'
 
 type Filter = 'all' | 'tracks' | 'albums' | 'artists' | 'playlists'
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'tracks', label: 'Songs' },
-  { id: 'albums', label: 'Albums' },
-  { id: 'artists', label: 'Artists' },
-  { id: 'playlists', label: 'Playlists' }
+const FILTERS: { id: Filter; label: MessageKey }[] = [
+  { id: 'all', label: 'search.all' },
+  { id: 'tracks', label: 'search.songs' },
+  { id: 'albums', label: 'search.albums' },
+  { id: 'artists', label: 'search.artists' },
+  { id: 'playlists', label: 'search.playlists' }
 ]
 const RECENT_KEY = 'nocturne.recentSearches'
 
@@ -31,6 +32,7 @@ function useDebounced<T>(value: T, ms: number): T {
 }
 
 export function SearchPage({ initial }: { initial?: string }): ReactNode {
+  const tr = useT()
   const [query, setQuery] = useState(initial ?? '')
   const [filter, setFilter] = useState<Filter>('all')
   const [results, setResults] = useState<SearchResults | null>(null)
@@ -76,14 +78,14 @@ export function SearchPage({ initial }: { initial?: string }): ReactNode {
         autoFocus
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="What do you want to listen to?"
-        aria-label="Search"
+        placeholder={tr('search.placeholder')}
+        aria-label={tr('search.label')}
         type="search"
         spellCheck={false}
         className="h-11 w-full rounded-full border border-transparent bg-ink-800 pr-10 pl-11 text-sm outline-none transition placeholder:text-fg-subtle focus:border-white/20 focus:bg-ink-700 [&::-webkit-search-cancel-button]:hidden"
       />
       {query && (
-        <button aria-label="Clear search" onClick={() => setQuery('')} className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1.5 text-fg-muted hover:text-fg">
+        <button aria-label={tr('search.clear')} onClick={() => setQuery('')} className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1.5 text-fg-muted hover:text-fg">
           <X className="h-4 w-4" />
         </button>
       )}
@@ -97,7 +99,7 @@ export function SearchPage({ initial }: { initial?: string }): ReactNode {
           {recent.length > 0 ? (
             <>
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-xl font-bold tracking-tight">Recent searches</h2>
+                <h2 className="text-xl font-bold tracking-tight">{tr('search.recent')}</h2>
                 <button
                   className="text-sm text-fg-muted hover:text-fg"
                   onClick={() => {
@@ -105,7 +107,7 @@ export function SearchPage({ initial }: { initial?: string }): ReactNode {
                     writeJson(RECENT_KEY, [])
                   }}
                 >
-                  Clear
+                  {tr('search.clearRecent')}
                 </button>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -117,7 +119,7 @@ export function SearchPage({ initial }: { initial?: string }): ReactNode {
               </div>
             </>
           ) : (
-            <EmptyState icon={<SearchIcon className="h-9 w-9" strokeWidth={1.4} />} title="Search your music" hint="Find songs, albums, artists and playlists. Tip: press Ctrl+K anywhere." />
+            <EmptyState icon={<SearchIcon className="h-9 w-9" strokeWidth={1.4} />} title={tr('search.emptyTitle')} hint={tr('search.emptyHint')} />
           )}
         </section>
       )}
@@ -133,7 +135,7 @@ export function SearchPage({ initial }: { initial?: string }): ReactNode {
                 onClick={() => setFilter(f.id)}
                 className={cx('shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition', filter === f.id ? 'bg-fg text-ink-950' : 'bg-white/[0.07] text-fg hover:bg-white/[0.12]')}
               >
-                {f.label}
+                {tr(f.label)}
               </button>
             ))}
             {loading && <Spinner className="ml-2 h-5 w-5 self-center" />}
@@ -147,6 +149,7 @@ export function SearchPage({ initial }: { initial?: string }): ReactNode {
 }
 
 function Results({ results, filter, query }: { results: SearchResults; filter: Filter; query: string }): ReactNode {
+  const tr = useT()
   const go = useNav((s) => s.go)
   const playTracks = playback.playTracks
   const ctx = useMemo(() => ({ type: 'search' as const, id: query, name: `“${query}”` }), [query])
@@ -155,7 +158,7 @@ function Results({ results, filter, query }: { results: SearchResults; filter: F
   const playlists = results.playlists.map((item) => ({ kind: 'playlist' as const, item }))
   const empty = !results.tracks.length && !albums.length && !artists.length && !playlists.length
 
-  if (empty) return <EmptyState icon={<SearchIcon className="h-9 w-9" strokeWidth={1.4} />} title={`No results for “${query}”`} hint="Check the spelling or try fewer words." />
+  if (empty) return <EmptyState icon={<SearchIcon className="h-9 w-9" strokeWidth={1.4} />} title={tr('search.noResults', { query })} hint={tr('search.noResultsHint')} />
 
   if (filter === 'tracks') return <TrackList tracks={results.tracks} context={ctx} />
   if (filter === 'albums') return <CardGrid cards={albums} />
@@ -169,7 +172,7 @@ function Results({ results, filter, query }: { results: SearchResults; filter: F
       <div className="mb-8 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         {(top || topTrack) && (
           <section>
-            <h2 className="mb-3 text-xl font-bold tracking-tight">Top result</h2>
+            <h2 className="mb-3 text-xl font-bold tracking-tight">{tr('search.topResult')}</h2>
             <div
               role="link"
               tabIndex={0}
@@ -178,10 +181,10 @@ function Results({ results, filter, query }: { results: SearchResults; filter: F
             >
               <Artwork images={top ? top.artwork : topTrack!.artwork} size={120} round={Boolean(top)} className="mb-4 h-24 w-24 shadow-xl shadow-black/40" />
               <p className="truncate text-3xl font-extrabold tracking-tight">{top ? top.name : topTrack!.title}</p>
-              <p className="mt-1 text-sm text-fg-muted">{top ? 'Artist' : `Song • ${artistNames(topTrack!.artists)}`}</p>
+              <p className="mt-1 text-sm text-fg-muted">{top ? tr('search.artistKind') : tr('search.songKind', { artists: artistNames(topTrack!.artists) })}</p>
               {!top && topTrack && (
                 <button
-                  aria-label={`Play ${topTrack.title}`}
+                  aria-label={tr('card.play', { title: topTrack.title })}
                   onClick={(e) => {
                     e.stopPropagation()
                     void playTracks(results.tracks, 0, ctx)
@@ -196,14 +199,14 @@ function Results({ results, filter, query }: { results: SearchResults; filter: F
         )}
         {results.tracks.length > 0 && (
           <section className="min-w-0">
-            <h2 className="mb-3 text-xl font-bold tracking-tight">Songs</h2>
+            <h2 className="mb-3 text-xl font-bold tracking-tight">{tr('search.songs')}</h2>
             <TrackList tracks={results.tracks.slice(0, 5)} context={ctx} header={false} showAlbum={false} />
           </section>
         )}
       </div>
-      <Shelf title="Artists" cards={artists} />
-      <Shelf title="Albums" cards={albums} />
-      <Shelf title="Playlists" cards={playlists} />
+      <Shelf title={tr('search.artists')} cards={artists} />
+      <Shelf title={tr('search.albums')} cards={albums} />
+      <Shelf title={tr('search.playlists')} cards={playlists} />
     </div>
   )
 }

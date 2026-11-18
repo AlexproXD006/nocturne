@@ -9,15 +9,17 @@ import { Artwork, IconButton, LikeButton, cx } from './common'
 import { SeekBar, TransportControls, VolumeControl } from './controls'
 import { DevicesButton, ListeningBar, RemoteSuggestion, openDevices } from './Devices'
 import { AddToPlaylistButton } from './Playlists'
+import { useT } from '../i18n'
 
 function NowPlayingInfo(): ReactNode {
+  const tr = useT()
   const t = useNowTrack()
   const go = useNav((s) => s.go)
   const setFullscreen = useUi((s) => s.setFullscreen)
   if (!t) return <div className="min-w-0 flex-1" />
   return (
     <div className="flex min-w-0 flex-1 items-center gap-3">
-      <button type="button" aria-label="Open now playing" onClick={() => setFullscreen(true)} className="group relative shrink-0">
+      <button type="button" aria-label={tr('player.openNowPlaying')} onClick={() => setFullscreen(true)} className="group relative shrink-0">
         <Artwork images={t.artwork} size={56} className="h-14 w-14 shadow-md shadow-black/40" rounded="rounded-md" />
         <span className="absolute inset-0 hidden items-center justify-center rounded-md bg-black/50 group-hover:flex">
           <Maximize2 className="h-4 w-4" />
@@ -50,6 +52,7 @@ function NowPlayingInfo(): ReactNode {
 
 /** Desktop bottom bar. */
 export function PlayerBar(): ReactNode {
+  const tr = useT()
   const panel = useUi((s) => s.panel)
   const togglePanel = useUi((s) => s.togglePanel)
   const setFullscreen = useUi((s) => s.setFullscreen)
@@ -57,22 +60,22 @@ export function PlayerBar(): ReactNode {
 
   return (
     <div className="app-chrome hidden shrink-0 flex-col md:flex">
-    <footer className="g-chrome flex h-[84px] shrink-0 items-center gap-6 border-t border-line bg-ink-950 px-4" aria-label="Player">
+    <footer className="g-chrome flex h-[84px] shrink-0 items-center gap-6 border-t border-line bg-ink-950 px-4" aria-label={tr('player.bar')}>
       <NowPlayingInfo />
       <div className="flex w-[min(42vw,640px)] flex-col items-center gap-1">
         <TransportControls />
         <SeekBar />
       </div>
       <div className="flex flex-1 items-center justify-end gap-1">
-        <IconButton label="Lyrics (L)" active={panel === 'lyrics'} onClick={() => togglePanel('lyrics')} disabled={!hasItem}>
+        <IconButton label={tr('player.lyricsHint')} active={panel === 'lyrics'} onClick={() => togglePanel('lyrics')} disabled={!hasItem}>
           <Mic2 className="h-4 w-4" />
         </IconButton>
-        <IconButton label="Queue (Q)" active={panel === 'queue'} onClick={() => togglePanel('queue')}>
+        <IconButton label={tr('player.queueHint')} active={panel === 'queue'} onClick={() => togglePanel('queue')}>
           <ListMusic className="h-[18px] w-[18px]" />
         </IconButton>
         <DevicesButton />
         <VolumeControl className="ml-1 hidden lg:flex" />
-        <IconButton label="Fullscreen (F)" onClick={() => setFullscreen(true)} disabled={!hasItem}>
+        <IconButton label={tr('player.fullscreenHint')} onClick={() => setFullscreen(true)} disabled={!hasItem}>
           <Maximize2 className="h-4 w-4" />
         </IconButton>
       </div>
@@ -84,6 +87,7 @@ export function PlayerBar(): ReactNode {
 
 /** Mobile mini player that sits above the tab bar. Tap to open fullscreen. */
 export function MiniPlayer(): ReactNode {
+  const tr = useT()
   const t = useNowTrack()
   const status = useNowStatus()
   const duration = useNowDuration()
@@ -123,7 +127,7 @@ export function MiniPlayer(): ReactNode {
         {connectActive && (
           <button
             type="button"
-            aria-label="Devices"
+            aria-label={tr('player.devices')}
             onClick={(e) => {
               e.stopPropagation()
               openDevices()
@@ -136,7 +140,7 @@ export function MiniPlayer(): ReactNode {
         <LikeButton trackId={t.id} serverValue={t.liked} />
         <button
           type="button"
-          aria-label={playing ? 'Pause' : 'Play'}
+          aria-label={playing ? tr('ctl.pause') : tr('ctl.play')}
           onClick={(e) => {
             e.stopPropagation()
             toggle()

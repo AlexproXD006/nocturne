@@ -16,6 +16,7 @@ import { AddToPlaylistButton, PlaylistFormDialog, usePlaylistsEnabled } from '..
 import { artistNames, formatTotal, plural } from '../lib/format'
 import { HeroHeader, Page, PlayButtons, useTint } from './Page'
 import { PageSkeleton } from './Album'
+import { useT } from '../i18n'
 
 /**
  * Stable React keys, one per playlist row. A playlist may contain the same song more than once:
@@ -50,6 +51,7 @@ function PlaylistEditList({
   onMove: (from: number, to: number) => void
   onRemove: (index: number) => void
 }): ReactNode {
+  const tr = useT()
   const keys = useMemo(() => rowKeys(tracks), [tracks])
   const listRef = useRef<HTMLOListElement>(null)
   const pendingFocus = useRef<{ key: string; dir: 'up' | 'down' } | null>(null)
@@ -70,13 +72,13 @@ function PlaylistEditList({
     const to = dir === 'up' ? i - 1 : i + 1
     if (to < 0 || to >= tracks.length) return
     pendingFocus.current = { key: keys[i]!, dir }
-    setAnnounce(`Moved ${tracks[i]!.title} to position ${to + 1} of ${tracks.length}`)
+    setAnnounce(tr('pp.moved', { title: tracks[i]!.title, pos: to + 1, total: tracks.length }))
     onMove(i, to)
   }
 
   return (
     <>
-      <ol ref={listRef} aria-label="Edit playlist songs" className="-mx-3">
+      <ol ref={listRef} aria-label={tr('pp.editList')} className="-mx-3">
         {tracks.map((t, i) => (
           <li key={keys[i]} data-key={keys[i]} className="flex min-h-14 items-center gap-2 rounded-lg px-3 py-1 hover:bg-white/[0.04]">
             <span className="w-6 shrink-0 text-center text-sm text-fg-muted tabular-nums">{i + 1}</span>
@@ -88,7 +90,7 @@ function PlaylistEditList({
             <button
               type="button"
               data-dir="up"
-              aria-label={`Move ${t.title} up`}
+              aria-label={tr('pp.moveUp', { title: t.title })}
               disabled={i === 0}
               onClick={() => move(i, 'up')}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-white/8 hover:text-fg active:scale-95 disabled:opacity-30"
@@ -98,7 +100,7 @@ function PlaylistEditList({
             <button
               type="button"
               data-dir="down"
-              aria-label={`Move ${t.title} down`}
+              aria-label={tr('pp.moveDown', { title: t.title })}
               disabled={i === tracks.length - 1}
               onClick={() => move(i, 'down')}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-white/8 hover:text-fg active:scale-95 disabled:opacity-30"
@@ -107,9 +109,9 @@ function PlaylistEditList({
             </button>
             <button
               type="button"
-              aria-label={`Remove ${t.title} from playlist`}
+              aria-label={tr('pp.removeLabel', { title: t.title })}
               onClick={() => {
-                setAnnounce(`Removed ${t.title}`)
+                setAnnounce(tr('pp.removedAnnounce', { title: t.title }))
                 // Move focus to the next row (or the previous one when removing the last).
                 const sibling = keys[i + 1] ?? keys[i - 1]
                 if (sibling) pendingFocus.current = { key: sibling, dir: 'up' }
@@ -130,6 +132,7 @@ function PlaylistEditList({
 }
 
 export function PlaylistPage({ id }: { id: string }): ReactNode {
+  const tr = useT()
   const key = playlistKey(id)
   const res = useResource<PlaylistDetail>(key, (s) => api.playlist(id, s))
   const pl = res.data
@@ -184,14 +187,14 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
         void applyTracks(
           (tracks) => tracks.filter((x) => x.entryId !== entryId),
           () => api.removePlaylistEntry(id, entryId),
-          `Removed “${t.title}”`
+          tr('pp.removed', { title: t.title })
         )
         return
       }
       void applyTracks(
         (tracks) => tracks.filter((x) => x.id !== t.id),
         () => api.removeFromPlaylist(id, t.id),
-        `Removed “${t.title}”`
+        tr('pp.removed', { title: t.title })
       )
     },
     [applyTracks, id, key]
@@ -232,7 +235,7 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
         {pl.owner && <span className="font-semibold text-fg">{pl.owner.name}</span>}
         {pl.owner && <span aria-hidden>•</span>}
         <span>
-          {plural(pl.tracks.length, 'song')}
+          {plural(pl.tracks.length)}
           {total > 0 && <span className="text-fg-muted">, {formatTotal(total)}</span>}
         </span>
       </p>
@@ -241,7 +244,7 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
 
   return (
     <Page tint={tint}>
-      <HeroHeader images={pl.artwork} kind="Playlist" title={pl.name} meta={meta} />
+      <HeroHeader images={pl.artwork} kind={tr('nav.playlist')} title={pl.name} meta={meta} />
       <PlayButtons tracks={pl.tracks} context={context}>
         <AddToPlaylistButton tracks={pl.tracks} label={pl.name} size="lg" />
         {canEdit && (
@@ -256,12 +259,12 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
                   editing ? 'bg-fg text-ink-950' : 'bg-white/[0.08] text-fg hover:bg-white/[0.14]'
                 )}
               >
-                {editing ? 'Done' : 'Edit'}
+                {editing ? tr('pp.done') : tr('pp.edit')}
               </button>
             )}
             <span ref={optionsRef} className="inline-flex">
               <IconButton
-                label="Playlist options"
+                label={tr('pp.options')}
                 size="lg"
                 onClick={() => {
                   const r = optionsRef.current?.getBoundingClientRect()
@@ -278,8 +281,8 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
       {pl.tracks.length === 0 ? (
         <EmptyState
           icon={<ListMusic className="h-9 w-9" strokeWidth={1.4} />}
-          title="This playlist is empty"
-          hint={canEdit ? 'Use “Add to playlist…” on any song to add it here.' : 'Songs added to it on your server will appear here.'}
+          title={tr('pp.emptyTitle')}
+          hint={canEdit ? tr('pp.emptyEdit') : tr('pp.emptyView')}
         />
       ) : canEdit && editing ? (
         <PlaylistEditList tracks={pl.tracks} onMove={move} onRemove={remove} />
@@ -293,15 +296,15 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
           y={menu.y}
           onClose={close}
           items={[
-            { label: 'Edit details', icon: <Pencil />, onSelect: () => setDialog('details') },
-            { label: 'Delete playlist', icon: <Trash2 />, onSelect: () => setDialog('delete') }
+            { label: tr('pp.editDetails'), icon: <Pencil />, onSelect: () => setDialog('details') },
+            { label: tr('pp.delete'), icon: <Trash2 />, onSelect: () => setDialog('delete') }
           ]}
         />
       )}
       {dialog === 'details' && (
         <PlaylistFormDialog
-          title="Edit details"
-          submitLabel="Save"
+          title={tr('pp.editDetails')}
+          submitLabel={tr('common.save')}
           initial={{ name: pl.name, description: pl.description ?? '' }}
           onClose={() => setDialog(null)}
           onSubmit={async (v) => {
@@ -313,25 +316,25 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
               artwork: Array.isArray(updated?.artwork) ? updated.artwork : p.artwork
             }))
             invalidatePlaylists()
-            useUi.getState().toast('Playlist updated')
+            useUi.getState().toast(tr('pp.updated'))
           }}
         />
       )}
       {dialog === 'delete' && (
         <ConfirmDialog
-          title="Delete playlist?"
+          title={tr('pp.deleteQ')}
           message={
             <>
-              <span className="font-semibold break-words text-fg">{pl.name}</span> will be deleted for good. This can't be undone.
+              {tr('pp.deleteMsg', { name: '\u0000' }).split('\u0000').flatMap((part, i) => (i === 0 ? [part] : [<span key="n" className="font-semibold break-words text-fg">{pl.name}</span>, part]))}
             </>
           }
-          confirmLabel="Delete"
+          confirmLabel={tr('common.delete')}
           tone="danger"
           onClose={() => setDialog(null)}
           onConfirm={async () => {
             await api.deletePlaylist(id)
             invalidatePlaylists()
-            useUi.getState().toast(`Deleted ${pl.name}`)
+            useUi.getState().toast(tr('pp.deleted', { name: pl.name }))
             replace({ name: 'library', tab: 'playlists' })
           }}
         />

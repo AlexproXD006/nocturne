@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { setLanguagePref } from '@/i18n'
 import { detectSource, formatBytes, generatePassword, relativeTime, usageFraction } from '@/pages/admin/format'
 
 describe('formatBytes', () => {
@@ -34,18 +35,23 @@ describe('usageFraction', () => {
 
 describe('relativeTime', () => {
   const now = Date.parse('2026-01-10T12:00:00Z')
-  it.each([
-    ['2026-01-10T11:59:58Z', 'just now'],
-    ['2026-01-10T11:59:00Z', '60 s ago'.replace('60 s', '60 s')],
-  ])('%s', (iso, expected) => {
-    expect(relativeTime(iso, now)).toBe(expected === '60 s ago' ? '1 min ago' : expected)
-  })
-  it('formats units', () => {
-    expect(relativeTime('2026-01-10T11:59:30Z', now)).toBe('30 s ago')
-    expect(relativeTime('2026-01-10T11:55:00Z', now)).toBe('5 min ago')
-    expect(relativeTime('2026-01-10T09:00:00Z', now)).toBe('3 hr ago')
-    expect(relativeTime('2026-01-08T12:00:00Z', now)).toBe('2 d ago')
+  const rtf = (unit: Intl.RelativeTimeFormatUnit, n: number): string =>
+    new Intl.RelativeTimeFormat('en', { numeric: 'always', style: 'short' }).format(-n, unit)
+  it('says "just now" under 5 seconds', () => {
+    expect(relativeTime('2026-01-10T11:59:58Z', now)).toBe('just now')
     expect(relativeTime('2026-01-10T12:00:30Z', now)).toBe('just now')
+  })
+  it('uses Intl.RelativeTimeFormat units', () => {
+    expect(relativeTime('2026-01-10T11:59:00Z', now)).toBe(rtf('minute', 1))
+    expect(relativeTime('2026-01-10T11:59:30Z', now)).toBe(rtf('second', 30))
+    expect(relativeTime('2026-01-10T11:55:00Z', now)).toBe(rtf('minute', 5))
+    expect(relativeTime('2026-01-10T09:00:00Z', now)).toBe(rtf('hour', 3))
+    expect(relativeTime('2026-01-08T12:00:00Z', now)).toBe(rtf('day', 2))
+  })
+  it('follows the active language', () => {
+    setLanguagePref('es')
+    expect(relativeTime('2026-01-10T11:55:00Z', now)).toMatch(/^hace 5 min/)
+    expect(relativeTime('2026-01-10T11:59:58Z', now)).toBe('ahora mismo')
   })
   it('handles missing and invalid input', () => {
     expect(relativeTime(undefined, now)).toBe('')

@@ -1,3 +1,5 @@
+import { t } from '../i18n'
+
 const PRIVATE_HOST = /^(localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|\[::1\]|[a-z0-9-]+\.local)$/i
 
 /**
@@ -8,18 +10,18 @@ const PRIVATE_HOST = /^(localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.16
  */
 export function normalizeServerUrl(input: string): string {
   const trimmed = input.trim()
-  if (!trimmed) throw new Error('Enter your server address.')
+  if (!trimmed) throw new Error(t('url.empty'))
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
   let url: URL
   try {
     url = new URL(withScheme)
   } catch {
-    throw new Error("That doesn't look like a valid address.")
+    throw new Error(t('url.invalid'))
   }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('Use an https:// address.')
-  if (url.username || url.password) throw new Error("Don't put credentials in the address.")
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error(t('url.https'))
+  if (url.username || url.password) throw new Error(t('url.credentials'))
   if (url.protocol === 'http:' && !PRIVATE_HOST.test(url.hostname)) {
-    throw new Error('Plain http is only allowed on your local network. Use https://.')
+    throw new Error(t('url.plainHttp'))
   }
   const path = url.pathname.replace(/\/+$/, '')
   return `${url.protocol}//${url.host}${path}`

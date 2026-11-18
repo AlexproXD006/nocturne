@@ -7,11 +7,13 @@ import { ACCENTS, THEMES, accentRgb, useSettings, type AccentId, type AccentPres
 import { useUpdates } from '../store/updates'
 import { ExternalLink, cx } from '../components/common'
 import { Logo } from '../components/Shell'
+import { LanguageSelect } from '../components/LanguageSelect'
 import { Page } from './Page'
 import { SpotifySettings, useSpotifyImportEnabled } from '../components/Spotify'
 import { isPrerelease } from '../lib/version'
 import { Row, Segmented, Toggle } from './SettingsControls'
 import { AdaptiveSettingsPanel } from './AdaptiveSettings'
+import { useT, type MessageKey } from '../i18n'
 
 function Section({ title, children }: { title: string; children: ReactNode }): ReactNode {
   return (
@@ -22,16 +24,16 @@ function Section({ title, children }: { title: string; children: ReactNode }): R
   )
 }
 
-const VISUALIZERS: { id: VisualizerStyle; label: string }[] = [
-  { id: 'aurora', label: 'Aurora' },
-  { id: 'spectrum', label: 'Spectrum' },
-  { id: 'minimal', label: 'Minimal' }
+const VISUALIZERS: { id: VisualizerStyle; label: MessageKey }[] = [
+  { id: 'aurora', label: 'set.vis.aurora' },
+  { id: 'spectrum', label: 'set.vis.spectrum' },
+  { id: 'minimal', label: 'set.vis.minimal' }
 ]
 
-const MOTION: { id: MotionPref; label: string }[] = [
-  { id: 'system', label: 'System' },
-  { id: 'reduced', label: 'Reduced' },
-  { id: 'full', label: 'Full' }
+const MOTION: { id: MotionPref; label: MessageKey }[] = [
+  { id: 'system', label: 'set.motion.system' },
+  { id: 'reduced', label: 'set.motion.reduced' },
+  { id: 'full', label: 'set.motion.full' }
 ]
 
 // Preview-only swatch colours (background = ink-950, bars = fg) per theme,
@@ -59,8 +61,9 @@ const THEME_PREVIEW: Record<ThemeId, { bg: string; fg: string }> = {
 }
 
 function ThemePicker({ value, accentRgb, onChange }: { value: ThemeId; accentRgb: string; onChange: (id: ThemeId) => void }): ReactNode {
+  const tr = useT()
   return (
-    <div role="radiogroup" aria-label="Theme" className="grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-3 sm:w-[22rem]">
+    <div role="radiogroup" aria-label={tr('set.theme')} className="grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-3 sm:w-[22rem]">
       {THEMES.map((t) => {
         const preview = THEME_PREVIEW[t.id]
         const selected = value === t.id
@@ -70,8 +73,7 @@ function ThemePicker({ value, accentRgb, onChange }: { value: ThemeId; accentRgb
             type="button"
             role="radio"
             aria-checked={selected}
-            aria-label={t.label}
-            title={t.label}
+            aria-label={tr(t.labelKey)} title={tr(t.labelKey)}
             onClick={() => onChange(t.id)}
             className={cx(
               'group flex flex-col items-center gap-1.5 rounded-xl p-1.5 transition-colors',
@@ -97,7 +99,7 @@ function ThemePicker({ value, accentRgb, onChange }: { value: ThemeId; accentRgb
                 </span>
               )}
             </span>
-            <span className={cx('text-[12px] font-medium', selected ? 'text-fg' : 'text-fg-muted')}>{t.label}</span>
+            <span className={cx('text-[12px] font-medium', selected ? 'text-fg' : 'text-fg-muted')}>{tr(t.labelKey)}</span>
           </button>
         )
       })}
@@ -106,14 +108,14 @@ function ThemePicker({ value, accentRgb, onChange }: { value: ThemeId; accentRgb
 }
 
 function AccentPicker({ value, onChange }: { value: AccentId; onChange: (id: AccentId) => void }): ReactNode {
+  const tr = useT()
   return (
-    <div role="radiogroup" aria-label="Accent" className="flex flex-wrap items-center gap-2.5">
+    <div role="radiogroup" aria-label={tr('set.accent')} className="flex flex-wrap items-center gap-2.5">
       <button
         type="button"
         role="radio"
         aria-checked={value === 'adaptive'}
-        aria-label="Adaptive: follows the dominant color of the current cover"
-        title="Adaptive — follows the current cover"
+        aria-label={tr('set.accentAdaptiveLabel')} title={tr('set.accentAdaptiveTitle')}
         onClick={() => onChange('adaptive')}
         className={cx(
           'flex h-8 items-center gap-2 rounded-full bg-white/[0.06] pl-1 pr-3 text-[13px] font-semibold ring-offset-2 ring-offset-ink-900 transition-shadow',
@@ -127,10 +129,11 @@ function AccentPicker({ value, onChange }: { value: AccentId; onChange: (id: Acc
         >
           {value === 'adaptive' && <Check className="h-3.5 w-3.5 text-ink-950" strokeWidth={3} />}
         </span>
-        Adaptive
+        {tr('accent.adaptive')}
       </button>
       {(Object.keys(ACCENTS) as AccentPresetId[]).map((id) => {
-        const { label, rgb } = ACCENTS[id]
+        const { labelKey, rgb } = ACCENTS[id]
+        const label = tr(labelKey)
         const selected = value === id
         return (
           <button
@@ -155,19 +158,19 @@ function AccentPicker({ value, onChange }: { value: AccentId; onChange: (id: Acc
   )
 }
 
-const SHORTCUTS: [string, string][] = [
-  ['Space', 'Play / pause'],
-  ['← / →', 'Seek 5 seconds'],
-  ['Shift + ← / →', 'Previous / next track'],
-  ['↑ / ↓', 'Volume up / down'],
-  ['M', 'Mute'],
-  ['L', 'Toggle lyrics'],
-  ['Q', 'Toggle queue'],
-  ['F', 'Fullscreen player'],
-  ['S', 'Shuffle'],
-  ['R', 'Cycle repeat'],
-  ['Ctrl + K  or  /', 'Search'],
-  ['Esc', 'Exit fullscreen']
+const SHORTCUTS: [MessageKey | string, MessageKey][] = [
+  ['sc.space', 'sc.playPause'],
+  ['← / →', 'sc.seek'],
+  ['Shift + ← / →', 'sc.prevNext'],
+  ['↑ / ↓', 'sc.volume'],
+  ['M', 'sc.mute'],
+  ['L', 'sc.lyrics'],
+  ['Q', 'sc.queue'],
+  ['F', 'sc.fullscreen'],
+  ['S', 'sc.shuffle'],
+  ['R', 'sc.repeat'],
+  ['sc.searchKeys', 'sc.search'],
+  ['Esc', 'sc.esc']
 ]
 
 function Kbd({ children }: { children: string }): ReactNode {
@@ -175,6 +178,7 @@ function Kbd({ children }: { children: string }): ReactNode {
 }
 
 function SecurityStatus(): ReactNode {
+  const tr = useT()
   const [state, setState] = useState<'checking' | 'secure' | 'weak'>('checking')
   useEffect(() => {
     let alive = true
@@ -186,7 +190,7 @@ function SecurityStatus(): ReactNode {
       alive = false
     }
   }, [])
-  if (state === 'checking') return <p className="text-sm text-fg-muted">Checking secure storage…</p>
+  if (state === 'checking') return <p className="text-sm text-fg-muted">{tr('set.checkingStorage')}</p>
   const secure = state === 'secure'
   const Icon = secure ? ShieldCheck : ShieldAlert
   return (
@@ -194,14 +198,14 @@ function SecurityStatus(): ReactNode {
       <Icon className={cx('mt-0.5 h-5 w-5 shrink-0', secure ? 'text-accent' : 'text-[#ffb870]')} />
       <p>
         {secure
-          ? 'Session encrypted with your OS keychain.'
-          : 'Secure storage is unavailable on this device. Your session is only kept for this browser session or stored without OS encryption.'}
+          ? tr('set.secure') : tr('set.weak')}
       </p>
     </div>
   )
 }
 
 function UpdatesSection(): ReactNode {
+  const tr = useT()
   const available = useUpdates((s) => s.available)
   const latest = useUpdates((s) => s.latest)
   const downloadUrl = useUpdates((s) => s.downloadUrl)
@@ -210,13 +214,13 @@ function UpdatesSection(): ReactNode {
   const check = useUpdates((s) => s.check)
 
   return (
-    <Section title="Updates">
+    <Section title={tr('set.updates')}>
       <Row
-        label="App version"
+        label={tr('set.appVersion')}
         hint={
           isPrerelease(__APP_VERSION__)
-            ? `You're running Nocturne ${__APP_VERSION__} (beta channel): you'll get new betas and the next stable release.`
-            : `You're running Nocturne ${__APP_VERSION__}.`
+            ? tr('set.runningBeta', { version: __APP_VERSION__ })
+            : tr('set.running', { version: __APP_VERSION__ })
         }
       >
         {available && downloadUrl ? (
@@ -225,7 +229,7 @@ function UpdatesSection(): ReactNode {
             onClick={() => void platform.openExternal(downloadUrl)}
             className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-ink-950 hover:opacity-90"
           >
-            <Download className="h-4 w-4" /> Update now
+            <Download className="h-4 w-4" /> {tr('set.updateNow')}
           </button>
         ) : (
           <button
@@ -234,13 +238,13 @@ function UpdatesSection(): ReactNode {
             onClick={() => void check()}
             className="inline-flex items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2 text-sm font-semibold hover:bg-white/[0.14] disabled:opacity-50"
           >
-            <RotateCw className={cx('h-4 w-4', checking && 'animate-spin')} /> {checking ? 'Checking…' : 'Check for updates'}
+            <RotateCw className={cx('h-4 w-4', checking && 'animate-spin')} /> {checking ? tr('set.checking') : tr('set.checkUpdates')}
           </button>
         )}
       </Row>
       {checked && !checking && (
         <p className="text-sm text-fg-muted">
-          {available && latest ? `Nocturne ${latest.version} is available → Update now.` : "You're up to date."}
+          {available && latest ? tr('set.updateAvailable', { version: latest.version }) : tr('set.upToDate')}
         </p>
       )}
     </Section>
@@ -248,6 +252,7 @@ function UpdatesSection(): ReactNode {
 }
 
 export function SettingsPage(): ReactNode {
+  const tr = useT()
   const { crossfade, visualizer, motion, lyrics, theme, accent, update } = useSettings()
   const session = useSession((s) => s.session)
   const server = useSession((s) => s.server)
@@ -258,17 +263,18 @@ export function SettingsPage(): ReactNode {
   const go = useNav((s) => s.go)
   const [signingOut, setSigningOut] = useState(false)
   const fadeId = useId()
+  const langId = useId()
   const serverUrl = session?.serverUrl || lastServerUrl
 
   return (
     <Page>
-      <h1 className="mb-6 text-3xl font-extrabold tracking-tight">Settings</h1>
+      <h1 className="mb-6 text-3xl font-extrabold tracking-tight">{tr('set.title')}</h1>
       <div className="max-w-3xl">
-        <Section title="Playback">
+        <Section title={tr('set.playback')}>
           <Row
-            label="Crossfade"
+            label={tr('set.crossfade')}
             htmlFor={fadeId}
-            hint={crossfade === 0 ? 'Gapless: tracks play back-to-back with no overlap.' : `Tracks overlap by ${crossfade} seconds.`}
+            hint={crossfade === 0 ? tr('set.gapless') : tr('set.overlap', { count: crossfade })}
           >
             <div className="flex items-center gap-3">
               <input
@@ -279,17 +285,23 @@ export function SettingsPage(): ReactNode {
                 max={12}
                 step={1}
                 value={crossfade}
-                aria-valuetext={crossfade === 0 ? 'Gapless' : `${crossfade} seconds`}
+                aria-valuetext={crossfade === 0 ? tr('set.gaplessShort') : tr('set.seconds', { count: crossfade })}
                 style={{ ['--fill' as string]: `${(crossfade / 12) * 100}%` }}
                 onChange={(e) => update({ crossfade: Number(e.currentTarget.value) })}
               />
-              <span className="w-16 text-right text-sm text-fg-muted tabular-nums">{crossfade === 0 ? 'Gapless' : `${crossfade}s`}</span>
+              <span className="min-w-16 shrink-0 text-right text-sm whitespace-nowrap text-fg-muted tabular-nums">{crossfade === 0 ? tr('set.gaplessShort') : `${crossfade} s`}</span>
             </div>
           </Row>
         </Section>
 
-        <Section title="Visuals">
-          <Row label="Theme" hint="Recolours the whole interface.">
+        <Section title={tr('set.language')}>
+          <Row label={tr('set.languageRow')} hint={tr('set.languageHint')} htmlFor={langId}>
+            <LanguageSelect id={langId} className="min-h-10 rounded-full border border-line bg-ink-800 px-4 text-sm font-medium text-fg outline-none focus:border-accent/70" />
+          </Row>
+        </Section>
+
+        <Section title={tr('set.visuals')}>
+          <Row label={tr('set.theme')} hint={tr('set.themeHint')}>
             <ThemePicker
               value={theme}
               accentRgb={accentRgb(accent) ?? ACCENTS.coral.rgb}
@@ -299,39 +311,38 @@ export function SettingsPage(): ReactNode {
           {theme === 'adaptive' ? (
             <>
               <Row
-                label="Accent"
-                hint="Adaptive picks a colour from the current cover and builds the background around it."
+                label={tr('set.accent')} hint={tr('set.accentAdaptiveHint')}
               />
               <AdaptiveSettingsPanel />
             </>
           ) : (
-            <Row label="Accent" hint="Highlight colour for controls and emphasis. Adaptive follows the current cover.">
+            <Row label={tr('set.accent')} hint={tr('set.accentHint')}>
               <AccentPicker value={accent} onChange={(id) => update({ accent: id })} />
             </Row>
           )}
-          <Row label="Visualizer style" hint="Shown behind the artwork in the fullscreen player.">
-            <Segmented label="Visualizer style" value={visualizer} options={VISUALIZERS} onChange={(v) => update({ visualizer: v })} />
+          <Row label={tr('set.visualizer')} hint={tr('set.visualizerHint')}>
+            <Segmented label={tr('set.visualizer')} value={visualizer} options={VISUALIZERS.map((o) => ({ id: o.id, label: tr(o.label) }))} onChange={(v) => update({ visualizer: v })} />
           </Row>
-          <Row label="Motion" hint="System follows your device's reduce-motion setting.">
-            <Segmented label="Motion" value={motion} options={MOTION} onChange={(v) => update({ motion: v })} />
-          </Row>
-        </Section>
-
-        <Section title="Lyrics">
-          <Row label="Show lyrics" hint="Synced lyrics from LRCLIB">
-            <Toggle label="Show lyrics" checked={lyrics} onChange={(v) => update({ lyrics: v })} />
+          <Row label={tr('set.motion')} hint={tr('set.motionHint')}>
+            <Segmented label={tr('set.motion')} value={motion} options={MOTION.map((o) => ({ id: o.id, label: tr(o.label) }))} onChange={(v) => update({ motion: v })} />
           </Row>
         </Section>
 
-        <Section title="Account">
+        <Section title={tr('set.lyrics')}>
+          <Row label={tr('set.showLyrics')} hint={tr('set.showLyricsHint')}>
+            <Toggle label={tr('set.showLyrics')} checked={lyrics} onChange={(v) => update({ lyrics: v })} />
+          </Row>
+        </Section>
+
+        <Section title={tr('set.account')}>
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
-            <dt className="text-fg-muted">Signed in as</dt>
+            <dt className="text-fg-muted">{tr('set.signedInAs')}</dt>
             <dd className="truncate font-medium">{session?.user.displayName || session?.user.username || '—'}</dd>
-            <dt className="text-fg-muted">Server</dt>
+            <dt className="text-fg-muted">{tr('set.server')}</dt>
             <dd className="truncate font-medium">{serverUrl || '—'}</dd>
             {server && (
               <>
-                <dt className="text-fg-muted">Server software</dt>
+                <dt className="text-fg-muted">{tr('set.serverSoftware')}</dt>
                 <dd className="truncate font-medium">
                   {server.name} <span className="text-fg-muted">v{server.version}</span>
                 </dd>
@@ -347,7 +358,7 @@ export function SettingsPage(): ReactNode {
             }}
             className="inline-flex items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2 text-sm font-semibold hover:bg-white/[0.14] disabled:opacity-50"
           >
-            <LogOut className="h-4 w-4" /> Sign out
+            <LogOut className="h-4 w-4" /> {tr('set.signOut')}
           </button>
         </Section>
 
@@ -358,43 +369,41 @@ export function SettingsPage(): ReactNode {
         )}
 
         {platform.hostedOrigin && (
-          <Section title="Apps">
-            <Row label="Android & Windows apps" hint="Install Nocturne on your phone or PC to control playback across your devices.">
+          <Section title={tr('set.apps')}> <Row label={tr('set.appsRow')} hint={tr('set.appsHint')}>
               <a
                 href="/descargar"
                 className="inline-flex items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2 text-sm font-semibold hover:bg-white/[0.14]"
               >
-                <Smartphone className="h-4 w-4" /> Get the apps
+                <Smartphone className="h-4 w-4" /> {tr('set.getApps')}
               </a>
             </Row>
           </Section>
         )}
 
         {admin && (
-          <Section title="Administration">
-            <Row label="Admin dashboard" hint="Add music, manage users, jobs, library and backups.">
+          <Section title={tr('set.admin')}> <Row label={tr('set.adminRow')} hint={tr('set.adminHint')}>
               <button
                 type="button"
                 onClick={() => go({ name: 'admin' })}
                 className="inline-flex items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2 text-sm font-semibold hover:bg-white/[0.14]"
               >
-                <ShieldCheck className="h-4 w-4" /> Open Admin
+                <ShieldCheck className="h-4 w-4" /> {tr('set.openAdmin')}
               </button>
             </Row>
           </Section>
         )}
 
-        <Section title="Security">
+        <Section title={tr('set.security')}>
           <SecurityStatus />
         </Section>
 
-        <Section title="Keyboard shortcuts">
+        <Section title={tr('set.shortcuts')}>
           <dl className="grid grid-cols-1 gap-x-10 gap-y-2.5 sm:grid-cols-2">
             {SHORTCUTS.map(([keys, action]) => (
               <div key={keys} className="flex items-center justify-between gap-4 text-sm">
-                <dt className="text-fg-muted">{action}</dt>
+                <dt className="text-fg-muted">{tr(action)}</dt>
                 <dd className="shrink-0">
-                  <Kbd>{keys}</Kbd>
+                  <Kbd>{keys.startsWith('sc.') ? tr(keys as MessageKey) : keys}</Kbd>
                 </dd>
               </div>
             ))}
@@ -403,21 +412,21 @@ export function SettingsPage(): ReactNode {
 
         {!platform.hostedOrigin && <UpdatesSection />}
 
-        <Section title="About">
+        <Section title={tr('set.about')}>
           <div className="flex items-center gap-4">
             <Logo className="h-12 w-12" />
             <div className="text-sm">
               <p className="font-semibold">Nocturne</p>
               <p className="flex items-center gap-2 text-fg-muted tabular-nums">
-                Version {__APP_VERSION__}
+                {tr('set.version', { version: __APP_VERSION__ })}
                 {isPrerelease(__APP_VERSION__) && (
-                  <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-bold tracking-wider text-accent">BETA</span>
+                  <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-bold tracking-wider text-accent">{tr('set.beta')}</span>
                 )}
               </p>
             </div>
           </div>
           <p className="text-sm text-fg-muted">
-            Lyrics are provided by <ExternalLink href="https://lrclib.net">LRCLIB</ExternalLink>, a free and open lyrics database.
+            {tr('set.lyricsBy', { source: '\u0000' }).split('\u0000').flatMap((part, i) => (i === 0 ? [part] : [<ExternalLink key="l" href="https://lrclib.net">LRCLIB</ExternalLink>, part]))}
           </p>
         </Section>
       </div>

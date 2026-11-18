@@ -7,6 +7,7 @@ import { cx } from './common'
 import { canvasToPngBlob, ensureCardFonts, loadCardImage } from '../lib/lyricCard'
 import { drawRecapCard, parseAccent, type RecapImages } from '../lib/recapCard'
 import type { RecapData } from '../lib/stats'
+import { useT } from '../i18n'
 
 /**
  * Modal that renders the period recap as a 1080×1920 image (same canvas = preview + export source).
@@ -14,6 +15,7 @@ import type { RecapData } from '../lib/stats'
  * that fails to load is drawn as a placeholder so the canvas is never tainted.
  */
 export function RecapCard({ data, onClose }: { data: RecapData; onClose: () => void }): ReactNode {
+  const tr = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imagesRef = useRef<RecapImages>({ artists: [], cover: null })
   const [version, setVersion] = useState(0)
@@ -107,12 +109,12 @@ export function RecapCard({ data, onClose }: { data: RecapData; onClose: () => v
     try {
       const blob = await currentBlob()
       if (!blob) {
-        toast('Could not create the image.', 'error')
+        toast(tr('card.imageFailed'), 'error')
         return
       }
       if (share) {
         const file = new File([blob], fileName, { type: 'image/png' })
-        const payload: ShareData = { files: [file], title: `My Nocturne ${data.periodLabel}` }
+        const payload: ShareData = { files: [file], title: tr('card.recapShareTitle', { period: data.periodLabel }) }
         if (typeof navigator.canShare === 'function' && navigator.canShare(payload)) {
           try {
             await navigator.share(payload)
@@ -124,7 +126,7 @@ export function RecapCard({ data, onClose }: { data: RecapData; onClose: () => v
       }
       triggerDownload(blob)
     } catch {
-      toast(share ? 'Could not share the image.' : 'Could not create the image.', 'error')
+      toast(share ? tr('card.shareFailed') : tr('card.imageFailed'), 'error')
     } finally {
       setBusy(false)
     }
@@ -143,17 +145,17 @@ export function RecapCard({ data, onClose }: { data: RecapData; onClose: () => v
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Share recap as image"
+        aria-label={tr('card.recapDialog')}
         className={cx(
           'g-pop g-sheet flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-line bg-ink-850 pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-black/70 sm:max-w-md sm:rounded-2xl sm:pb-0',
           !reduced && (closing ? 'modal-pop-out' : 'modal-pop')
         )}
       >
         <div className="flex items-center justify-between gap-4 px-5 pt-5 pb-1">
-          <h2 className="text-lg font-bold tracking-tight">Share recap</h2>
+          <h2 className="text-lg font-bold tracking-tight">{tr('card.recapTitle')}</h2>
           <button
             type="button"
-            aria-label="Close"
+            aria-label={tr('card.close')}
             onClick={requestClose}
             className="-mt-1 -mr-2 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-white/8 hover:text-fg"
           >
@@ -164,29 +166,29 @@ export function RecapCard({ data, onClose }: { data: RecapData; onClose: () => v
           <canvas
             ref={canvasRef}
             role="img"
-            aria-label={`Recap card preview for ${data.periodLabel}`}
+            aria-label={tr('card.recapPreview', { period: data.periodLabel })}
             className="h-auto max-h-[64vh] w-auto max-w-full rounded-xl shadow-lg shadow-black/50"
           />
         </div>
         <div className="flex gap-2 px-5 pt-1 pb-5">
           <button
             type="button"
-            aria-label="Download image"
+            aria-label={tr('card.downloadLabel')}
             disabled={busy}
             onClick={() => void run(false)}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-3 text-sm font-semibold text-fg transition-colors hover:bg-white/14 disabled:pointer-events-none disabled:opacity-50"
           >
-            <Download className="h-4 w-4" /> Download
+            <Download className="h-4 w-4" /> {tr('card.download')}
           </button>
           {canNativeShare && (
             <button
               type="button"
-              aria-label="Share image"
+              aria-label={tr('card.shareLabel')}
               disabled={busy}
               onClick={() => void run(true)}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-accent px-4 py-3 text-sm font-semibold text-ink-950 transition-transform active:scale-95 disabled:pointer-events-none disabled:opacity-50"
             >
-              <Share2 className="h-4 w-4" /> Share
+              <Share2 className="h-4 w-4" /> {tr('card.share')}
             </button>
           )}
         </div>

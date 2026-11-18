@@ -5,6 +5,7 @@ import type { ServerInfo } from '../api/types'
 import { normalizeServerUrl } from '../lib/url'
 import { readJson, writeJson } from '../lib/storage'
 import type { SecureStorage } from '../platform'
+import { t } from '../i18n'
 
 export type SessionStatus = 'restoring' | 'signedOut' | 'signedIn'
 
@@ -106,20 +107,20 @@ export function createSessionStore(deps: SessionDeps): { useSession: UseBoundSto
 
     async login(rawUrl, username, password) {
       const serverUrl = hostedOrigin ? hostedOrigin.replace(/\/+$/, '') : normalizeServerUrl(rawUrl)
-      if (!username.trim() || !password) throw new Error('Enter your username and password.')
+      if (!username.trim() || !password) throw new Error(t('err.noCredentials'))
       let server: ServerInfo
       try {
         server = await ServerApi.info(serverUrl, fetchImpl)
       } catch (err) {
         if (err instanceof ApiError && (err.code === 'network' || err.code === 'timeout')) {
-          throw new ApiError(err.code, "Couldn't reach that server. Check the address and that it's online.")
+          throw new ApiError(err.code, t('err.serverUnreachable'))
         }
         if (err instanceof ApiError && (err.code === 'not_found' || err.code === 'bad_response')) {
-          throw new ApiError(err.code, "That address doesn't look like a Nocturne-compatible server.")
+          throw new ApiError(err.code, t('err.notNocturne'))
         }
         throw err
       }
-      if (server.apiVersion !== 1) throw new Error(`Unsupported server API version (${String(server.apiVersion)}).`)
+      if (server.apiVersion !== 1) throw new Error(t('err.apiVersion', { version: String(server.apiVersion) }))
       const session = await ServerApi.login(serverUrl, username.trim(), password, fetchImpl, now(), { cookieSession: cookie })
       if (!hostedOrigin) writeJson(SERVER_KEY, serverUrl)
       set({ server, lastServerUrl: serverUrl, restoreError: null })
@@ -151,7 +152,7 @@ export function createSessionStore(deps: SessionDeps): { useSession: UseBoundSto
       if (err instanceof ApiError && (err.code === 'unauthorized' || err.code === 'forbidden' || err.code === 'bad_request')) {
         set({ status: 'signedOut', session: null, restoreError: null })
       } else {
-        const message = err instanceof ApiError ? err.message : "Can't reach the server."
+        const message = err instanceof ApiError ? err.message : t('err.cantReach')
         set({ status: 'signedOut', session: null, restoreError: message, lastServerUrl: origin })
       }
       return

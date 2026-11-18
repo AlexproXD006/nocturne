@@ -13,6 +13,7 @@ import { prefersReducedMotion, useSettings } from '../store/settings'
 import { pickImage } from '../lib/url'
 import { ExternalLink, Spinner, cx } from './common'
 import { LyricCard } from './LyricCard'
+import { useT } from '../i18n'
 
 /** Maximum number of lyric lines that can go on a shared image. */
 const MAX_SHARE_LINES = 10
@@ -50,6 +51,7 @@ function setWordClass(el: HTMLElement | null | undefined, state: 'sung' | 'curre
  * state per frame. Clicking a line seeks there. Manual scrolling pauses auto-follow for a few seconds.
  */
 export function LyricsView({ track, size = 'md' }: { track: Track | null; size?: 'md' | 'lg' }): ReactNode {
+  const tr = useT()
   const enabled = useSettings((s) => s.lyrics)
   const motion = useSettings((s) => s.motion)
   const reduced = prefersReducedMotion(motion)
@@ -210,8 +212,8 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
   const shareCover = pickImage(track?.artwork, 256)
   const shareLines = selected.map((i) => lines[i]?.text ?? '').filter(Boolean)
 
-  if (!enabled) return <LyricsMessage big={big}>Lyrics are turned off in Settings.</LyricsMessage>
-  if (!track) return <LyricsMessage big={big}>Play something to see its lyrics.</LyricsMessage>
+  if (!enabled) return <LyricsMessage big={big}>{tr('lyr.off')}</LyricsMessage>
+  if (!track) return <LyricsMessage big={big}>{tr('lyr.idle')}</LyricsMessage>
   if (state.status === 'loading' || state.status === 'idle') {
     return (
       <div className="flex h-full items-center justify-center">
@@ -219,10 +221,10 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
       </div>
     )
   }
-  if (state.status === 'error') return <LyricsMessage big={big}>Couldn't load lyrics right now.</LyricsMessage>
-  if (lyrics?.kind === 'instrumental') return <LyricsMessage big={big}>♪ Instrumental</LyricsMessage>
+  if (state.status === 'error') return <LyricsMessage big={big}>{tr('lyr.error')}</LyricsMessage>
+  if (lyrics?.kind === 'instrumental') return <LyricsMessage big={big}>{tr('lyr.instrumental')}</LyricsMessage>
   if (!lyrics || lyrics.kind === 'none' || lines.length === 0) {
-    return <LyricsMessage big={big}>No lyrics found for this song.</LyricsMessage>
+    return <LyricsMessage big={big}>{tr('lyr.none')}</LyricsMessage>
   }
 
   const renderLine = (line: LyricLine, i: number): ReactNode => {
@@ -319,11 +321,11 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
         })}
         {lyrics.source === 'lrclib' && (
           <p className="mt-10 text-xs font-normal text-fg-subtle">
-            Lyrics from <ExternalLink href="https://lrclib.net">LRCLIB</ExternalLink>
-            {!synced && ' · not time-synced'}
+            {tr('lyr.from', { source: '\u0000' }).split('\u0000').flatMap((part, i) => (i === 0 ? [part] : [<ExternalLink key="l" href="https://lrclib.net">LRCLIB</ExternalLink>, part]))}
+            {!synced && ` · ${tr('lyr.notSynced')}`}
           </p>
         )}
-        {lyrics.source === 'ttml' && <p className="mt-10 text-xs font-normal text-fg-subtle">Lyrics from your library (TTML)</p>}
+        {lyrics.source === 'ttml' && <p className="mt-10 text-xs font-normal text-fg-subtle">{tr('lyr.fromLibrary')}</p>}
       </div>
     </div>
 
@@ -331,39 +333,39 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
       {synced && !selecting && (
         <div
           role="group"
-          aria-label="Lyrics timing offset"
+          aria-label={tr('lyr.offsetGroup')}
           className="no-drag absolute left-3 top-3 z-20 inline-flex items-center gap-0.5 rounded-full bg-ink-800/70 px-1 py-1 text-xs text-fg-muted shadow-lg shadow-black/30 backdrop-blur"
         >
           <button
             type="button"
-            aria-label="Lyrics 0.5 seconds earlier"
-            title="Lyrics earlier"
+            aria-label={tr('lyr.earlierLabel')}
+            title={tr('lyr.earlier')}
             onClick={() => nudge(-OFFSET_STEP_MS)}
             className="h-7 rounded-full px-2 font-semibold tabular-nums transition-colors hover:bg-white/10 hover:text-fg active:scale-95"
           >
-            {'\u2212'}0.5s
+            {formatOffset(-OFFSET_STEP_MS)}
           </button>
           <span data-testid="lyrics-offset" aria-live="polite" className="min-w-[3.2rem] text-center font-semibold tabular-nums text-fg">
             {formatOffset(offsetMs)}
           </span>
           <button
             type="button"
-            aria-label="Lyrics 0.5 seconds later"
-            title="Lyrics later"
+            aria-label={tr('lyr.laterLabel')}
+            title={tr('lyr.later')}
             onClick={() => nudge(OFFSET_STEP_MS)}
             className="h-7 rounded-full px-2 font-semibold tabular-nums transition-colors hover:bg-white/10 hover:text-fg active:scale-95"
           >
-            +0.5s
+            {formatOffset(OFFSET_STEP_MS)}
           </button>
           <button
             type="button"
-            aria-label="Reset lyrics offset"
-            title="Reset offset"
+            aria-label={tr('lyr.resetLabel')}
+            title={tr('lyr.resetTitle')}
             disabled={offsetMs === 0}
             onClick={reset}
             className="h-7 rounded-full px-2 font-semibold transition-colors hover:bg-white/10 hover:text-fg disabled:opacity-35 disabled:hover:bg-transparent"
           >
-            reset
+            {tr('lyr.reset')}
           </button>
         </div>
       )}
@@ -372,8 +374,8 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
       {!selecting && (
         <button
           type="button"
-          aria-label="Select lyrics to share as an image"
-          title="Share lyrics"
+          aria-label={tr('lyr.shareLabel')}
+          title={tr('lyr.share')}
           onClick={startSelecting}
           className="no-drag absolute right-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full bg-ink-800/70 text-fg-muted shadow-lg shadow-black/30 backdrop-blur transition-colors hover:bg-ink-700/80 hover:text-fg active:scale-95"
         >
@@ -391,14 +393,14 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
         >
           <button
             type="button"
-            aria-label="Exit selection mode"
+            aria-label={tr('lyr.exitSelect')}
             onClick={stopSelecting}
             className="no-drag pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink-800/80 text-fg-muted backdrop-blur hover:text-fg active:scale-95"
           >
             <X className="h-5 w-5" />
           </button>
           <span className="pointer-events-auto text-sm font-medium text-fg-muted" aria-live="polite">
-            Tap lines · <span className="text-fg">{selected.length}/{MAX_SHARE_LINES}</span>
+            {tr('lyr.tapLines')} · <span className="text-fg">{selected.length}/{MAX_SHARE_LINES}</span>
           </span>
           <span className="h-9 w-9" aria-hidden />
         </div>
@@ -413,11 +415,11 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
         >
           <button
             type="button"
-            aria-label={`Create image from ${selected.length} selected line${selected.length === 1 ? '' : 's'}`}
+            aria-label={tr('lyr.createLabel', { count: selected.length })}
             onClick={() => setCardOpen(true)}
             className="no-drag pointer-events-auto inline-flex items-center gap-2 rounded-full bg-accent px-5 py-3 text-sm font-semibold text-ink-950 shadow-lg shadow-black/40 transition-transform active:scale-95"
           >
-            <ImagePlus className="h-4 w-4" /> Create image
+            <ImagePlus className="h-4 w-4" /> {tr('lyr.create')}
           </button>
         </div>
       )}

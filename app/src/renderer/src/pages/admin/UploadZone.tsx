@@ -7,6 +7,7 @@ import { useUi } from '../../store/ui'
 import { cx } from '../../components/common'
 import { formatBytes } from './format'
 import { Button, Card, Chip, ProgressBar } from './ui'
+import { t, useT } from '../../i18n'
 
 export const AUDIO_ACCEPT = 'audio/*,.mp3,.flac,.m4a,.aac,.ogg,.opus,.wav'
 const AUDIO_EXT = /\.(mp3|flac|m4a|aac|ogg|opus|wav)$/i
@@ -17,9 +18,9 @@ export function isAudioFile(file: { name: string; type: string }): boolean {
 
 /** Returns an error message for files that must not be uploaded, else null. */
 export function validateUpload(file: { name: string; type: string; size: number }, maxBytes: number | undefined): string | null {
-  if (!isAudioFile(file)) return 'Not an audio file (mp3, flac, m4a, aac, ogg, opus or wav).'
-  if (file.size === 0) return 'The file is empty.'
-  if (maxBytes !== undefined && maxBytes > 0 && file.size > maxBytes) return `Too large — the limit is ${formatBytes(maxBytes)}.`
+  if (!isAudioFile(file)) return t('up.notAudio')
+  if (file.size === 0) return t('up.empty')
+  if (maxBytes !== undefined && maxBytes > 0 && file.size > maxBytes) return t('up.tooLarge', { limit: formatBytes(maxBytes) })
   return null
 }
 
@@ -35,6 +36,7 @@ interface Item {
 let nextId = 1
 
 export function UploadZone({ maxBytes }: { maxBytes: number | undefined }): ReactNode {
+  const tr = useT()
   const [items, setItems] = useState<Item[]>([])
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -75,7 +77,7 @@ export function UploadZone({ maxBytes }: { maxBytes: number | undefined }): Reac
         activeId.current = null
         ctrls.current.delete(next.id)
         patch(next.id, { status: 'done', progress: 1 })
-        useUi.getState().toast(`Uploaded “${track.title || next.file.name}”`)
+        useUi.getState().toast(t('up.uploaded', { title: track.title || next.file.name }))
       })
       .catch((err: unknown) => {
         activeId.current = null
@@ -108,7 +110,7 @@ export function UploadZone({ maxBytes }: { maxBytes: number | undefined }): Reac
   }
 
   return (
-    <Card id="upload-title" title="Upload files">
+    <Card id="upload-title" title={tr('up.title')}>
       <div
         onDragEnter={(e) => {
           e.preventDefault()
@@ -128,19 +130,19 @@ export function UploadZone({ maxBytes }: { maxBytes: number | undefined }): Reac
         )}
       >
         <UploadCloud className={cx('h-9 w-9', dragging ? 'text-accent' : 'text-fg-subtle')} strokeWidth={1.5} aria-hidden />
-        <p className="text-sm font-semibold">{dragging ? 'Drop to upload' : 'Drag audio files here'}</p>
+        <p className="text-sm font-semibold">{dragging ? tr('up.drop') : tr('up.drag')}</p>
         <p className="text-[13px] text-fg-muted">
-          mp3, flac, m4a, aac, ogg, opus or wav{maxBytes ? ` · up to ${formatBytes(maxBytes)} each` : ''}
+          {tr('up.formats')}{maxBytes ? ` · ${tr('up.upTo', { limit: formatBytes(maxBytes) })}` : ''}
         </p>
         <Button className="mt-2" onClick={() => inputRef.current?.click()}>
-          Choose files
+          {tr('up.choose')}
         </Button>
         <input
           ref={inputRef}
           type="file"
           multiple
           accept={AUDIO_ACCEPT}
-          aria-label="Choose audio files to upload"
+          aria-label={tr('up.chooseLabel')}
           className="sr-only"
           tabIndex={-1}
           data-testid="upload-input"
@@ -155,11 +157,11 @@ export function UploadZone({ maxBytes }: { maxBytes: number | undefined }): Reac
         <div className="mt-4">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-[13px] text-fg-muted tabular-nums" aria-live="polite">
-              {busyCount > 0 ? `${busyCount} remaining` : `${items.length} ${items.length === 1 ? 'file' : 'files'}`}
+              {busyCount > 0 ? tr('up.remaining', { count: busyCount }) : tr('up.files', { count: items.length })}
             </p>
             {finished.length > 0 && (
               <Button size="sm" variant="ghost" onClick={() => setItems((l) => l.filter((i) => i.status === 'pending' || i.status === 'uploading'))}>
-                Clear finished
+                {tr('up.clearFinished')}
               </Button>
             )}
           </div>
@@ -173,22 +175,22 @@ export function UploadZone({ maxBytes }: { maxBytes: number | undefined }): Reac
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <p className="min-w-0 truncate text-sm font-medium" title={i.file.name}>{i.file.name}</p>
                     <span className="text-xs text-fg-subtle tabular-nums">{formatBytes(i.file.size)}</span>
-                    {i.status === 'pending' && <Chip>Waiting</Chip>}
-                    {i.status === 'done' && <Chip tone="good">Uploaded</Chip>}
-                    {i.status === 'cancelled' && <Chip tone="warn">Cancelled</Chip>}
-                    {i.status === 'error' && <Chip tone="bad">Failed</Chip>}
+                    {i.status === 'pending' && <Chip>{tr('up.waiting')}</Chip>}
+                    {i.status === 'done' && <Chip tone="good">{tr('up.chipUploaded')}</Chip>}
+                    {i.status === 'cancelled' && <Chip tone="warn">{tr('up.chipCancelled')}</Chip>}
+                    {i.status === 'error' && <Chip tone="bad">{tr('up.chipFailed')}</Chip>}
                   </div>
                   {i.status === 'uploading' && (
                     <div className="mt-2 flex items-center gap-3">
-                      <ProgressBar value={i.progress} label={`Uploading ${i.file.name}`} />
+                      <ProgressBar value={i.progress} label={tr('up.uploading', { name: i.file.name })} />
                       <span className="w-10 shrink-0 text-right text-xs text-fg-muted tabular-nums">{Math.round(i.progress * 100)}%</span>
                     </div>
                   )}
                   {i.status === 'error' && i.error && <p className="mt-1 text-[13px] text-[#ff9b9b] [overflow-wrap:anywhere]">{i.error}</p>}
                 </div>
                 {(i.status === 'uploading' || i.status === 'pending') && (
-                  <Button size="sm" variant="ghost" icon={<X />} aria-label={`Cancel upload of ${i.file.name}`} onClick={() => cancel(i)}>
-                    <span className="max-sm:sr-only">Cancel</span>
+                  <Button size="sm" variant="ghost" icon={<X />} aria-label={tr('up.cancelLabel', { name: i.file.name })} onClick={() => cancel(i)}>
+                    <span className="max-sm:sr-only">{tr('job.cancel')}</span>
                   </Button>
                 )}
               </li>

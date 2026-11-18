@@ -5,13 +5,14 @@ import { cx } from '../../components/common'
 import { relativeTime } from './format'
 import { cancelJob, jobKindLabel } from './useJobs'
 import { Button, Chip, ProgressBar, type ChipTone } from './ui'
+import { useT, type MessageKey } from '../../i18n'
 
-const STATUS: Record<JobStatus, { label: string; tone: ChipTone }> = {
-  queued: { label: 'Queued', tone: 'neutral' },
-  running: { label: 'Running', tone: 'accent' },
-  done: { label: 'Done', tone: 'good' },
-  failed: { label: 'Failed', tone: 'bad' },
-  cancelled: { label: 'Cancelled', tone: 'warn' }
+const STATUS: Record<JobStatus, { label: MessageKey; tone: ChipTone }> = {
+  queued: { label: 'job.queued', tone: 'neutral' },
+  running: { label: 'job.running', tone: 'accent' },
+  done: { label: 'job.done', tone: 'good' },
+  failed: { label: 'job.failed', tone: 'bad' },
+  cancelled: { label: 'job.cancelled', tone: 'warn' }
 }
 
 const KIND_ICON: Record<AdminJob['kind'], typeof Download> = {
@@ -23,11 +24,13 @@ const KIND_ICON: Record<AdminJob['kind'], typeof Download> = {
 }
 
 export function JobStatusChip({ status }: { status: JobStatus }): ReactNode {
+  const tr = useT()
   const s = STATUS[status]
-  return <Chip tone={s.tone}>{s.label}</Chip>
+  return <Chip tone={s.tone}>{tr(s.label)}</Chip>
 }
 
 export function JobRow({ job, now, compact }: { job: AdminJob; now: number; compact?: boolean }): ReactNode {
+  const tr = useT()
   const [cancelling, setCancelling] = useState(false)
   const Icon = KIND_ICON[job.kind]
   const active = job.status === 'queued' || job.status === 'running'
@@ -51,11 +54,11 @@ export function JobRow({ job, now, compact }: { job: AdminJob; now: number; comp
           {jobKindLabel(job.kind)}
           {job.source && job.source !== 'url' ? ` · ${job.source === 'spotify' ? 'Spotify' : 'YouTube'}` : ''}
           {when ? ` · ${when}` : ''}
-          {added > 0 ? ` · ${added} ${added === 1 ? 'track' : 'tracks'} added` : ''}
+          {added > 0 ? ` · ${tr('job.added', { count: added })}` : ''}
         </p>
         {job.status === 'running' && (
           <div className="mt-2.5 flex items-center gap-3">
-            <ProgressBar value={job.progress} label={`${job.title} progress`} />
+            <ProgressBar value={job.progress} label={tr('job.progress', { title: job.title })} />
             {job.progress !== undefined && (
               <span className="w-10 shrink-0 text-right text-xs text-fg-muted tabular-nums">{Math.round(job.progress * 100)}%</span>
             )}
@@ -72,14 +75,14 @@ export function JobRow({ job, now, compact }: { job: AdminJob; now: number; comp
           size="sm"
           variant="ghost"
           busy={cancelling}
-          aria-label={`Cancel ${job.title}`}
+          aria-label={tr('job.cancelLabel', { title: job.title })}
           icon={<X />}
           onClick={() => {
             setCancelling(true)
             void cancelJob(job.id).finally(() => setCancelling(false))
           }}
         >
-          <span className="max-sm:sr-only">Cancel</span>
+          <span className="max-sm:sr-only">{tr('job.cancel')}</span>
         </Button>
       )}
     </li>

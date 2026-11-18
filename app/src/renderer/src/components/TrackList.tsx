@@ -11,6 +11,7 @@ import { Artwork, LikeButton, cx } from './common'
 import { Menu, useMenu } from './Menu'
 import { usePlaylistsEnabled } from './Playlists'
 import { usePlaylistUi } from '../store/playlists'
+import { useT } from '../i18n'
 
 export function Equalizer({ paused }: { paused?: boolean }): ReactNode {
   return (
@@ -60,6 +61,7 @@ interface RowProps {
 }
 
 const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCurrent, isPlaying, onPlay, onRemove, dnd }: RowProps): ReactNode {
+  const tr = useT()
   const { menu, open, close } = useMenu()
   const go = useNav((s) => s.go)
   const toast = useUi((s) => s.toast)
@@ -71,18 +73,18 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
   const [over, setOver] = useState(false)
 
   const items = [
-    { label: 'Play next', icon: <ListPlus />, onSelect: () => (playback.addNext([track]), toast(`“${track.title}” will play next`)) },
-    { label: 'Add to queue', icon: <ListEnd />, onSelect: () => (playback.addToQueue([track]), toast('Added to queue')) },
-    ...(playlists ? [{ label: 'Add to playlist…', icon: <ListMusic />, onSelect: () => usePlaylistUi.getState().openPicker([track]) }] : []),
-    ...(playlists && onRemove ? [{ label: 'Remove from this playlist', icon: <ListMinus />, onSelect: () => onRemove(index) }] : []),
-    ...(track.album ? [{ label: 'Go to album', icon: <Disc3 />, onSelect: () => go({ name: 'album', id: track.album!.id }) }] : []),
-    ...(track.artists[0] ? [{ label: 'Go to artist', icon: <UserRound />, onSelect: () => go({ name: 'artist', id: track.artists[0]!.id }) }] : [])
+    { label: tr('tl.playNext'), icon: <ListPlus />, onSelect: () => (playback.addNext([track]), toast(tr('tl.willPlayNext', { title: track.title }))) },
+    { label: tr('tl.addToQueue'), icon: <ListEnd />, onSelect: () => (playback.addToQueue([track]), toast(tr('tl.addedToQueue'))) },
+    ...(playlists ? [{ label: tr('tl.addToPlaylist'), icon: <ListMusic />, onSelect: () => usePlaylistUi.getState().openPicker([track]) }] : []),
+    ...(playlists && onRemove ? [{ label: tr('tl.removeFromPlaylist'), icon: <ListMinus />, onSelect: () => onRemove(index) }] : []),
+    ...(track.album ? [{ label: tr('tl.goAlbum'), icon: <Disc3 />, onSelect: () => go({ name: 'album', id: track.album!.id }) }] : []),
+    ...(track.artists[0] ? [{ label: tr('tl.goArtist'), icon: <UserRound />, onSelect: () => go({ name: 'artist', id: track.artists[0]!.id }) }] : [])
   ]
 
   const activate = (): void => (isCurrent ? toggle() : onPlay(index))
   const quickQueue = (): void => {
     const undo = playback.addToQueue([track])
-    toast('Added to queue', 'info', undo ? { action: { label: 'Undo', run: undo } } : undefined)
+    toast(tr('tl.addedToQueue'), 'info', undo ? { action: { label: tr('tl.undo'), run: undo } } : undefined)
   }
 
   return (
@@ -158,7 +160,7 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
         )}
         <button
           type="button"
-          aria-label={isCurrent && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
+          aria-label={isCurrent && isPlaying ? tr('tl.pauseTrack', { title: track.title }) : tr('tl.playTrack', { title: track.title })}
           onClick={(e) => {
             e.stopPropagation()
             activate()
@@ -203,7 +205,7 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
         {dnd && (
           <span
             aria-hidden
-            title="Drag to reorder"
+            title={tr('tl.drag')}
             onPointerDown={(e) => e.pointerType === 'mouse' && setArmed(true)}
             onPointerUp={() => setArmed(false)}
             className="hidden h-8 w-6 cursor-grab items-center justify-center text-fg-subtle opacity-0 transition group-hover:opacity-100 active:cursor-grabbing md:flex"
@@ -213,8 +215,8 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
         )}
         <button
           type="button"
-          aria-label={`Add ${track.title} to queue`}
-          title="Add to queue"
+          aria-label={tr('tl.addTrackToQueue', { title: track.title })}
+          title={tr('tl.addToQueue')}
           onClick={(e) => {
             e.stopPropagation()
             quickQueue()
@@ -230,7 +232,7 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
         <span className="hidden w-12 text-right text-[13px] text-fg-muted tabular-nums sm:inline">{formatTime(track.duration)}</span>
         <button
           type="button"
-          aria-label={`More options for ${track.title}`}
+          aria-label={tr('tl.more', { title: track.title })}
           onClick={(e) => {
             e.stopPropagation()
             const r = e.currentTarget.getBoundingClientRect()
@@ -268,6 +270,7 @@ export function TrackList({
   /** Stable React keys per row (e.g. playlist entry ids, so the same song can appear twice). Default: id + index. */
   rowKeys?: readonly string[]
 }): ReactNode {
+  const tr = useT()
   const currentId = useNowTrack()?.id
   const nowCtx = useNowContext()
   const sameContext = nowCtx?.type === context.type && nowCtx?.id === context.id
@@ -297,7 +300,7 @@ export function TrackList({
   }))
 
   return (
-    <div role="table" aria-label="Tracks" className="-mx-3">
+    <div role="table" aria-label={tr('tl.tracks')} className="-mx-3">
       {header && (
         <div
           role="row"
@@ -308,10 +311,10 @@ export function TrackList({
           )}
         >
           <span className="text-center">#</span>
-          <span>Title</span>
-          {showAlbum && <span className="hidden md:block">Album</span>}
+          <span>{tr('tl.title')}</span>
+          {showAlbum && <span className="hidden md:block">{tr('tl.album')}</span>}
           <span className="flex justify-end pr-10">
-            <Clock3 className="hidden h-4 w-4 sm:block" aria-label="Duration" />
+            <Clock3 className="hidden h-4 w-4 sm:block" aria-label={tr('tl.duration')} />
           </span>
         </div>
       )}

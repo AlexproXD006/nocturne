@@ -4,8 +4,11 @@ import { platform, useSession } from '../services'
 import { describeError } from '../api/errors'
 import { Spinner, cx } from '../components/common'
 import { Logo, TitleBar } from '../components/Shell'
+import { LanguageSelect } from '../components/LanguageSelect'
+import { useT } from '../i18n'
 
 export function Login(): ReactNode {
+  const tr = useT()
   const lastServer = useSession((s) => s.lastServerUrl)
   const login = useSession((s) => s.login)
   const restoreError = useSession((s) => s.restoreError)
@@ -37,6 +40,9 @@ export function Login(): ReactNode {
   return (
     <div className="flex h-full flex-col bg-ink-950">
       <TitleBar />
+      <div className="absolute top-3 right-3 z-10 md:top-12">
+        <LanguageSelect className="rounded-full border border-line bg-ink-850 px-3 py-1.5 text-xs text-fg-muted outline-none focus:border-accent/70" />
+      </div>
       <div className="relative flex flex-1 items-center justify-center overflow-y-auto px-5 py-10">
         <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-accent/20 blur-[120px]" />
@@ -45,8 +51,8 @@ export function Login(): ReactNode {
         <form onSubmit={(e) => void submit(e)} className="fade-up relative w-full max-w-sm" noValidate>
           <div className="mb-8 flex flex-col items-center text-center">
             <Logo className="mb-5 h-14 w-14" />
-            <h1 className="text-3xl font-extrabold tracking-tight">Welcome back</h1>
-            <p className="mt-2 text-sm text-fg-muted">Sign in to your music server.</p>
+            <h1 className="text-3xl font-extrabold tracking-tight">{tr('login.welcome')}</h1>
+            <p className="mt-2 text-sm text-fg-muted">{tr('login.subtitle')}</p>
           </div>
 
           {hosted ? (
@@ -55,7 +61,7 @@ export function Login(): ReactNode {
             </p>
           ) : (
             <>
-          <label className="mb-1.5 block text-xs font-semibold text-fg-muted" htmlFor="server">Server</label>
+          <label className="mb-1.5 block text-xs font-semibold text-fg-muted" htmlFor="server">{tr('login.server')}</label>
           <div className="relative mb-4">
             <Server className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
             <input
@@ -75,7 +81,7 @@ export function Login(): ReactNode {
             </>
           )}
 
-          <label className="mb-1.5 block text-xs font-semibold text-fg-muted" htmlFor="username">Username</label>
+          <label className="mb-1.5 block text-xs font-semibold text-fg-muted" htmlFor="username">{tr('login.username')}</label>
           <div className="relative mb-4">
             <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-sm text-fg-subtle">@</span>
             <input
@@ -90,7 +96,7 @@ export function Login(): ReactNode {
             />
           </div>
 
-          <label className="mb-1.5 block text-xs font-semibold text-fg-muted" htmlFor="password">Password</label>
+          <label className="mb-1.5 block text-xs font-semibold text-fg-muted" htmlFor="password">{tr('login.password')}</label>
           <div className="relative mb-2">
             <Lock className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
             <input
@@ -104,7 +110,7 @@ export function Login(): ReactNode {
             />
             <button
               type="button"
-              aria-label={show ? 'Hide password' : 'Show password'}
+              aria-label={show ? tr('login.hide') : tr('login.show')}
               onClick={() => setShow((v) => !v)}
               className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1.5 text-fg-subtle hover:text-fg"
             >
@@ -119,9 +125,9 @@ export function Login(): ReactNode {
             disabled={busy}
             className="mt-2 flex h-12 w-full items-center justify-center rounded-full bg-accent text-[15px] font-bold text-ink-950 transition hover:brightness-110 active:scale-[0.99] disabled:opacity-60"
           >
-            {busy ? <Spinner className="h-5 w-5 text-ink-950" /> : 'Sign in'}
+            {busy ? <Spinner className="h-5 w-5 text-ink-950" /> : tr('login.submit')}
           </button>
-          <p className="mt-6 text-center text-xs text-fg-subtle">Your password is sent only to your server. The session is stored encrypted on this device.</p>
+          <p className="mt-6 text-center text-xs text-fg-subtle">{tr('login.privacy')}</p>
         </form>
       </div>
     </div>

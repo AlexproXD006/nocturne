@@ -12,6 +12,8 @@ import { BulkImport } from './lyrics/BulkImport'
 import { LyricsEditDialog } from './LyricsEditDialog'
 import { LYRICS_ACCEPT, removeLyrics, uploadLyricsFile } from './lyrics/files'
 import { Button, Card, Chip, ProgressBar, inputClass, useDebounced } from './ui'
+import { useT } from '../../i18n'
+import { formatNumber } from '../../i18n/format'
 
 type Filter = 'missing' | 'present'
 
@@ -20,13 +22,14 @@ function play(t: AdminTrack, name: string): void {
 }
 
 function Row({ track, format, children }: { track: AdminTrack; format?: LyricsFormat | null; children: ReactNode }): ReactNode {
+  const tr = useT()
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl p-2 hover:bg-white/[0.04]" data-testid="lyrics-row">
       <Artwork images={track.artwork} size={44} className="h-11 w-11 shrink-0" />
       <div className="min-w-0 flex-1 basis-40">
         <p className="truncate text-sm font-semibold" title={track.title}>{track.title}</p>
         <p className="truncate text-[13px] text-fg-muted">
-          {artistNames(track.artists) || 'Unknown artist'}
+          {artistNames(track.artists) || tr('ly.unknownArtist')}
           {track.album ? ` · ${track.album.title}` : ''}
         </p>
       </div>
@@ -38,6 +41,7 @@ function Row({ track, format, children }: { track: AdminTrack; format?: LyricsFo
 }
 
 function SearchBox({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }): ReactNode {
+  const tr = useT()
   return (
     <div className="relative mb-3">
       <Search className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
@@ -46,14 +50,14 @@ function SearchBox({ value, onChange, label }: { value: string; onChange: (v: st
         role="searchbox"
         aria-label={label}
         className={`${inputClass} pl-11`}
-        placeholder="Search by title, artist or album"
+        placeholder={tr('ly.searchPlaceholder')}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoComplete="off"
         spellCheck={false}
       />
       {value && (
-        <button type="button" aria-label="Clear search" onClick={() => onChange('')} className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1.5 text-fg-subtle hover:text-fg">
+        <button type="button" aria-label={tr('search.clear')} onClick={() => onChange('')} className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1.5 text-fg-subtle hover:text-fg">
           <X className="h-4 w-4" />
         </button>
       )}
@@ -63,6 +67,7 @@ function SearchBox({ value, onChange, label }: { value: string; onChange: (v: st
 
 /** One hidden file input shared by every row of a list. */
 function useLyricsPicker(onFile: (track: AdminTrack, file: File) => void): { open: (t: AdminTrack) => void; input: ReactNode } {
+  const tr = useT()
   const ref = useRef<HTMLInputElement>(null)
   const target = useRef<AdminTrack | null>(null)
   const input = (
@@ -70,7 +75,7 @@ function useLyricsPicker(onFile: (track: AdminTrack, file: File) => void): { ope
       ref={ref}
       type="file"
       accept={LYRICS_ACCEPT}
-      aria-label="Choose a lyrics file"
+      aria-label={tr('ly.chooseFile')}
       className="sr-only"
       tabIndex={-1}
       data-testid="lyrics-file-input"
@@ -106,6 +111,7 @@ function PagedList({
   empty: { title: string; hint: string }
   renderRow: (t: AdminTrack) => ReactNode
 }): ReactNode {
+  const tr = useT()
   const q = useDebounced(query.trim(), 300)
   const paged = usePaged<AdminTrack>(
     `admin-lyrics:${filter}:${q}:${rev}`,
@@ -126,8 +132,7 @@ function PagedList({
     return (
       <EmptyState
         icon={<FileText className="h-8 w-8" strokeWidth={1.5} />}
-        title={q ? 'No matching tracks' : empty.title}
-        hint={q ? `Nothing matched “${q}”.` : empty.hint}
+        title={q ? tr('ly.noMatch') : empty.title} hint={q ? tr('ly.nothingMatched', { q }) : empty.hint}
       />
     )
   }
@@ -143,6 +148,7 @@ function PagedList({
 }
 
 function Coverage({ nonce }: { nonce: number }): ReactNode {
+  const tr = useT()
   const [counts, setCounts] = useState<{ missing: number; present: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -168,17 +174,18 @@ function Coverage({ nonce }: { nonce: number }): ReactNode {
     <div data-testid="lyrics-coverage">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-sm">
-          <span className="text-2xl font-extrabold tabular-nums">{counts.present.toLocaleString()}</span>{' '}
-          <span className="text-fg-muted">of {total.toLocaleString()} tracks have lyrics</span>
+          <span className="text-2xl font-extrabold tabular-nums">{formatNumber(counts.present)}</span>{' '}
+          <span className="text-fg-muted">{tr('ly.ofTotal', { total })}</span>
         </p>
-        <p className="text-[13px] text-fg-muted tabular-nums">{counts.missing.toLocaleString()} missing</p>
+        <p className="text-[13px] text-fg-muted tabular-nums">{tr('ly.missingCount', { count: counts.missing })}</p>
       </div>
-      <ProgressBar value={total > 0 ? counts.present / total : 0} label="Tracks with lyrics" tone="good" />
+      <ProgressBar value={total > 0 ? counts.present / total : 0} label={tr('ly.tracksWithLyrics')} tone="good" />
     </div>
   )
 }
 
 export function LyricsTab(): ReactNode {
+  const tr = useT()
   // Bumped whenever lyrics change so counts and lists refetch.
   const [nonce, setNonce] = useState(0)
   const [missingRev, setMissingRev] = useState(0)
@@ -207,7 +214,7 @@ export function LyricsTab(): ReactNode {
       setFormats((f) => ({ ...f, [t.id]: format }))
       setPresentRev((r) => r + 1)
       changed()
-      useUi.getState().toast(`Saved ${format.toUpperCase()} lyrics for “${t.title}”`)
+      useUi.getState().toast(tr('ly.savedFormat', { format: format.toUpperCase(), title: t.title }))
     } catch (err) {
       useUi.getState().toast(`${file.name}: ${describeError(err)}`, 'error')
     } finally {
@@ -220,7 +227,7 @@ export function LyricsTab(): ReactNode {
     try {
       const format = await uploadLyricsFile(t.id, file)
       setFormats((f) => ({ ...f, [t.id]: format }))
-      useUi.getState().toast(`Replaced lyrics for “${t.title}”`)
+      useUi.getState().toast(tr('ly.replaced', { title: t.title }))
     } catch (err) {
       useUi.getState().toast(`${file.name}: ${describeError(err)}`, 'error')
     } finally {
@@ -238,11 +245,11 @@ export function LyricsTab(): ReactNode {
     })
     setMissingRev((r) => r + 1)
     changed()
-    useUi.getState().toast(`Removed lyrics from “${t.title}”`)
+    useUi.getState().toast(tr('ly.removed', { title: t.title }))
   }
 
   const preview = (t: AdminTrack): void => {
-    play(t, 'Lyrics preview')
+    play(t, tr('ly.preview'))
     const ui = useUi.getState()
     if (ui.panel !== 'lyrics') ui.togglePanel('lyrics')
   }
@@ -263,64 +270,64 @@ export function LyricsTab(): ReactNode {
 
   return (
     <div className="space-y-5">
-      <Card id="lyrics-coverage-title" title="Lyrics coverage">
+      <Card id="lyrics-coverage-title" title={tr('ly.coverageTitle')}>
         <Coverage nonce={nonce} />
         <p className="mt-3 text-[13px] text-fg-muted">
-          TTML (Apple Music style) carries word-by-word timing; plain LRC is line-synced. Stored lyrics are used before LRCLIB.
+          {tr('ly.coverageNote')}
         </p>
       </Card>
 
-      <Card id="lyrics-bulk-title" title="Import lyrics files">
+      <Card id="lyrics-bulk-title" title={tr('ly.importTitle')}>
         <BulkImport onSaved={onBulkSaved} />
       </Card>
 
-      <Card id="lyrics-missing-title" title="Missing lyrics">
-        <SearchBox value={missingQuery} onChange={setMissingQuery} label="Search tracks without lyrics" />
+      <Card id="lyrics-missing-title" title={tr('ly.missingTitle')}>
+        <SearchBox value={missingQuery} onChange={setMissingQuery} label={tr('ly.searchMissing')} />
         {missingPicker.input}
         <PagedList
           filter="missing"
           query={missingQuery}
           rev={missingRev}
           removed={handled}
-          empty={{ title: 'Every track has lyrics', hint: 'Nothing is waiting for a lyrics file.' }}
+          empty={{ title: tr('ly.allHave'), hint: tr('ly.allHaveHint') }}
           renderRow={(t) => (
             <Row key={t.id} track={t}>
-              <Button size="sm" icon={<Upload />} busy={busy === t.id} onClick={() => missingPicker.open(t)} aria-label={`Upload lyrics for ${t.title}`}>
-                Upload
+              <Button size="sm" icon={<Upload />} busy={busy === t.id} onClick={() => missingPicker.open(t)} aria-label={tr('ly.uploadLabel', { title: t.title })}>
+                {tr('ly.upload')}
               </Button>
-              <Button size="sm" icon={<PencilLine />} onClick={() => setEditing(t)} aria-label={`Edit lyrics for ${t.title}`}>
-                <span className="max-md:sr-only">Edit</span>
+              <Button size="sm" icon={<PencilLine />} onClick={() => setEditing(t)} aria-label={tr('ly.editLabel', { title: t.title })}>
+                <span className="max-md:sr-only">{tr('ly.edit')}</span>
               </Button>
-              <Button size="sm" variant="ghost" icon={<Play />} onClick={() => play(t, 'Admin lyrics')} aria-label={`Play ${t.title}`}>
-                <span className="max-sm:sr-only">Play</span>
+              <Button size="sm" variant="ghost" icon={<Play />} onClick={() => play(t, tr('ly.adminLyrics'))} aria-label={tr('ly.playLabel', { title: t.title })}>
+                <span className="max-sm:sr-only">{tr('ly.play')}</span>
               </Button>
             </Row>
           )}
         />
       </Card>
 
-      <Card id="lyrics-present-title" title="With lyrics">
-        <SearchBox value={presentQuery} onChange={setPresentQuery} label="Search tracks with lyrics" />
+      <Card id="lyrics-present-title" title={tr('ly.withTitle')}>
+        <SearchBox value={presentQuery} onChange={setPresentQuery} label={tr('ly.searchWith')} />
         {presentPicker.input}
         <PagedList
           filter="present"
           query={presentQuery}
           rev={presentRev}
           removed={removed}
-          empty={{ title: 'No stored lyrics yet', hint: 'Upload a .ttml or .lrc file above to get started.' }}
+          empty={{ title: tr('ly.noneStored'), hint: tr('ly.noneStoredHint') }}
           renderRow={(t) => (
             <Row key={t.id} track={t} format={formats[t.id] ?? t.lyrics}>
-              <Button size="sm" variant="ghost" icon={<Eye />} onClick={() => preview(t)} aria-label={`Preview lyrics for ${t.title}`}>
-                <span className="max-md:sr-only">Preview</span>
+              <Button size="sm" variant="ghost" icon={<Eye />} onClick={() => preview(t)} aria-label={tr('ly.previewLabel', { title: t.title })}>
+                <span className="max-md:sr-only">{tr('ly.previewBtn')}</span>
               </Button>
-              <Button size="sm" icon={<PencilLine />} onClick={() => setEditing(t)} aria-label={`Edit lyrics for ${t.title}`}>
-                <span className="max-md:sr-only">Edit</span>
+              <Button size="sm" icon={<PencilLine />} onClick={() => setEditing(t)} aria-label={tr('ly.editLabel', { title: t.title })}>
+                <span className="max-md:sr-only">{tr('ly.edit')}</span>
               </Button>
-              <Button size="sm" icon={<Replace />} busy={busy === t.id} onClick={() => presentPicker.open(t)} aria-label={`Replace lyrics for ${t.title}`}>
-                <span className="max-md:sr-only">Replace</span>
+              <Button size="sm" icon={<Replace />} busy={busy === t.id} onClick={() => presentPicker.open(t)} aria-label={tr('ly.replaceLabel', { title: t.title })}>
+                <span className="max-md:sr-only">{tr('ly.replace')}</span>
               </Button>
-              <Button size="sm" variant="danger" icon={<Trash2 />} onClick={() => setPendingRemove(t)} aria-label={`Remove lyrics from ${t.title}`}>
-                <span className="max-md:sr-only">Remove</span>
+              <Button size="sm" variant="danger" icon={<Trash2 />} onClick={() => setPendingRemove(t)} aria-label={tr('ly.removeLabel', { title: t.title })}>
+                <span className="max-md:sr-only">{tr('ly.remove')}</span>
               </Button>
             </Row>
           )}
@@ -358,10 +365,10 @@ export function LyricsTab(): ReactNode {
 
       {pendingRemove && (
         <ConfirmDialog
-          title="Remove these lyrics?"
+          title={tr('ly.removeQ')}
           tone="danger"
-          confirmLabel="Remove lyrics"
-          message={<>The stored lyrics for “{pendingRemove.title}” will be deleted. The player will fall back to LRCLIB.</>}
+          confirmLabel={tr('ly.removeConfirm')}
+          message={tr('ly.removeMsg', { title: pendingRemove.title })}
           onConfirm={() => remove(pendingRemove)}
           onClose={() => setPendingRemove(null)}
         />

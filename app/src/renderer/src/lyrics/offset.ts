@@ -1,3 +1,4 @@
+import { formatNumber } from '../i18n/format'
 /** Per-track lyrics timing offset. Positive = lyrics appear later, negative = earlier. */
 export const OFFSET_STEP_MS = 500
 export const OFFSET_MAX_MS = 30000
@@ -10,8 +11,9 @@ export function clampOffset(ms: number): number {
 /** "+1.0s", "−0.5s" (true minus sign) or "0.0s". */
 export function formatOffset(ms: number): string {
   const v = clampOffset(ms)
-  if (v === 0) return '0.0s'
-  return `${v > 0 ? '+' : '−'}${(Math.abs(v) / 1000).toFixed(1)}s`
+  const n = formatNumber(Math.abs(v) / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+  if (v === 0) return `${n}s`
+  return `${v > 0 ? '+' : '−'}${n}s`
 }
 
 /** Player position (ms) to look up in the lyrics' own timeline: a lyric stamped T shows at T + offset. */

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Download, X } from 'lucide-react'
+import { useT } from '../i18n'
 import { platform, useSession } from '../services'
 import { useUpdates } from '../store/updates'
 import { useUpdateReveal } from '../store/updateNotifications'
@@ -18,6 +19,7 @@ function readDismissed(): string {
  * download manager / installer takes over. Never shown on web (the browser app self-updates).
  */
 export function UpdateBanner(): ReactNode {
+  const t = useT()
   const status = useSession((s) => s.status)
   const available = useUpdates((s) => s.available)
   const latest = useUpdates((s) => s.latest)
@@ -50,7 +52,7 @@ export function UpdateBanner(): ReactNode {
     <div className="flex items-center justify-between gap-3 border-b border-line bg-ink-900 px-4 py-2.5 text-sm">
       <p className="min-w-0 truncate">
         <span className="font-semibold">Nocturne {latest.version}</span>
-        <span className="text-fg-muted"> is available</span>
+        <span className="text-fg-muted"> {t('update.available')}</span>
       </p>
       <div className="flex shrink-0 items-center gap-2">
         <button
@@ -58,15 +60,15 @@ export function UpdateBanner(): ReactNode {
           onClick={() => void platform.openExternal(downloadUrl)}
           className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 font-semibold text-ink-950 hover:opacity-90"
         >
-          <Download className="h-4 w-4" /> Update now
+          <Download className="h-4 w-4" /> {t('update.now')}
         </button>
         <button
           type="button"
           onClick={dismiss}
-          aria-label="Dismiss update"
+          aria-label={t('update.dismiss')}
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium text-fg-muted hover:text-fg"
         >
-          <X className="h-4 w-4" /> Later
+          <X className="h-4 w-4" /> {t('update.later')}
         </button>
       </div>
     </div>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text of the "update available" notification (UpdateNotifier). -->
+<resources>
+    <string name="nocturne_update_channel_name">App updates</string>
+    <string name="nocturne_update_channel_description">Tells you when a new version of Nocturne is available</string>
+    <string name="nocturne_update_title">Nocturne %1$s available</string>
+    <string name="nocturne_update_text">Tap to update</string>
+</resources>

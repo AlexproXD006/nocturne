@@ -1,6 +1,7 @@
 import type { LyricsFormat, Track } from '../api/types'
 import { inspectTtml, validateLrc } from './ttml'
 import { parseLrc } from './lrc'
+import { t } from '../i18n'
 
 /** Scores at or above this are applied without review. */
 export const AUTO_THRESHOLD = 0.75
@@ -161,7 +162,7 @@ export function describeLyricsFile(name: string, content: string): LyricsFileDes
         title: meta.title ?? fromName.title,
         artist: meta.artist ?? fromName.artist,
         valid: false,
-        error: r.error ?? 'The TTML needs at least one <p> with a begin time.'
+        error: r.error ?? t('lfile.ttmlNeedsP')
       }
     }
     return {

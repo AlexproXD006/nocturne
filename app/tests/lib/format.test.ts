@@ -55,14 +55,14 @@ describe('artistNames', () => {
 
 describe('plural', () => {
   it('uses singular only for exactly one', () => {
-    expect(plural(1, 'song')).toBe('1 song')
-    expect(plural(0, 'song')).toBe('0 songs')
-    expect(plural(2, 'song')).toBe('2 songs')
+    expect(plural(1)).toBe('1 song')
+    expect(plural(0)).toBe('0 songs')
+    expect(plural(2)).toBe('2 songs')
   })
-  it('supports a custom plural and grouping', () => {
-    expect(plural(2, 'person', 'people')).toBe('2 people')
-    expect(plural(1, 'person', 'people')).toBe('1 person')
-    expect(plural(1234, 'play')).toBe((1234).toLocaleString() + ' plays')
+  it('supports another message and locale grouping', () => {
+    expect(plural(2, 'common.play')).toBe('2 plays')
+    expect(plural(1, 'common.play')).toBe('1 play')
+    expect(plural(1234, 'common.play')).toBe('1,234 plays')
   })
 })
 

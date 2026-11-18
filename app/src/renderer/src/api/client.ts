@@ -1,4 +1,5 @@
 import { ApiError } from './errors'
+import { t as tl } from '../i18n'
 import { buildUrl } from '../lib/url'
 import type {
   StatsHistory,
@@ -134,19 +135,19 @@ async function rawRequest<T>(
     res = await fetchImpl(url, { ...init, signal: t.signal, credentials, cache: 'no-store' })
   } catch (err) {
     t.done()
-    if (t.timedOut()) throw new ApiError('timeout', 'The server took too long to respond.')
-    if (outerSignal?.aborted) throw new ApiError('aborted', 'Request cancelled.')
-    throw new ApiError('network', "Can't reach the server. Check your connection.", 0)
+    if (t.timedOut()) throw new ApiError('timeout', tl('err.timeout'))
+    if (outerSignal?.aborted) throw new ApiError('aborted', tl('err.cancelled'))
+    throw new ApiError('network', tl('err.network'), 0)
   }
   t.done()
   if (!res.ok) throw ApiError.fromStatus(res.status, await readError(res), retryAfterSeconds(res))
   if (res.status === 204) return undefined as T
   const type = res.headers.get('Content-Type') ?? ''
-  if (!type.includes('json')) throw new ApiError('bad_response', 'The server sent an unexpected response.', res.status)
+  if (!type.includes('json')) throw new ApiError('bad_response', tl('err.badResponse'), res.status)
   try {
     return (await res.json()) as T
   } catch {
-    throw new ApiError('bad_response', 'The server sent an unexpected response.', res.status)
+    throw new ApiError('bad_response', tl('err.badResponse'), res.status)
   }
 }
 
@@ -154,7 +155,7 @@ export function toStoredSession(serverUrl: string, session: Session, now: number
   // In cookie mode the refresh token travels in an HttpOnly cookie, so the body carries "".
   const refreshOk = typeof session?.refreshToken === 'string' && (opts.cookieSession === true || session.refreshToken !== '')
   if (!session || typeof session.accessToken !== 'string' || !refreshOk || !session.user) {
-    throw new ApiError('bad_response', 'The server sent an invalid sign-in response.')
+    throw new ApiError('bad_response', tl('err.badSignin'))
   }
   const expiresIn = Number.isFinite(session.expiresIn) && session.expiresIn > 0 ? session.expiresIn : 3600
   return { ...session, serverUrl, expiresAt: now + expiresIn * 1000 }
@@ -190,7 +191,7 @@ export const ServerApi = {
       return toStoredSession(serverUrl, session, now, { cookieSession })
     } catch (err) {
       if (err instanceof ApiError && err.code === 'unauthorized') {
-        throw new ApiError('unauthorized', 'Wrong username or password.', 401)
+        throw new ApiError('unauthorized', tl('err.wrongCredentials'), 401)
       }
       throw err
     }
@@ -235,7 +236,7 @@ export class ApiClient {
 
   private session(): StoredSession {
     const s = this.opts.getSession()
-    if (!s) throw new ApiError('unauthorized', 'You are signed out.', 401)
+    if (!s) throw new ApiError('unauthorized', tl('err.signedOut'), 401)
     return s
   }
 
@@ -268,7 +269,7 @@ export class ApiClient {
       .catch((err: unknown) => {
         if (err instanceof ApiError && (err.code === 'unauthorized' || err.code === 'bad_request' || err.code === 'forbidden')) {
           this.opts.setSession(null)
-          throw new ApiError('unauthorized', 'Your session has expired. Please sign in again.', 401)
+          throw new ApiError('unauthorized', tl('err.sessionExpired'), 401)
         }
         throw err
       })
@@ -283,7 +284,7 @@ export class ApiClient {
     let session = auth ? this.session() : this.opts.getSession()
     if (auth && session && session.expiresAt - EXPIRY_SKEW_MS <= this.now()) session = await this.refresh()
     const base = session?.serverUrl
-    if (!base) throw new ApiError('unauthorized', 'You are signed out.', 401)
+    if (!base) throw new ApiError('unauthorized', tl('err.signedOut'), 401)
 
     const send = (token: string | undefined): Promise<T> => {
       const headers: Record<string, string> = { Accept: 'application/json' }
@@ -534,7 +535,7 @@ export class ApiClient {
     } catch {
       ok = false
     }
-    if (!ok) throw new ApiError('bad_response', 'The server sent an invalid Spotify login link.')
+    if (!ok) throw new ApiError('bad_response', tl('err.badSpotifyLink'))
     return { url }
   }
 
@@ -605,7 +606,7 @@ export class ApiClient {
     let session = this.session()
     if (session && session.expiresAt - EXPIRY_SKEW_MS <= this.now()) session = await this.refresh()
     const base = session?.serverUrl
-    if (!base) throw new ApiError('unauthorized', 'You are signed out.', 401)
+    if (!base) throw new ApiError('unauthorized', tl('err.signedOut'), 401)
     const headers: Record<string, string> = { Accept: 'application/zip' }
     if (this.cookie) headers[COOKIE_SESSION_HEADER] = COOKIE_SESSION_VALUE
     else headers['Authorization'] = `Bearer ${session.accessToken}`
@@ -615,7 +616,7 @@ export class ApiClient {
       credentials: this.cookie ? 'same-origin' : 'omit',
       cache: 'no-store'
     })
-    if (!res.ok) throw new ApiError('server', `Keystore download failed (${res.status})`, res.status)
+    if (!res.ok) throw new ApiError('server', tl('err.keystore', { status: res.status }), res.status)
     return res.blob()
   }
 
@@ -707,12 +708,12 @@ export class ApiClient {
           }
           const msg = body && typeof (body as { message?: unknown }).message === 'string' ? (body as { message: string }).message : undefined
           const failed = xhr.status >= 300 || (xhr.status > 0 && xhr.status < 200)
-          reject(failed ? ApiError.fromStatus(xhr.status, msg) : new ApiError('bad_response', 'The server sent an unexpected response.'))
+          reject(failed ? ApiError.fromStatus(xhr.status, msg) : new ApiError('bad_response', tl('err.badResponse')))
         }
-        xhr.onerror = () => reject(new ApiError('network', "Can't reach the server. Check your connection."))
-        xhr.onabort = () => reject(new ApiError('aborted', 'Upload cancelled.'))
+        xhr.onerror = () => reject(new ApiError('network', tl('err.network')))
+        xhr.onabort = () => reject(new ApiError('aborted', tl('err.uploadCancelled')))
         if (opts.signal?.aborted) {
-          reject(new ApiError('aborted', 'Upload cancelled.'))
+          reject(new ApiError('aborted', tl('err.uploadCancelled')))
           return
         }
         opts.signal?.addEventListener('abort', () => xhr.abort(), { once: true })

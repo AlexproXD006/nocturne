@@ -9,6 +9,7 @@ import {
   type ConnectSession,
   type Track
 } from '../api/types'
+import { t } from '../i18n'
 import type { PlayerState } from './player'
 import * as Q from '../player/queue'
 import { compactResolved } from '../player/resolveTracks'
@@ -422,9 +423,9 @@ export function createConnectStore(deps: ConnectDeps): UseBoundStore<StoreApi<Co
       if (!target || !target.online) {
         misses += 1
         if (misses >= MAX_MISSES) {
-          const name = get().remote?.name ?? 'the other device'
+          const name = get().remote?.name ?? t('connect.otherDevice')
           get().release()
-          deps.notify?.(`Lost connection to ${name}. Playing on this device.`, 'info')
+          deps.notify?.(t('connect.lost', { name }), 'info')
         }
         return
       }
@@ -475,7 +476,7 @@ export function createConnectStore(deps: ConnectDeps): UseBoundStore<StoreApi<Co
           /* just the current track */
         }
       }
-      const ctx = remote.state.context ?? { type: 'tracks' as const, name: `From ${sessionDisplayName(remote)}` }
+      const ctx = remote.state.context ?? { type: 'tracks' as const, name: t('connect.from', { name: sessionDisplayName(remote) }) }
       const p = deps.player.getState()
       if (remote.state.repeat && remote.state.repeat !== p.queue.repeat) p.setRepeat(remote.state.repeat)
       await p.playTracks(tracks, 0, ctx, { shuffle: false })
@@ -531,9 +532,9 @@ export function createConnectStore(deps: ConnectDeps): UseBoundStore<StoreApi<Co
         if (status === 404 || status === 409) {
           const name = remoteName(id)
           get().release()
-          deps.notify?.(`${name} is no longer available. Playing on this device.`, 'error')
+          deps.notify?.(t('connect.unavailable', { name }), 'error')
         } else {
-          deps.notify?.(`Couldn't reach ${remoteName(id)}.`, 'error')
+          deps.notify?.(t('connect.cantReach', { name: remoteName(id) }), 'error')
         }
       }
     },

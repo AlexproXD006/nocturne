@@ -1,3 +1,4 @@
+import { useT } from '../i18n'
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
@@ -25,6 +26,7 @@ export interface ModalProps {
 
 /** Accessible modal: role=dialog, aria-modal, focus trap, Esc to close, focus restored on close. */
 export function Modal({ title, description, onClose, children, footer, dismissible = true, size = 'sm', initialFocus }: ModalProps): ReactNode {
+  const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const descId = useId()
@@ -104,7 +106,7 @@ export function Modal({ title, description, onClose, children, footer, dismissib
           {dismissible && (
             <button
               type="button"
-              aria-label="Close dialog"
+              aria-label={t('ui.closeDialog')}
               onClick={onClose}
               className="-mt-1 -mr-2 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-white/8 hover:text-fg"
             >

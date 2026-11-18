@@ -8,6 +8,7 @@ import type { Track } from '../api/types'
 import { artistNames } from '../lib/format'
 import { Artwork, EmptyState, cx } from './common'
 import { Equalizer } from './TrackList'
+import { t, useT } from '../i18n'
 
 function QueueRow({
   item,
@@ -27,6 +28,7 @@ function QueueRow({
   onDragStart?: (index: number) => void
   onDropAt?: (index: number) => void
 }): ReactNode {
+  const tr = useT()
   const [over, setOver] = useState(false)
   const playing = useNowStatus() === 'playing'
   const play = (): void => {
@@ -71,14 +73,14 @@ function QueueRow({
           </div>
         )}
       </div>
-      <button type="button" className="min-w-0 flex-1 text-left" onClick={play} aria-label={`Play ${item.track.title}`}>
+      <button type="button" className="min-w-0 flex-1 text-left" onClick={play} aria-label={tr('card.play', { title: item.track.title })}>
         <p className={cx('truncate text-sm font-medium', current && 'text-accent')}>{item.track.title}</p>
         <p className="truncate text-xs text-fg-muted">{artistNames(item.track.artists)}</p>
       </button>
       {!current && !readOnly && (
         <button
           type="button"
-          aria-label={`Remove ${item.track.title} from queue`}
+          aria-label={tr('queue.remove', { title: item.track.title })}
           onClick={() => usePlayer.getState().removeFromQueue(item.uid)}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-fg-subtle opacity-0 hover:bg-white/8 hover:text-fg group-hover:opacity-100 focus:opacity-100 max-md:h-10 max-md:w-10 max-md:opacity-100"
         >
@@ -90,12 +92,13 @@ function QueueRow({
 }
 
 function SectionHeader({ title, onClear }: { title: string; onClear?: () => void }): ReactNode {
+  const tr = useT()
   return (
     <div className="mt-5 flex items-center justify-between gap-3 px-2 pb-2">
       <p className="min-w-0 truncate text-xs font-semibold tracking-wide text-fg-subtle uppercase">{title}</p>
       {onClear && (
-        <button onClick={onClear} aria-label={`Clear ${title}`} className="-my-2 shrink-0 px-1 py-2 text-xs text-fg-muted hover:text-fg">
-          Clear
+        <button onClick={onClear} aria-label={tr('queue.clearLabel', { title })} className="-my-2 shrink-0 px-1 py-2 text-xs text-fg-muted hover:text-fg">
+          {tr('queue.clear')}
         </button>
       )}
     </div>
@@ -125,7 +128,7 @@ function Section({ section, items }: { section: QueueSection; items: QueueItem[]
 }
 
 function contextTitle(name: string | undefined): string {
-  return name ? `Next from ${name}` : 'Next up'
+  return name ? t('queue.nextFrom', { name }) : t('queue.nextUp')
 }
 
 /** Tracks for remote queue ids (resolved through the API, cached for the session). */
@@ -154,13 +157,14 @@ const asItems = (tracks: Track[], prefix: string): QueueItem[] => tracks.map((tr
 
 /** Read-only view of the controlled device's queue (both tiers). */
 function RemoteQueue(): ReactNode {
+  const tr = useT()
   const remote = useConnect((s) => s.remote)
   const user = useResolved(remote?.state.userQueue ?? [])
   const next = useResolved(remote?.state.upNext ?? [])
   if (!remote) return null
   const t = remote.state.track
   if (!t) {
-    return <EmptyState icon={<MonitorSpeaker className="h-8 w-8" strokeWidth={1.4} />} title={`Nothing playing on ${remote.name}`} hint="Pick something to play and it will start there." />
+    return <EmptyState icon={<MonitorSpeaker className="h-8 w-8" strokeWidth={1.4} />} title={tr('queue.nothingOn', { name: remote.name })} hint={tr('queue.nothingOnHint')} />
   }
   return (
     <div className="flex h-full flex-col">
@@ -169,17 +173,18 @@ function RemoteQueue(): ReactNode {
           <MonitorSpeaker className="h-3.5 w-3.5" /> Now playing on {remote.name}
         </p>
         <QueueRow item={{ uid: 'remote-now', track: t }} index={0} current readOnly />
-        {user.length > 0 && <SectionHeader title="Next in queue" />}
+        {user.length > 0 && <SectionHeader title={tr('queue.nextInQueue')} />}
         {asItems(user, 'ru').map((item, i) => <QueueRow key={item.uid} item={item} index={i} readOnly />)}
         {next.length > 0 && <SectionHeader title={contextTitle(remote.state.context?.name)} />}
         {asItems(next, 'rn').map((item, i) => <QueueRow key={item.uid} item={item} index={i} readOnly />)}
-        <p className="px-2 pt-4 text-xs text-fg-subtle">“Add to queue” and “Play next” add songs to that device's queue.</p>
+        <p className="px-2 pt-4 text-xs text-fg-subtle">{tr('queue.remoteNote')}</p>
       </div>
     </div>
   )
 }
 
 export function QueuePanel(): ReactNode {
+  const tr = useT()
   const queue = usePlayer((s) => s.queue)
   const remote = useConnect((s) => s.remote !== null)
   const now = currentItem(queue)
@@ -187,7 +192,7 @@ export function QueuePanel(): ReactNode {
   if (remote) return <RemoteQueue />
 
   if (!now) {
-    return <EmptyState icon={<ListMusic className="h-8 w-8" strokeWidth={1.4} />} title="Your queue is empty" hint="Play an album or playlist and it will show up here." />
+    return <EmptyState icon={<ListMusic className="h-8 w-8" strokeWidth={1.4} />} title={tr('queue.empty')} hint={tr('queue.emptyHint')} />
   }
   const user = userUpcoming(queue)
   const next = contextUpcoming(queue)
@@ -195,11 +200,11 @@ export function QueuePanel(): ReactNode {
   return (
     <div className="flex h-full flex-col">
       <div className="hide-scrollbar flex-1 overflow-y-auto px-3 pb-6">
-        <p className="px-2 pt-2 pb-2 text-xs font-semibold tracking-wide text-fg-subtle uppercase">Now playing</p>
+        <p className="px-2 pt-2 pb-2 text-xs font-semibold tracking-wide text-fg-subtle uppercase">{tr('queue.nowPlaying')}</p>
         <QueueRow item={now} index={queue.index} current />
         {user.length > 0 && (
           <>
-            <SectionHeader title="Next in queue" onClear={() => usePlayer.getState().clearUserQueue()} />
+            <SectionHeader title={tr('queue.nextInQueue')} onClear={() => usePlayer.getState().clearUserQueue()} />
             <Section section="user" items={user} />
           </>
         )}

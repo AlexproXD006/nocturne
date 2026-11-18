@@ -6,7 +6,7 @@ import type { SpotifyImport, SpotifyPlaylist, SpotifyStatus } from '../api/types
 import { useNav } from '../store/nav'
 import { useUi } from '../store/ui'
 import {
-  IMPORT_STATUS_LABEL,
+    importStatusLabel,
   connectionExpiry,
   createSpotifyStore,
   describeFinished,
@@ -16,6 +16,8 @@ import {
 } from '../store/spotify'
 import { prefersReducedMotion, useSettings } from '../store/settings'
 import { plural } from '../lib/format'
+import { formatDate as fmtDate } from '../i18n/format'
+import { useT } from '../i18n'
 import { Button, Chip, Field, InlineError, ProgressBar, inputClass, type ChipTone } from '../pages/admin/ui'
 import { Artwork, ExternalLink, Spinner, cx } from './common'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -56,7 +58,7 @@ export function SpotifyImportsHost(): ReactNode {
 
 const imagesOf = (url: string | undefined) => (url ? [{ url }] : [])
 
-const formatDate = (d: Date): string => d.toLocaleDateString('en', { year: 'numeric', month: 'short', day: 'numeric' })
+const formatDate = (d: Date): string => fmtDate(d)
 
 // ---- Connect flow ---------------------------------------------------------------------
 
@@ -114,6 +116,7 @@ function useSpotifyConnect() {
 }
 
 function ConnectPanel({ compact = false }: { compact?: boolean }): ReactNode {
+  const tr = useT()
   const c = useSpotifyConnect()
   const status = useSpotify((s) => s.status)
   return (
@@ -122,35 +125,32 @@ function ConnectPanel({ compact = false }: { compact?: boolean }): ReactNode {
         <div className="flex items-start gap-3 rounded-xl bg-white/[0.04] p-4">
           <AudioLines className={cx('mt-0.5 h-6 w-6 shrink-0', SPOTIFY_TINT)} aria-hidden />
           <div className="min-w-0 text-sm text-fg-muted">
-            <p className="font-semibold text-fg">Connect your Spotify account</p>
+            <p className="font-semibold text-fg">{tr('sp.connectTitle')}</p>
             <p className="mt-1">
-              Nocturne reads your Spotify playlists, finds the songs in your library and builds the same playlist here. Your Spotify password never
-              reaches Nocturne: you sign in on Spotify's own page.
+              {tr('sp.connectBody')}
             </p>
           </div>
         </div>
       )}
       {!c.waiting ? (
         <Button variant="primary" busy={c.busy} onClick={() => void c.connect()} icon={<AudioLines />} className="min-h-11 w-full sm:w-auto">
-          Connect Spotify
-        </Button>
+          {tr('sp.connect')}</Button>
       ) : (
         <div className="space-y-3" role="status" aria-live="polite">
           <p className="text-sm text-fg-muted">
-            Finish signing in on Spotify in your browser, then come back here.
-            {c.checks > 0 && !c.checking && status && !status.connected && ' Not connected yet.'}
+            {tr('sp.finishSignin')}
+            {c.checks > 0 && !c.checking && status && !status.connected && ` ${tr('sp.notYet')}`}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button variant="primary" busy={c.checking} onClick={() => void c.check()} className="min-h-11">
-              I've connected
-            </Button>
+              {tr('sp.connected')}</Button>
             <Button busy={c.busy} onClick={() => void c.connect()} icon={<RotateCw />} className="min-h-11">
-              Try again
+              {tr('common.retry')}
             </Button>
           </div>
           {c.authUrl && (
             <p className="text-xs text-fg-subtle">
-              Browser didn't open? <ExternalLink href={c.authUrl}>Open the Spotify sign-in page</ExternalLink>
+              {tr('sp.noBrowser')} <ExternalLink href={c.authUrl}>{tr('sp.openSignin')}</ExternalLink>
             </p>
           )}
         </div>
@@ -193,6 +193,7 @@ function matches(p: SpotifyPlaylist, q: string): boolean {
 }
 
 function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: SpotifyImport) => void; onClose: () => void; status: SpotifyStatus }): ReactNode {
+  const tr = useT()
   const playlists = useSpotify((s) => s.playlists)
   const loading = useSpotify((s) => s.playlistsLoading)
   const loadError = useSpotify((s) => s.playlistsError)
@@ -226,7 +227,7 @@ function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: Spot
       return
     }
     if (!source) {
-      setError('Choose a playlist or paste a Spotify playlist link.')
+      setError(tr('sp.chooseOrPaste'))
       return
     }
     setBusy(true)
@@ -234,7 +235,7 @@ function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: Spot
     try {
       const imp = await startImport(source, download)
       const name = imp?.spotifyPlaylist?.name || (linkId ? undefined : selected?.name)
-      toast(name ? `Importing '${name}'…` : 'Import started')
+      toast(name ? tr('sp.importing', { name }) : tr('sp.importStarted'))
       onStarted?.(imp)
       onClose()
     } catch (err) {
@@ -245,10 +246,10 @@ function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: Spot
 
   return (
     <Modal
-      title="Import from Spotify"
+      title={tr('sp.import')}
       description={
         <span className="block truncate">
-          {status.account?.displayName ? `Connected as ${status.account.displayName}` : 'Spotify connected'}
+          {status.account?.displayName ? tr('sp.connectedAs', { name: status.account.displayName }) : tr('sp.spotifyConnected')}
         </span>
       }
       size="md"
@@ -257,10 +258,10 @@ function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: Spot
       footer={
         <>
           <Button disabled={busy} onClick={onClose} className="min-h-11">
-            Cancel
+            {tr('common.cancel')}
           </Button>
           <Button variant="primary" busy={busy} disabled={!source || linkInvalid} onClick={() => void start()} className="min-h-11">
-            Start import
+            {tr('sp.startImport')}
           </Button>
         </>
       }
@@ -271,16 +272,15 @@ function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: Spot
             <AlertTriangle className="mt-px h-4 w-4 shrink-0" aria-hidden />
             <span className="min-w-0">
               {expiry.expired
-                ? 'Your Spotify connection has expired. Reconnect it in Settings → Spotify.'
-                : `Your Spotify connection expires on ${formatDate(expiry.at)}. Reconnect it in Settings → Spotify to keep importing.`}
+                ? tr('sp.expiredSettings') : tr('sp.expiresSettings', { date: formatDate(expiry.at) })}
             </span>
           </p>
         )}
 
         <Field
-          label="Paste a Spotify playlist link"
+          label={tr('sp.pasteLink')}
           htmlFor={`${ids}-link`}
-          hint={linkInvalid && linkTouched ? <span className="text-[#ff9b9b]">That doesn't look like a Spotify playlist link.</span> : 'Any public playlist, e.g. open.spotify.com/playlist/…'}
+          hint={linkInvalid && linkTouched ? <span className="text-[#ff9b9b]">{tr('sp.badLink')}</span> : tr('sp.linkHint')}
         >
           <input
             id={`${ids}-link`}
@@ -303,11 +303,11 @@ function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: Spot
         </Field>
 
         <div>
-          <h3 className="mb-2 text-xs font-semibold text-fg-muted">Or choose one of your playlists</h3>
+          <h3 className="mb-2 text-xs font-semibold text-fg-muted">{tr('sp.orChoose')}</h3>
           <div className="relative mb-2">
             <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
             <label htmlFor={`${ids}-search`} className="sr-only">
-              Search your Spotify playlists
+              {tr('sp.search')}
             </label>
             <input
               id={`${ids}-search`}
@@ -316,7 +316,7 @@ function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: Spot
               value={query}
               disabled={busy}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search your Spotify playlists"
+              placeholder={tr('sp.search')}
               autoComplete="off"
               className={cx(inputClass, 'pl-10')}
             />
@@ -330,14 +330,14 @@ function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: Spot
             <p className="py-3 text-sm text-fg-muted">
               {loadError}{' '}
               <button type="button" onClick={() => void loadPlaylists(true)} className="min-h-11 font-semibold text-fg underline-offset-2 hover:underline">
-                Try again
+                {tr('common.retry')}
               </button>
             </p>
           )}
-          {playlists && playlists.length === 0 && <p className="py-3 text-sm text-fg-muted">No playlists on your Spotify account. Paste a link above instead.</p>}
-          {playlists && playlists.length > 0 && shown.length === 0 && <p className="py-3 text-sm text-fg-muted">No playlists match “{query.trim()}”.</p>}
+          {playlists && playlists.length === 0 && <p className="py-3 text-sm text-fg-muted">{tr('sp.noPlaylists')}</p>}
+          {playlists && playlists.length > 0 && shown.length === 0 && <p className="py-3 text-sm text-fg-muted">{tr('sp.noMatch', { query: query.trim() })}</p>}
           {shown.length > 0 && (
-            <div role="radiogroup" aria-label="Your Spotify playlists" className="-mx-2">
+            <div role="radiogroup" aria-label={tr('sp.yourPlaylists')} className="-mx-2">
               {shown.map((p) => {
                 const on = !linkId && selected?.id === p.id
                 return (
@@ -362,7 +362,7 @@ function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: Spot
                     <span className="min-w-0 flex-1">
                       <span className={cx('block truncate text-sm font-medium', on && 'text-accent')}>{p.name}</span>
                       <span className="block truncate text-xs text-fg-muted">
-                        {plural(Number(p.trackCount) || 0, 'song')}
+                        {plural(Number(p.trackCount) || 0)}
                         {p.owner ? ` • ${p.owner}` : ''}
                       </span>
                     </span>
@@ -383,24 +383,24 @@ function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: Spot
           <Switch
             checked={download}
             onChange={setDownload}
-            label="Download missing songs"
+            label={tr('sp.downloadMissing')}
             hint={
               download
-                ? "Songs that aren't in your library yet are downloaded to your server and added."
-                : 'Only songs already in your library are added; the rest are listed as not found.'
+                ? tr('sp.downloadOn')
+                : tr('sp.downloadOff')
             }
           />
         </div>
         <InlineError message={error} />
         <p className="pb-2 text-xs text-fg-subtle">
-          Wrong account?{' '}
+          {tr('sp.wrongAccount')}{' '}
           <button
             type="button"
             disabled={busy}
             onClick={() => void disconnect().catch((err: unknown) => setError(describeError(err)))}
             className="min-h-11 font-semibold text-fg-muted underline-offset-2 hover:text-fg hover:underline"
           >
-            Disconnect Spotify
+            {tr('sp.disconnectSpotify')}
           </button>
         </p>
       </div>
@@ -410,6 +410,7 @@ function PlaylistPicker({ onStarted, onClose, status }: { onStarted?: (imp: Spot
 
 /** "Import from Spotify" dialog (a bottom sheet on phones): connect first if needed, then pick a playlist. */
 export function SpotifyImportDialog({ onClose, onStarted }: { onClose: () => void; onStarted?: (imp: SpotifyImport) => void }): ReactNode {
+  const tr = useT()
   const status = useSpotify((s) => s.status)
   const statusLoading = useSpotify((s) => s.statusLoading)
   const statusError = useSpotify((s) => s.statusError)
@@ -427,7 +428,7 @@ export function SpotifyImportDialog({ onClose, onStarted }: { onClose: () => voi
       <div className="space-y-3 pb-2">
         <p className="text-sm text-fg-muted">{statusError}</p>
         <Button onClick={() => void loadStatus()} icon={<RotateCw />} className="min-h-11">
-          Try again
+          {tr('common.retry')}
         </Button>
       </div>
     )
@@ -438,13 +439,13 @@ export function SpotifyImportDialog({ onClose, onStarted }: { onClose: () => voi
       </div>
     )
   } else if (!status.configured) {
-    body = <p className="pb-2 text-sm text-fg-muted">Spotify import isn't set up on this server yet. Ask your server admin to add Spotify app credentials.</p>
+    body = <p className="pb-2 text-sm text-fg-muted">{tr('sp.notSetUp')}</p>
   } else {
     body = <ConnectPanel />
   }
 
   return (
-    <Modal title="Import from Spotify" size="md" onClose={onClose}>
+    <Modal title={tr('sp.import')} size="md" onClose={onClose}>
       {body}
     </Modal>
   )
@@ -452,6 +453,7 @@ export function SpotifyImportDialog({ onClose, onStarted }: { onClose: () => voi
 
 /** Library grid tile next to "New playlist". Sized like a MediaCard. */
 export function ImportSpotifyTile({ onClick }: { onClick: () => void }): ReactNode {
+  const tr = useT()
   return (
     <button
       type="button"
@@ -461,8 +463,8 @@ export function ImportSpotifyTile({ onClick }: { onClick: () => void }): ReactNo
       <span className="mb-3 flex aspect-square w-full items-center justify-center rounded-lg border-2 border-dashed border-line bg-white/[0.03] transition-colors group-hover:border-accent/60">
         <AudioLines className={cx('h-10 w-10', SPOTIFY_TINT)} strokeWidth={1.6} aria-hidden />
       </span>
-      <span className="block truncate text-[15px] font-semibold">Import from Spotify</span>
-      <span className="mt-0.5 block truncate text-[13px] text-fg-muted">Bring your playlists</span>
+      <span className="block truncate text-[15px] font-semibold">{tr('sp.import')}</span>
+      <span className="mt-0.5 block truncate text-[13px] text-fg-muted">{tr('sp.bring')}</span>
     </button>
   )
 }
@@ -480,6 +482,7 @@ const TONE: Record<SpotifyImport['status'], ChipTone> = {
 }
 
 function ImportRow({ imp }: { imp: SpotifyImport }): ReactNode {
+  const tr = useT()
   const go = useNav((s) => s.go)
   const cancelImport = useSpotify((s) => s.cancelImport)
   const [confirming, setConfirming] = useState(false)
@@ -487,16 +490,16 @@ function ImportRow({ imp }: { imp: SpotifyImport }): ReactNode {
   const failuresId = useId()
   const active = isActiveImport(imp)
   const { ready, total, fraction } = importProgress(imp)
-  const name = imp.spotifyPlaylist?.name || 'Spotify playlist'
-  const label = IMPORT_STATUS_LABEL[imp.status] ?? imp.status
+  const name = imp.spotifyPlaylist?.name || tr('sp.playlistFallback')
+  const label = importStatusLabel(imp.status)
   const failures = Array.isArray(imp.failures) ? imp.failures : []
   const notFound = Math.max(Number(imp.failed) || 0, failures.length)
   const counts = [
-    total > 0 ? `${ready} of ${plural(total, 'song')}` : active ? 'Counting songs…' : plural(ready, 'song'),
-    imp.matched > 0 && `${imp.matched} already in library`,
-    imp.downloaded > 0 && `${imp.downloaded} downloaded`,
-    notFound > 0 && `${notFound} not found`,
-    active && imp.pending > 0 && `${imp.pending} to go`
+    total > 0 ? tr('sp.ofSongs', { ready, songs: plural(total) }) : active ? tr('sp.counting') : plural(ready),
+    imp.matched > 0 && tr('sp.inLibrary', { n: imp.matched }),
+    imp.downloaded > 0 && tr('sp.downloaded', { n: imp.downloaded }),
+    notFound > 0 && tr('sp.notFound', { n: notFound }),
+    active && imp.pending > 0 && tr('sp.toGo', { n: imp.pending })
   ].filter(Boolean)
 
   return (
@@ -517,7 +520,7 @@ function ImportRow({ imp }: { imp: SpotifyImport }): ReactNode {
       </div>
       <ProgressBar
         className="mt-3"
-        label={`${name} import progress`}
+        label={tr('sp.progress', { name })}
         value={active && fraction === undefined ? undefined : (fraction ?? 1)}
         tone={imp.status === 'done' ? 'good' : imp.status === 'failed' ? 'bad' : imp.status === 'cancelled' ? 'warn' : 'accent'}
       />
@@ -525,12 +528,12 @@ function ImportRow({ imp }: { imp: SpotifyImport }): ReactNode {
         <div className="mt-3 flex flex-wrap gap-2">
           {imp.playlistId && (
             <Button size="sm" icon={<ListMusic />} onClick={() => go({ name: 'playlist', id: imp.playlistId! })} className="min-h-11">
-              Open playlist
+              {tr('sp.openPlaylist')}
             </Button>
           )}
           {active && (
             <Button size="sm" variant="ghost" icon={<X />} onClick={() => setConfirming(true)} className="min-h-11">
-              Cancel
+              {tr('common.cancel')}
             </Button>
           )}
           {failures.length > 0 && (
@@ -543,13 +546,13 @@ function ImportRow({ imp }: { imp: SpotifyImport }): ReactNode {
               icon={<ChevronDown className={cx('transition-transform', showFailures && 'rotate-180')} />}
               className="min-h-11"
             >
-              {showFailures ? 'Hide' : 'Show'} {failures.length} not found
+              {showFailures ? tr('sp.hideFailures', { n: failures.length }) : tr('sp.showFailures', { n: failures.length })}
             </Button>
           )}
         </div>
       )}
       {failures.length > 0 && showFailures && (
-        <ul id={failuresId} aria-label={`Songs not imported from ${name}`} className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg bg-ink-900/60 p-2">
+        <ul id={failuresId} aria-label={tr('sp.failuresLabel', { name })} className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg bg-ink-900/60 p-2">
           {failures.map((f, i) => (
             <li key={`${f.title}-${i}`} className="min-w-0 px-1 py-1 text-xs">
               <span className="block truncate font-medium text-fg">{f.title}</span>
@@ -563,10 +566,7 @@ function ImportRow({ imp }: { imp: SpotifyImport }): ReactNode {
       )}
       {confirming && (
         <ConfirmDialog
-          title="Cancel import?"
-          message={`Stop importing '${name}'? Songs added so far stay in the playlist.`}
-          confirmLabel="Cancel import"
-          cancelLabel="Keep importing"
+          title={tr('sp.cancelQ')} message={tr('sp.cancelMsg', { name })} confirmLabel={tr('sp.cancelImport')} cancelLabel={tr('sp.keepImporting')}
           tone="danger"
           onConfirm={() => cancelImport(imp.id)}
           onClose={() => setConfirming(false)}
@@ -581,6 +581,7 @@ const COLLAPSED_COUNT = 3
 
 /** "Imports" section at the top of Library → Playlists, shown while there are Spotify imports. */
 export function SpotifyImports(): ReactNode {
+  const tr = useT()
   const enabled = useSpotifyImportEnabled()
   const imports = useSpotify((s) => s.imports)
   const reduced = prefersReducedMotion(useSettings((s) => s.motion))
@@ -597,7 +598,7 @@ export function SpotifyImports(): ReactNode {
   if (active > 0 || Date.now() - latestFinish < RECENT_MS) autoOpened.current = true
   const open = explicitOpen ?? autoOpened.current
   const shown = showAll ? imports : imports.slice(0, COLLAPSED_COUNT)
-  const summary = active > 0 ? `${active} running` : plural(imports.length, 'recent import')
+  const summary = active > 0 ? tr('sp.running', { n: active }) : plural(imports.length, 'common.recentImport')
 
   return (
     <section aria-labelledby={headingId} className={cx('mb-6 min-w-0 rounded-2xl bg-white/[0.035] p-3 sm:p-4', !reduced && 'fade-up')}>
@@ -611,7 +612,7 @@ export function SpotifyImports(): ReactNode {
         >
           <AudioLines className={cx('h-5 w-5 shrink-0', SPOTIFY_TINT)} aria-hidden />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-base font-bold tracking-tight">Spotify imports</span>
+            <span className="block truncate text-base font-bold tracking-tight">{tr('sp.imports')}</span>
             <span className="block truncate text-xs font-normal text-fg-muted">{summary}</span>
           </span>
           <ChevronDown className={cx('h-5 w-5 shrink-0 text-fg-muted', !reduced && 'transition-transform', open && 'rotate-180')} aria-hidden />
@@ -626,7 +627,7 @@ export function SpotifyImports(): ReactNode {
           </ul>
           {imports.length > COLLAPSED_COUNT && (
             <Button size="sm" variant="ghost" onClick={() => setShowAll((v) => !v)} className="mt-2 min-h-11">
-              {showAll ? 'Show fewer' : `Show all ${imports.length}`}
+              {showAll ? tr('sp.showFewer') : tr('sp.showAll', { n: imports.length })}
             </Button>
           )}
         </div>
@@ -639,6 +640,7 @@ export function SpotifyImports(): ReactNode {
 
 /** Body of the Settings → Spotify section. */
 export function SpotifySettings(): ReactNode {
+  const tr = useT()
   const status = useSpotify((s) => s.status)
   const statusLoading = useSpotify((s) => s.statusLoading)
   const statusError = useSpotify((s) => s.statusError)
@@ -660,7 +662,7 @@ export function SpotifySettings(): ReactNode {
         <div className="flex flex-wrap items-center gap-3">
           <p className="min-w-0 text-sm text-fg-muted">{statusError}</p>
           <Button size="sm" onClick={() => void loadStatus()} icon={<RotateCw />} className="min-h-11">
-            Try again
+            {tr('common.retry')}
           </Button>
         </div>
       )
@@ -673,60 +675,60 @@ export function SpotifySettings(): ReactNode {
   }
 
   if (!status.configured) {
-    return <p className="text-sm text-fg-muted">Spotify import isn't set up on this server yet. Ask your server admin to add Spotify app credentials.</p>
+    return <p className="text-sm text-fg-muted">{tr('sp.notSetUp')}</p>
   }
 
   if (!status.connected) {
     return (
       <div className="space-y-3">
-        <p className="text-sm text-fg-muted">Connect your Spotify account to import your playlists into Nocturne.</p>
+        <p className="text-sm text-fg-muted">{tr('sp.connectToImport')}</p>
         <ConnectPanel compact />
       </div>
     )
   }
 
   const expiry = connectionExpiry(status)
-  const name = status.account?.displayName || status.account?.id || 'your account'
+  const name = status.account?.displayName || status.account?.id || tr('sp.yourAccount')
   return (
     <div className="space-y-4">
       <div className="flex min-w-0 items-center gap-3">
         <AudioLines className={cx('h-6 w-6 shrink-0', SPOTIFY_TINT)} aria-hidden />
         <div className="min-w-0">
-          <p className="truncate text-[15px] font-medium">Connected as {name}</p>
+          <p className="truncate text-[15px] font-medium">{tr('sp.connectedAs', { name })}</p>
           {expiry && (
             <p className={cx('text-[13px]', expiry.expired || expiry.soon ? 'text-[#ffc15e]' : 'text-fg-muted')}>
               {expiry.expired
-                ? 'The connection has expired. Reconnect to keep importing.'
+                ? tr('sp.expired')
                 : expiry.soon
-                  ? `The connection expires on ${formatDate(expiry.at)} (${plural(Math.max(1, expiry.daysLeft), 'day')} left). Reconnect to keep importing.`
-                  : `Spotify connections last about 6 months. This one is valid until ${formatDate(expiry.at)}.`}
+                  ? tr('sp.expiresSoon', { date: formatDate(expiry.at), days: plural(Math.max(1, expiry.daysLeft), 'common.day') })
+                  : tr('sp.validUntil', { date: formatDate(expiry.at) })}
             </p>
           )}
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" icon={<Import />} onClick={() => setImporting(true)} className="min-h-11">
-          Import a playlist
+          {tr('sp.importPlaylist')}
         </Button>
         {(expiry?.expired || expiry?.soon) && !reconnect && (
           <Button icon={<RotateCw />} onClick={() => setReconnect(true)} className="min-h-11">
-            Reconnect
+            {tr('sp.reconnect')}
           </Button>
         )}
         <Button variant="danger" icon={<Unplug />} onClick={() => setConfirming(true)} className="min-h-11">
-          Disconnect
+          {tr('sp.disconnect')}
         </Button>
       </div>
       {reconnect && <ConnectPanel compact />}
       {confirming && (
         <ConfirmDialog
-          title="Disconnect Spotify?"
-          message="Nocturne forgets your Spotify sign-in. Playlists you already imported stay in your library."
-          confirmLabel="Disconnect"
+          title={tr('sp.disconnectQ')}
+          message={tr('sp.disconnectMsg')}
+          confirmLabel={tr('sp.disconnect')}
           tone="danger"
           onConfirm={async () => {
             await disconnect()
-            toast('Spotify disconnected')
+            toast(tr('sp.disconnected'))
           }}
           onClose={() => setConfirming(false)}
         />

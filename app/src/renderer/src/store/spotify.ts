@@ -3,6 +3,7 @@ import type { ApiClient } from '../api/client'
 import { ApiError, describeError } from '../api/errors'
 import type { SpotifyImport, SpotifyPlaylist, SpotifyStatus } from '../api/types'
 import { resources, type ResourceCache } from '../lib/resource'
+import { t, type MessageKey } from '../i18n'
 import { invalidatePlaylists } from './playlists'
 
 /**
@@ -40,26 +41,21 @@ export function importProgress(imp: Pick<SpotifyImport, 'total' | 'matched' | 'd
   return { ready: Number.isFinite(ready) ? ready : 0, total, fraction: total > 0 ? ready / total : undefined }
 }
 
-export const IMPORT_STATUS_LABEL: Record<SpotifyImport['status'], string> = {
-  queued: 'Queued',
-  reading: 'Reading playlist',
-  matching: 'Matching songs',
-  downloading: 'Downloading',
-  done: 'Imported',
-  failed: 'Failed',
-  cancelled: 'Cancelled'
+/** Translated label for an import status. */
+export function importStatusLabel(status: SpotifyImport['status']): string {
+  return t(`spotify.status.${status}` as MessageKey)
 }
 
-const songs = (n: number): string => `${n} ${n === 1 ? 'song' : 'songs'}`
+const songs = (n: number): string => t('common.song', { count: n })
 
 /** Toast text for an import that just finished. */
 export function describeFinished(imp: SpotifyImport): string {
-  const name = imp.spotifyPlaylist?.name || 'playlist'
-  if (imp.status === 'failed') return imp.error ? `Couldn't import '${name}': ${imp.error}` : `Couldn't import '${name}'`
-  if (imp.status === 'cancelled') return `Import of '${name}' cancelled`
+  const name = imp.spotifyPlaylist?.name || t('spotify.playlistFallback')
+  if (imp.status === 'failed') return imp.error ? t('spotify.finish.failedWith', { name, error: imp.error }) : t('spotify.finish.failed', { name })
+  if (imp.status === 'cancelled') return t('spotify.finish.cancelled', { name })
   const { ready } = importProgress(imp)
   const missing = num(imp.failed)
-  return `Imported '${name}': ${songs(ready)}${missing > 0 ? `, ${missing} not found` : ''}`
+  return missing > 0 ? t('spotify.finish.doneMissing', { name, songs: songs(ready), missing }) : t('spotify.finish.done', { name, songs: songs(ready) })
 }
 
 const ID_RE = /^[A-Za-z0-9]{16,40}$/

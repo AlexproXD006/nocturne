@@ -1,4 +1,5 @@
 import { parseLrc, parsePlain } from '../../../lyrics/lrc'
+import { t } from '../../../i18n'
 
 /** Server limit for admin LRC / plain-text lyrics. */
 export const EDIT_MAX_BYTES = 200 * 1024
@@ -28,17 +29,17 @@ export interface EditCheck {
 export function checkEditLyrics(format: EditFormat, text: string): EditCheck {
   const bytes = utf8Bytes(text)
   const empty: EditCheck = { ok: false, lines: 0, bytes, preview: [] }
-  if (text.trim() === '') return { ...empty, error: 'Paste or choose some lyrics first.' }
-  if (bytes > EDIT_MAX_BYTES) return { ...empty, error: 'The lyrics are larger than 200 KB.' }
+  if (text.trim() === '') return { ...empty, error: t('edit.empty') }
+  if (bytes > EDIT_MAX_BYTES) return { ...empty, error: t('edit.tooBig') }
   if (format === 'lrc') {
-    if (!STAMP.test(text)) return { ...empty, error: 'No [mm:ss.xx] timestamps found - switch to plain text or add timestamps.' }
+    if (!STAMP.test(text)) return { ...empty, error: t('edit.noStamps') }
     const parsed = parseLrc(text)
     const lines = parsed.lines.filter((l) => l.text)
     const preview = parsed.lines.slice(0, 8).map((l) => `${Math.floor(l.time / 60000)}:${String(Math.floor((l.time % 60000) / 1000)).padStart(2, '0')}  ${l.text || '♪'}`)
-    return { ok: lines.length > 0, error: lines.length ? undefined : 'No timed lyric lines found.', lines: lines.length, bytes, preview }
+    return { ok: lines.length > 0, error: lines.length ? undefined : t('edit.noTimed'), lines: lines.length, bytes, preview }
   }
   const lines = parsePlain(text).lines.filter((l) => l.text)
-  return { ok: lines.length > 0, error: lines.length ? undefined : 'No lyric lines found.', lines: lines.length, bytes, preview: lines.slice(0, 8).map((l) => l.text) }
+  return { ok: lines.length > 0, error: lines.length ? undefined : t('edit.noLines'), lines: lines.length, bytes, preview: lines.slice(0, 8).map((l) => l.text) }
 }
 
 /** Accepted file types for the "choose a file" button. */

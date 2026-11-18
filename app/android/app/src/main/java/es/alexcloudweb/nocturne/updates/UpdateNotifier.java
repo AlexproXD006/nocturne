@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import es.alexcloudweb.nocturne.MainActivity;
+import es.alexcloudweb.nocturne.R;
 
 /**
  * Posts the "Nocturne X available" notification, at most once per version (the last notified
@@ -69,8 +70,8 @@ public final class UpdateNotifier {
         if (Build.VERSION.SDK_INT < 26) return;
         NotificationManager sys = ctx.getSystemService(NotificationManager.class);
         if (sys == null || sys.getNotificationChannel(CHANNEL_ID) != null) return;
-        NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "App updates", NotificationManager.IMPORTANCE_DEFAULT);
-        ch.setDescription("Tells you when a new version of Nocturne is available");
+        NotificationChannel ch = new NotificationChannel(CHANNEL_ID, ctx.getString(R.string.nocturne_update_channel_name), NotificationManager.IMPORTANCE_DEFAULT);
+        ch.setDescription(ctx.getString(R.string.nocturne_update_channel_description));
         sys.createNotificationChannel(ch);
     }
 
@@ -104,8 +105,8 @@ public final class UpdateNotifier {
 
             NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, CHANNEL_ID)
                 .setSmallIcon(smallIcon(ctx))
-                .setContentTitle("Nocturne " + version + " available")
-                .setContentText("Tap to update")
+                .setContentTitle(ctx.getString(R.string.nocturne_update_title, version))
+                .setContentText(ctx.getString(R.string.nocturne_update_text))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
                 .setContentIntent(pi)

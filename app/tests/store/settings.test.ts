@@ -21,7 +21,16 @@ describe('sanitizeSettings', () => {
 
   it('keeps valid values', () => {
     const valid = { crossfade: 5, visualizer: 'spectrum', motion: 'reduced', lyrics: false, volume: 0.25, muted: true, theme: 'nord', accent: 'blue', deviceName: 'Living room' }
-    expect(sanitizeSettings(valid)).toEqual({ ...valid, adaptive: DEFAULT_SETTINGS.adaptive })
+    expect(sanitizeSettings(valid)).toEqual({ ...valid, adaptive: DEFAULT_SETTINGS.adaptive, language: 'system' })
+  })
+
+  it('defaults language to "system" (migration for settings saved before i18n) and rejects unknown codes', () => {
+    expect(DEFAULT_SETTINGS.language).toBe('system')
+    expect(sanitizeSettings({}).language).toBe('system')
+    expect(sanitizeSettings({ language: 'es' }).language).toBe('es')
+    expect(sanitizeSettings({ language: 'en' }).language).toBe('en')
+    expect(sanitizeSettings({ language: 'klingon' }).language).toBe('system')
+    expect(sanitizeSettings({ language: 7 }).language).toBe('system')
   })
 
   it('clamps and rounds crossfade into 0..12', () => {

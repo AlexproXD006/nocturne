@@ -12,6 +12,13 @@ describe('parseUpdateNotice (IPC payload validation)', () => {
     })
   })
 
+  it('localises the text from the renderer locale (es-ES -> Spanish, unknown -> English)', () => {
+    const base = { version: '1.2.3', url: 'https://music.example.com/dl/app.exe' }
+    expect(parseUpdateNotice({ ...base, locale: 'es-ES' })).toMatchObject({ title: 'Nocturne 1.2.3 disponible', body: 'Haz clic para descargar la actualización' })
+    expect(parseUpdateNotice({ ...base, locale: 'fr' })).toMatchObject({ title: 'Nocturne 1.2.3 available' })
+    expect(parseUpdateNotice({ ...base, locale: 42 })).toMatchObject({ title: 'Nocturne 1.2.3 available' })
+  })
+
   it('rejects junk', () => {
     for (const bad of [
       null,

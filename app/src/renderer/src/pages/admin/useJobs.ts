@@ -5,14 +5,15 @@ import { resources } from '../../lib/resource'
 import { api, useSession } from '../../services'
 import { useUi } from '../../store/ui'
 import { createJobsStore, isActiveJob } from './jobsStore'
+import { t } from '../../i18n'
 
 export function jobKindLabel(kind: AdminJob['kind']): string {
   switch (kind) {
-    case 'download': return 'Download'
-    case 'import': return 'Playlist import'
-    case 'rescan': return 'Library scan'
-    case 'backup': return 'Backup'
-    case 'restore': return 'Restore'
+    case 'download': return t('job.kind.download')
+    case 'import': return t('job.kind.import')
+    case 'rescan': return t('job.kind.rescan')
+    case 'backup': return t('job.kind.backup')
+    case 'restore': return t('job.kind.restore')
   }
 }
 
@@ -21,9 +22,9 @@ function announce(job: AdminJob): void {
   if (job.status === 'done') {
     // New tracks / a restored database make cached home, library and search data stale.
     if (job.kind !== 'backup') resources.invalidate('')
-    toast(job.kind === 'download' || job.kind === 'import' ? `Added “${job.title}”` : `${jobKindLabel(job.kind)} finished`)
+    toast(job.kind === 'download' || job.kind === 'import' ? t('job.toastAdded', { title: job.title }) : t('job.toastFinished', { kind: jobKindLabel(job.kind) }))
   } else if (job.status === 'failed') {
-    toast(`${jobKindLabel(job.kind)} failed${job.error ? `: ${job.error}` : ''}`, 'error')
+    toast(job.error ? t('job.toastFailedWith', { kind: jobKindLabel(job.kind), error: job.error }) : t('job.toastFailed', { kind: jobKindLabel(job.kind) }), 'error')
   }
 }
 
@@ -60,7 +61,7 @@ export async function cancelJob(id: string): Promise<boolean> {
   try {
     await api.adminCancelJob(id)
     await jobsStore.refresh()
-    useUi.getState().toast('Job cancelled')
+    useUi.getState().toast(t('job.toastCancelled'))
     return true
   } catch (err) {
     useUi.getState().toast(describeError(err), 'error')
@@ -72,7 +73,7 @@ export async function cancelJob(id: string): Promise<boolean> {
 export async function startRescan(): Promise<boolean> {
   try {
     jobsStore.upsert(await api.adminRescan())
-    useUi.getState().toast('Library scan started')
+    useUi.getState().toast(t('job.toastScan'))
     return true
   } catch (err) {
     useUi.getState().toast(describeError(err), 'error')
@@ -83,7 +84,7 @@ export async function startRescan(): Promise<boolean> {
 export async function startBackup(): Promise<boolean> {
   try {
     jobsStore.upsert(await api.adminCreateBackup())
-    useUi.getState().toast('Backup started')
+    useUi.getState().toast(t('job.toastBackup'))
     return true
   } catch (err) {
     useUi.getState().toast(describeError(err), 'error')

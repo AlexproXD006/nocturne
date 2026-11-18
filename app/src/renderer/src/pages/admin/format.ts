@@ -1,4 +1,6 @@
 import type { AdminSource } from '../../api/types'
+import { formatDate, formatDateTime as fmtDateTime, formatRelative } from '../../i18n/format'
+import { t as tr } from '../../i18n'
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'] as const
 
@@ -27,25 +29,19 @@ export function usageFraction(used: number, free: number | undefined): number | 
 /** "just now", "42 s ago", "5 min ago", "3 hr ago", "2 d ago", then a short date. Empty for invalid input. */
 export function relativeTime(iso: string | undefined | null, now: number = Date.now()): string {
   if (!iso) return ''
-  const t = Date.parse(iso)
-  if (Number.isNaN(t)) return ''
-  const s = Math.floor((now - t) / 1000)
-  if (s < 5) return 'just now'
-  if (s < 60) return `${s} s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m} min ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h} hr ago`
-  const d = Math.floor(h / 24)
-  if (d < 30) return `${d} d ago`
-  return new Date(t).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  const ts = Date.parse(iso)
+  if (Number.isNaN(ts)) return ''
+  const s = Math.floor((now - ts) / 1000)
+  if (s < 5) return tr('rel.now')
+  if (s < 30 * 86400) return formatRelative(s)
+  return formatDate(ts)
 }
 
 export function formatDateTime(iso: string | undefined | null): string {
   if (!iso) return ''
-  const t = Date.parse(iso)
-  if (Number.isNaN(t)) return ''
-  return new Date(t).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const ts = Date.parse(iso)
+  if (Number.isNaN(ts)) return ''
+  return fmtDateTime(ts)
 }
 
 const SPOTIFY_HOSTS = new Set(['open.spotify.com', 'play.spotify.com'])

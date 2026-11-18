@@ -9,6 +9,7 @@ import { Artwork, ErrorState } from '../components/common'
 import { TrackList } from '../components/TrackList'
 import { useNav } from '../store/nav'
 import { Page } from './Page'
+import { useT, type MessageKey } from '../i18n'
 
 function toCards(section: HomeSection): CardItem[] {
   switch (section.kind) {
@@ -20,6 +21,7 @@ function toCards(section: HomeSection): CardItem[] {
 }
 
 function QuickTile({ title, images, onOpen, onPlay, icon }: { title: string; images?: Track['artwork']; onOpen: () => void; onPlay?: () => void; icon?: ReactNode }): ReactNode {
+  const tr = useT()
   return (
     <div
       role="link"
@@ -32,7 +34,7 @@ function QuickTile({ title, images, onOpen, onPlay, icon }: { title: string; ima
       <span className="line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug font-semibold [overflow-wrap:anywhere] md:text-sm">{title}</span>
       {onPlay && (
         <button
-          aria-label={`Play ${title}`}
+          aria-label={tr('card.play', { title })}
           onClick={(e) => {
             e.stopPropagation()
             onPlay()
@@ -46,14 +48,27 @@ function QuickTile({ title, images, onOpen, onPlay, icon }: { title: string; ima
   )
 }
 
+/** Shelves the API documents by id: translate their stock English titles, keep any custom server title. */
+const STOCK_SECTIONS: Record<string, [string, MessageKey]> = {
+  recent: ['Recently played', 'home.s.recent'],
+  albums: ['Your albums', 'home.s.albums'],
+  artists: ['Artists you love', 'home.s.artists'],
+  'made-for-you': ['Made for you', 'home.s.madeForYou'],
+  'new-releases': ['New releases', 'home.s.newReleases']
+}
+
 export function HomePage(): ReactNode {
+  const tr = useT()
   const name = useSession((s) => s.session?.user.displayName || s.session?.user.username)
   const home = useResource('home', (signal) => api.home(signal))
   const go = useNav((s) => s.go)
   const playTracks = playback.playTracks
   const hour = new Date().getHours()
 
-  const sections = home.data?.sections ?? []
+  const sections = (home.data?.sections ?? []).map((s) => {
+    const stock = STOCK_SECTIONS[s.id]
+    return stock && s.title === stock[0] ? { ...s, title: tr(stock[1]) } : s
+  })
   const quick = sections.find((s) => s.kind === 'albums' || s.kind === 'playlists')
   const quickCards = quick ? toCards(quick).slice(0, 5) : []
 
@@ -77,7 +92,7 @@ export function HomePage(): ReactNode {
         <>
           <div className="fade-up mb-9 grid grid-cols-2 gap-2 lg:grid-cols-3">
             <QuickTile
-              title="Liked Songs"
+              title={tr('nav.likedSongs')}
               onOpen={() => go({ name: 'liked' })}
               icon={
                 <span className="flex h-14 w-14 shrink-0 items-center justify-center bg-gradient-to-br from-accent to-[#7b5cff] md:h-16 md:w-16">
@@ -105,7 +120,7 @@ export function HomePage(): ReactNode {
                       className="text-sm font-semibold text-fg-muted hover:text-fg"
                       onClick={() => void playTracks(section.items, 0, { type: 'home', id: section.id, name: section.title })}
                     >
-                      Play all
+                      {tr('home.playAll')}
                     </button>
                   </div>
                   <TrackList tracks={section.items.slice(0, 6)} context={{ type: 'home', id: section.id, name: section.title }} header={false} />
@@ -115,7 +130,7 @@ export function HomePage(): ReactNode {
               <Shelf key={section.id} title={section.title} cards={toCards(section)} />
             )
           )}
-          {sections.length === 0 && <p className="py-10 text-center text-fg-muted">Your server didn't send anything for the home screen yet.</p>}
+          {sections.length === 0 && <p className="py-10 text-center text-fg-muted">{tr('home.empty')}</p>}
         </>
       )}
     </Page>

@@ -6,6 +6,8 @@
  *    server doesn't send CORS headers we transparently fall back to plain playback.
  */
 
+import { t } from '../i18n'
+
 export interface EngineEvents {
   onTime?(current: number, duration: number): void
   onPlaying?(): void
@@ -39,10 +41,10 @@ const DECK_EVENTS: DeckEvent[] = ['timeupdate', 'durationchange', 'playing', 'pa
 
 function mediaErrorMessage(el: HTMLAudioElement): string {
   switch (el.error?.code) {
-    case 2: return 'Network error while streaming.'
-    case 3: return 'This track could not be decoded.'
-    case 4: return "This track can't be played (unsupported format or link expired)."
-    default: return 'Playback failed.'
+    case 2: return t('playerr.network')
+    case 3: return t('playerr.decode')
+    case 4: return t('playerr.unsupported')
+    default: return t('playerr.failed')
   }
 }
 
@@ -370,7 +372,7 @@ export class AudioEngine {
       },
       () => {
         this.transitioning = false
-        this.events.onError?.('Playback was blocked by the system.')
+        this.events.onError?.(t('playerr.blocked'))
       }
     )
   }
@@ -386,7 +388,7 @@ export class AudioEngine {
       if (token !== this.playToken) return
       const name = (err as { name?: string })?.name
       if (name === 'AbortError') return
-      if (name === 'NotAllowedError') this.events.onError?.('Press play to start listening.')
+      if (name === 'NotAllowedError') this.events.onError?.(t('playerr.pressPlay'))
       // Other errors surface through the element's error event.
     }
   }

@@ -11,6 +11,7 @@ import {
   loadCardImage,
   type CardRatio
 } from '../lib/lyricCard'
+import { useT, type MessageKey } from '../i18n'
 
 export interface LyricCardProps {
   title: string
@@ -21,9 +22,9 @@ export interface LyricCardProps {
   onClose: () => void
 }
 
-const RATIO_OPTIONS: Array<{ id: CardRatio; label: string }> = [
-  { id: 'square', label: 'Square' },
-  { id: 'story', label: 'Story' }
+const RATIO_OPTIONS: Array<{ id: CardRatio; label: MessageKey }> = [
+  { id: 'square', label: 'card.square' },
+  { id: 'story', label: 'card.story' }
 ]
 
 /**
@@ -33,6 +34,7 @@ const RATIO_OPTIONS: Array<{ id: CardRatio; label: string }> = [
  * can't be used the card falls back to gradient-only so export always works.
  */
 export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCardProps): ReactNode {
+  const tr = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const coverRef = useRef<HTMLImageElement | null>(null)
   const [ratio, setRatio] = useState<CardRatio>('square')
@@ -124,12 +126,12 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
     try {
       const blob = await currentBlob()
       if (!blob) {
-        toast('Could not create the image.', 'error')
+        toast(tr('card.imageFailed'), 'error')
         return
       }
       triggerDownload(blob)
     } catch {
-      toast('Could not create the image.', 'error')
+      toast(tr('card.imageFailed'), 'error')
     } finally {
       setBusy(false)
     }
@@ -140,7 +142,7 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
     try {
       const blob = await currentBlob()
       if (!blob) {
-        toast('Could not create the image.', 'error')
+        toast(tr('card.imageFailed'), 'error')
         return
       }
       const file = new File([blob], 'nocturne-lyrics.png', { type: 'image/png' })
@@ -156,7 +158,7 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
       }
       triggerDownload(blob)
     } catch {
-      toast('Could not share the image.', 'error')
+      toast(tr('card.shareFailed'), 'error')
     } finally {
       setBusy(false)
     }
@@ -175,17 +177,17 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Share lyrics as image"
+        aria-label={tr('card.lyricsDialog')}
         className={cx(
           'g-pop g-sheet flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-line bg-ink-850 pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-black/70 sm:max-w-md sm:rounded-2xl sm:pb-0',
           !reduced && (closing ? 'modal-pop-out' : 'modal-pop')
         )}
       >
         <div className="flex items-center justify-between gap-4 px-5 pt-5 pb-1">
-          <h2 className="text-lg font-bold tracking-tight">Share lyrics</h2>
+          <h2 className="text-lg font-bold tracking-tight">{tr('card.lyricsTitle')}</h2>
           <button
             type="button"
-            aria-label="Close"
+            aria-label={tr('card.close')}
             onClick={requestClose}
             className="-mt-1 -mr-2 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-white/8 hover:text-fg"
           >
@@ -193,7 +195,7 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
           </button>
         </div>
 
-        <div className="px-5 pt-3" role="group" aria-label="Image shape">
+        <div className="px-5 pt-3" role="group" aria-label={tr('card.shapeGroup')}>
           <div className="inline-flex rounded-full bg-ink-900 p-1">
             {RATIO_OPTIONS.map((opt) => (
               <button
@@ -206,7 +208,7 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
                   (ratio === opt.id ? 'bg-accent text-ink-950' : 'text-fg-muted hover:text-fg')
                 }
               >
-                {opt.label}
+                {tr(opt.label)}
               </button>
             ))}
           </div>
@@ -215,7 +217,7 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-5 py-4">
           <canvas
             ref={canvasRef}
-            aria-label={`Lyric card preview for ${title}`}
+            aria-label={tr('card.lyricsPreview', { title })}
             role="img"
             className="h-auto max-h-[56vh] w-auto max-w-full rounded-xl shadow-lg shadow-black/50"
           />
@@ -224,22 +226,22 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
         <div className="flex gap-2 px-5 pt-1 pb-5">
           <button
             type="button"
-            aria-label="Download image"
+            aria-label={tr('card.downloadLabel')}
             disabled={busy}
             onClick={() => void onDownload()}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-3 text-sm font-semibold text-fg transition-colors hover:bg-white/14 disabled:pointer-events-none disabled:opacity-50"
           >
-            <Download className="h-4 w-4" /> Download
+            <Download className="h-4 w-4" /> {tr('card.download')}
           </button>
           {canNativeShare && (
             <button
               type="button"
-              aria-label="Share image"
+              aria-label={tr('card.shareLabel')}
               disabled={busy}
               onClick={() => void onShare()}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-accent px-4 py-3 text-sm font-semibold text-ink-950 transition-transform active:scale-95 disabled:pointer-events-none disabled:opacity-50"
             >
-              <Share2 className="h-4 w-4" /> Share
+              <Share2 className="h-4 w-4" /> {tr('card.share')}
             </button>
           )}
         </div>

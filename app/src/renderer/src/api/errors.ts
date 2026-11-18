@@ -1,3 +1,5 @@
+import { t } from '../i18n'
+
 export type ApiErrorCode =
   | 'network'
   | 'timeout'
@@ -35,12 +37,12 @@ export class ApiError extends Error {
 
 function defaultMessage(code: ApiErrorCode): string {
   switch (code) {
-    case 'unauthorized': return 'Your session has expired. Please sign in again.'
-    case 'forbidden': return "You don't have access to that."
-    case 'not_found': return "We couldn't find that."
-    case 'rate_limited': return 'Too many requests — slow down a little.'
-    case 'server': return 'The server had a problem. Try again in a moment.'
-    default: return 'Something went wrong.'
+    case 'unauthorized': return t('err.sessionExpired')
+    case 'forbidden': return t('err.forbidden')
+    case 'not_found': return t('err.notFound')
+    case 'rate_limited': return t('err.rateLimited')
+    case 'server': return t('err.server')
+    default: return t('err.generic')
   }
 }
 
@@ -52,5 +54,5 @@ export function isAbort(err: unknown): boolean {
 export function describeError(err: unknown): string {
   if (err instanceof ApiError) return err.message
   if (err instanceof Error && err.message) return err.message
-  return 'Something went wrong.'
+  return t('err.generic')
 }

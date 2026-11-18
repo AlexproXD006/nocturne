@@ -11,6 +11,7 @@ import { useSettings } from '../store/settings'
 import { platformLabel, sessionDisplayName } from '../lib/deviceName'
 import { IconButton, cx } from './common'
 import { VolumeControl } from './controls'
+import { t, useT } from '../i18n'
 
 /** Where the devices panel is showing: anchored popover (desktop) or bottom sheet (phone). */
 export const useDevicesUi = create<{ open: 'popover' | 'sheet' | null; show(mode: 'popover' | 'sheet'): void; hide(): void }>((set) => ({
@@ -36,16 +37,17 @@ function platformIcon(p: string, cls = 'h-4 w-4'): ReactNode {
 const ACTIVE = new Set(['playing', 'buffering', 'loading'])
 
 function statusLabel(s: ConnectSession): string {
-  if (!s.online) return 'Offline'
+  if (!s.online) return t('dev.offline')
   const st = s.state.status ?? 'idle'
-  const t = s.state.track
-  const what = t ? `${t.title} · ${t.artists.map((a) => a.name).join(', ')}` : ''
-  if (ACTIVE.has(st)) return what ? `Playing ${what}` : 'Playing'
-  if (st === 'paused') return what ? `Paused · ${what}` : 'Paused'
-  return 'Idle'
+  const track = s.state.track
+  const what = track ? `${track.title} · ${track.artists.map((a) => a.name).join(', ')}` : ''
+  if (ACTIVE.has(st)) return what ? t('dev.playingWhat', { what }) : t('dev.playing')
+  if (st === 'paused') return what ? t('dev.pausedWhat', { what }) : t('dev.paused')
+  return t('dev.idle')
 }
 
 function SelfRow(): ReactNode {
+  const tr = useT()
   const selfName = useConnect((s) => s.selfName)
   const controlling = useConnect((s) => s.controlling)
   const playHereFrom = useConnect((s) => s.playHereFrom)
@@ -70,27 +72,27 @@ function SelfRow(): ReactNode {
             <form onSubmit={(e) => { e.preventDefault(); save() }} className="flex items-center gap-1">
               <input
                 autoFocus
-                aria-label="Device name"
+                aria-label={tr('dev.name')}
                 maxLength={80}
                 value={draft}
                 onChange={(e) => setDraft(e.currentTarget.value)}
                 onKeyDown={(e) => { e.nativeEvent.stopPropagation(); if (e.key === 'Escape') setEditing(false) }}
                 className="min-w-0 flex-1 rounded-md border border-line bg-ink-900 px-2 py-1 text-sm outline-none focus:border-accent"
               />
-              <IconButton label="Save name" size="sm" onClick={save}><Check className="h-4 w-4" /></IconButton>
+              <IconButton label={tr('dev.saveName')} size="sm" onClick={save}><Check className="h-4 w-4" /></IconButton>
             </form>
           ) : (
             <p className="flex items-center gap-1 truncate text-sm font-medium">
               <span className="truncate">{selfName}</span>
-              <span className="shrink-0 text-xs font-normal text-fg-muted">· This device</span>
-              <button type="button" aria-label="Rename this device" onClick={() => { setDraft(selfName); setEditing(true) }}
+              <span className="shrink-0 text-xs font-normal text-fg-muted">· {tr('dev.thisDevice')}</span>
+              <button type="button" aria-label={tr('dev.rename')} onClick={() => { setDraft(selfName); setEditing(true) }}
                 className="ml-0.5 shrink-0 rounded p-0.5 text-fg-subtle hover:text-fg">
                 <Pencil className="h-3 w-3" />
               </button>
             </p>
           )}
           <p className={cx('truncate text-xs', controlling ? 'text-fg-muted' : 'text-accent')}>
-            {controlling ? 'Not playing here' : 'Listening on this device'}
+            {controlling ? tr('dev.notHere') : tr('dev.listeningHere')}
           </p>
         </div>
       </div>
@@ -99,9 +101,9 @@ function SelfRow(): ReactNode {
           <button
             type="button"
             onClick={() => void playHereFrom(controlling)}
-            className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-ink-950 hover:brightness-110"
+            className="rounded-full bg-accent px-3 py-1 text-xs font-semibold whitespace-nowrap text-ink-950 hover:brightness-110"
           >
-            Play here
+            {tr('dev.playHere')}
           </button>
         </div>
       )}
@@ -110,6 +112,7 @@ function SelfRow(): ReactNode {
 }
 
 function SessionRow({ session }: { session: ConnectSession }): ReactNode {
+  const tr = useT()
   const controlling = useConnect((s) => s.controlling)
   const remoteStatus = useConnect((s) => (s.remote?.id === session.id ? s.remote.state.status : undefined))
   const control = useConnect((s) => s.control)
@@ -146,18 +149,18 @@ function SessionRow({ session }: { session: ConnectSession }): ReactNode {
             {platformLabel(session.platform)} · {statusLabel(session)}
           </p>
         </div>
-        {session.online && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" aria-label="Online" />}
+        {session.online && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" aria-label={tr('dev.online')} />}
       </div>
       {session.online && (
         <>
           <div className="mt-2 flex items-center gap-1">
-            <IconButton label="Previous" size="sm" disabled={!canControl} onClick={() => send('previous')}>
+            <IconButton label={tr('ctl.previous')} size="sm" disabled={!canControl} onClick={() => send('previous')}>
               <SkipBack className="h-4 w-4" />
             </IconButton>
-            <IconButton label={playing ? 'Pause' : 'Play'} size="sm" disabled={!canControl} onClick={() => send('toggle')}>
+            <IconButton label={playing ? tr('ctl.pause') : tr('ctl.play')} size="sm" disabled={!canControl} onClick={() => send('toggle')}>
               {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </IconButton>
-            <IconButton label="Next" size="sm" disabled={!canControl} onClick={() => send('next')}>
+            <IconButton label={tr('ctl.next')} size="sm" disabled={!canControl} onClick={() => send('next')}>
               <SkipForward className="h-4 w-4" />
             </IconButton>
             <div className="ml-auto flex items-center gap-1.5">
@@ -165,26 +168,26 @@ function SessionRow({ session }: { session: ConnectSession }): ReactNode {
                 type="button"
                 disabled={!st.track}
                 onClick={() => void playHereFrom(session.id)}
-                className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-fg hover:bg-white/15 disabled:opacity-35"
+                className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold whitespace-nowrap text-fg hover:bg-white/15 disabled:opacity-35"
               >
-                Play here
+                {tr('dev.playHere')}
               </button>
               {isControlled ? (
                 <button
                   type="button"
                   onClick={release}
-                  className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-ink-950 hover:brightness-110"
+                  className="rounded-full bg-accent px-3 py-1 text-xs font-semibold whitespace-nowrap text-ink-950 hover:brightness-110"
                 >
-                  Disconnect
+                  {tr('dev.disconnect')}
                 </button>
               ) : (
                 <button
                   type="button"
                   disabled={!canControl}
                   onClick={() => control(session.id)}
-                  className="rounded-full bg-accent/15 px-3 py-1 text-xs font-semibold text-accent hover:bg-accent/25 disabled:opacity-35"
+                  className="rounded-full bg-accent/15 px-3 py-1 text-xs font-semibold whitespace-nowrap text-accent hover:bg-accent/25 disabled:opacity-35"
                 >
-                  Control
+                  {tr('dev.control')}
                 </button>
               )}
             </div>
@@ -197,12 +200,13 @@ function SessionRow({ session }: { session: ConnectSession }): ReactNode {
 }
 
 function PanelBody(): ReactNode {
+  const tr = useT()
   const sessions = useConnect((s) => s.sessions)
   return (
     <>
       <div className="mb-2 flex items-center gap-2 px-1">
         <Cast className="h-4 w-4 text-accent" />
-        <h3 className="text-sm font-semibold">Devices</h3>
+        <h3 className="text-sm font-semibold">{tr('player.devices')}</h3>
       </div>
       <ul className="flex flex-col gap-1.5">
         <SelfRow />
@@ -210,7 +214,7 @@ function PanelBody(): ReactNode {
       </ul>
       {sessions.length === 0 && (
         <p className="px-1 pb-2 pt-4 text-center text-xs text-fg-muted">
-          No other devices are signed in.<br />Open Nocturne on another device to control it from here.
+          {tr('dev.none')}<br />{tr('dev.noneHint')}
         </p>
       )}
     </>
@@ -218,6 +222,7 @@ function PanelBody(): ReactNode {
 }
 
 function Popover({ anchor, onClose }: { anchor: HTMLElement; onClose: () => void }): ReactNode {
+  const tr = useT()
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: 0, bottom: 0 })
 
@@ -246,7 +251,7 @@ function Popover({ anchor, onClose }: { anchor: HTMLElement; onClose: () => void
     <div
       ref={ref}
       role="dialog"
-      aria-label="Devices"
+      aria-label={tr('player.devices')}
       style={{ left: pos.left, bottom: pos.bottom, width: 340 }}
       className="fade-up g-pop fixed z-[100] max-h-[70vh] overflow-y-auto rounded-xl border border-line bg-ink-800/95 p-3 shadow-2xl shadow-black/60 backdrop-blur-xl"
     >
@@ -258,6 +263,7 @@ function Popover({ anchor, onClose }: { anchor: HTMLElement; onClose: () => void
 
 /** Phone: the devices panel as a bottom sheet. Mounted once at the app root. */
 export function DevicesSheet(): ReactNode {
+  const tr = useT()
   const open = useDevicesUi((s) => s.open === 'sheet')
   const hide = useDevicesUi((s) => s.hide)
   const openPanel = useConnect((s) => s.openPanel)
@@ -280,11 +286,11 @@ export function DevicesSheet(): ReactNode {
       <div className="g-scrim absolute inset-0 bg-black/60" onClick={hide} aria-hidden />
       <div
         role="dialog"
-        aria-label="Devices"
+        aria-label={tr('player.devices')}
         className="fade-up g-pop g-sheet relative max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border-t border-line bg-ink-800 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" aria-hidden />
-        <IconButton label="Close devices" size="sm" onClick={hide} className="absolute! right-2 top-2">
+        <IconButton label={tr('dev.closeSheet')} size="sm" onClick={hide} className="absolute! right-2 top-2">
           <X className="h-4 w-4" />
         </IconButton>
         <PanelBody />
@@ -296,6 +302,7 @@ export function DevicesSheet(): ReactNode {
 
 /** Devices button + popover for the player bar. Renders nothing when Connect is inactive. */
 export function DevicesButton({ onClick }: { onClick?: () => void } = {}): ReactNode {
+  const tr = useT()
   const active = useConnect((s) => s.active)
   const sessions = useConnect((s) => s.sessions)
   const controlling = useConnect((s) => s.controlling)
@@ -318,7 +325,7 @@ export function DevicesButton({ onClick }: { onClick?: () => void } = {}): React
   return (
     <div ref={btnRef} className="relative inline-flex" data-devices-anchor={onClick ? undefined : ''}>
       <IconButton
-        label={controlling ? 'Devices (controlling another device)' : 'Devices'}
+        label={controlling ? tr('dev.controlling') : tr('player.devices')}
         active={open || controlling !== null}
         onClick={onClick ?? (() => (open ? hide() : show('popover')))}
       >
@@ -341,6 +348,7 @@ export function DevicesButton({ onClick }: { onClick?: () => void } = {}): React
  * devices panel; the × goes back to playing on this device.
  */
 export function ListeningBar({ className, rounded = '' }: { className?: string; rounded?: string }): ReactNode {
+  const tr = useT()
   const remote = useConnect((s) => s.remote)
   const release = useConnect((s) => s.release)
   if (!remote) return null
@@ -353,20 +361,20 @@ export function ListeningBar({ className, rounded = '' }: { className?: string; 
         type="button"
         onClick={openDevices}
         className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left text-xs font-semibold"
-        aria-label={`Listening on ${remote.name}. Open devices`}
+        aria-label={tr('dev.listeningOnOpen', { name: remote.name })}
       >
         {platformIcon(remote.platform, 'h-3.5 w-3.5 shrink-0')}
-        <span className="truncate">Listening on {remote.name}</span>
+        <span className="truncate">{tr('dev.listeningOn', { name: remote.name })}</span>
       </button>
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); release() }}
-        aria-label="Stop controlling and play on this device"
-        title="Disconnect"
+        aria-label={tr('dev.stopControlling')}
+        title={tr('dev.disconnect')}
         className="-mr-1 flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold hover:bg-black/10"
       >
         <X className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">Disconnect</span>
+        <span className="hidden sm:inline">{tr('dev.disconnect')}</span>
       </button>
     </div>
   )
@@ -377,6 +385,7 @@ export function ListeningBar({ className, rounded = '' }: { className?: string; 
  * Keeps the remote reachable from the phone without opening a menu first.
  */
 export function RemoteSuggestion(): ReactNode {
+  const tr = useT()
   const candidate = useConnect((s) => s.controlling ? undefined : s.sessions.find((x) => x.online && x.controllable && ACTIVE.has(x.state.status ?? '') && x.state.track))
   const control = useConnect((s) => s.control)
   if (!candidate) return null
@@ -386,14 +395,14 @@ export function RemoteSuggestion(): ReactNode {
       <MonitorSpeaker className="h-4 w-4 shrink-0 text-accent" />
       <button type="button" onClick={openDevices} className="min-w-0 flex-1 text-left">
         <p className="truncate text-sm font-semibold">{t.title}</p>
-        <p className="truncate text-xs text-accent">Playing on {sessionDisplayName(candidate)}</p>
+        <p className="truncate text-xs text-accent">{tr('dev.playingOn', { name: sessionDisplayName(candidate) })}</p>
       </button>
       <button
         type="button"
         onClick={() => control(candidate.id)}
         className="shrink-0 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-ink-950"
       >
-        Control
+        {tr('dev.control')}
       </button>
     </div>
   )

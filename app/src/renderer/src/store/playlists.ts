@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { ApiClient } from '../api/client'
 import type { Page, Playlist, PlaylistDetail, Track } from '../api/types'
 import { resources, type ResourceCache } from '../lib/resource'
+import { t } from '../i18n'
 
 /**
  * Playlist editing helpers shared by the Library, the Playlist page and the "Add to playlist" picker.
@@ -65,10 +66,10 @@ export interface AddOutcome {
 }
 
 export function describeAdd(name: string, requested: number, added: number, skipped: number): string {
-  if (requested <= 1) return added > 0 ? `Added to ${name}` : `Already in ${name}`
-  if (added === 0) return `All ${requested} songs are already in ${name}`
-  if (skipped > 0) return `Added ${added} ${added === 1 ? 'song' : 'songs'} to ${name}, ${skipped} already there`
-  return `Added ${added} songs to ${name}`
+  if (requested <= 1) return added > 0 ? t('pl.addedTo', { name }) : t('pl.alreadyIn', { name })
+  if (added === 0) return t('pl.allAlready', { count: requested, name })
+  if (skipped > 0) return t('pl.addedSkipped', { count: added, name, skipped })
+  return t('pl.addedMany', { count: added, name })
 }
 
 /**
@@ -137,7 +138,7 @@ export const usePlaylistUi = create<PlaylistUiState>((set) => ({
   picker: null,
   openPicker(tracks, label) {
     if (tracks.length === 0) return
-    set({ picker: { tracks, label: label ?? (tracks.length === 1 ? tracks[0]!.title : `${tracks.length} songs`) } })
+    set({ picker: { tracks, label: label ?? (tracks.length === 1 ? tracks[0]!.title : t('common.song', { count: tracks.length })) } })
   },
   closePicker() {
     set({ picker: null })

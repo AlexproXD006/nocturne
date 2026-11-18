@@ -8,6 +8,7 @@ import { Artwork, EmptyState, Spinner } from '../../components/common'
 import { formatTime } from '../../lib/format'
 import { useJobs } from './useJobs'
 import { Button, Card, Chip, InlineError, Segmented, inputClass, useDebounced } from './ui'
+import { useT, type MessageKey } from '../../i18n'
 
 export const SOURCE_LABEL: Record<AdminSource, string> = { spotify: 'Spotify', youtube: 'YouTube' }
 
@@ -15,6 +16,7 @@ type DlState = 'starting' | 'queued'
 const keyOf = (r: SourceResult): string => `${r.source}:${r.id}`
 
 function ResultRow({ r, state, onDownload }: { r: SourceResult; state: DlState | undefined; onDownload: () => void }): ReactNode {
+  const tr = useT()
   const queued = state === 'queued'
   return (
     <li className="flex items-center gap-3 rounded-xl p-2 hover:bg-white/[0.04]">
@@ -22,8 +24,8 @@ function ResultRow({ r, state, onDownload }: { r: SourceResult; state: DlState |
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <p className="min-w-0 truncate text-sm font-semibold" title={r.title}>{r.title}</p>
-          <Chip>{r.kind}</Chip>
-          {r.inLibrary && <Chip tone="good">In library</Chip>}
+          <Chip>{tr(`src.kind.${r.kind}` as MessageKey)}</Chip>
+          {r.inLibrary && <Chip tone="good">{tr('src.inLibrary')}</Chip>}
         </div>
         <p className="truncate text-[13px] text-fg-muted">
           {r.artist}
@@ -38,17 +40,18 @@ function ResultRow({ r, state, onDownload }: { r: SourceResult; state: DlState |
         variant={queued ? 'ghost' : 'secondary'}
         busy={state === 'starting'}
         disabled={queued}
-        aria-label={queued ? `${r.title} queued` : `Download ${r.title}`}
+        aria-label={queued ? tr('src.queuedLabel', { title: r.title }) : tr('src.downloadLabel', { title: r.title })}
         icon={queued ? <Check /> : <Download />}
         onClick={onDownload}
       >
-        <span className="max-sm:sr-only">{queued ? 'Queued' : 'Download'}</span>
+        <span className="max-sm:sr-only">{queued ? tr('src.queued') : tr('src.download')}</span>
       </Button>
     </li>
   )
 }
 
 export function SourceSearch({ sources }: { sources: AdminSource[] }): ReactNode {
+  const tr = useT()
   const [source, setSource] = useState<AdminSource>(sources[0]!)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SourceResult[] | null>(null)
@@ -92,7 +95,7 @@ export function SourceSearch({ sources }: { sources: AdminSource[] }): ReactNode
       .then((job) => {
         upsert(job)
         setDl((d) => ({ ...d, [k]: 'queued' }))
-        useUi.getState().toast(`Queued “${r.title}”`)
+        useUi.getState().toast(tr('src.queuedToast', { title: r.title }))
       })
       .catch((err: unknown) => {
         setDl((d) => {
@@ -106,11 +109,11 @@ export function SourceSearch({ sources }: { sources: AdminSource[] }): ReactNode
   return (
     <Card
       id="source-search-title"
-      title="Search a source"
+      title={tr('src.title')}
       action={
         sources.length > 1 ? (
           <Segmented
-            label="Music source"
+            label={tr('src.source')}
             value={source}
             onChange={(s) => {
               setSource(s)
@@ -128,9 +131,9 @@ export function SourceSearch({ sources }: { sources: AdminSource[] }): ReactNode
         <input
           type="search"
           role="searchbox"
-          aria-label={`Search ${SOURCE_LABEL[source]}`}
+          aria-label={tr('src.searchLabel', { source: SOURCE_LABEL[source] })}
           className={`${inputClass} pl-11`}
-          placeholder={`Search ${SOURCE_LABEL[source]} for songs, albums or playlists`}
+          placeholder={tr('src.searchPlaceholder', { source: SOURCE_LABEL[source] })}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoComplete="off"
@@ -139,7 +142,7 @@ export function SourceSearch({ sources }: { sources: AdminSource[] }): ReactNode
         {query && (
           <button
             type="button"
-            aria-label="Clear search"
+            aria-label={tr('src.clear')}
             onClick={() => setQuery('')}
             className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1.5 text-fg-subtle hover:text-fg"
           >
@@ -150,9 +153,9 @@ export function SourceSearch({ sources }: { sources: AdminSource[] }): ReactNode
       <div className="mt-3 min-h-16" aria-live="polite">
         <InlineError message={error} />
         {loading && !results && <div className="flex justify-center py-8"><Spinner /></div>}
-        {!debounced && !error && <p className="py-4 text-center text-sm text-fg-muted">Type to search {SOURCE_LABEL[source]}.</p>}
+        {!debounced && !error && <p className="py-4 text-center text-sm text-fg-muted">{tr('src.type', { source: SOURCE_LABEL[source] })}</p>}
         {results && results.length === 0 && !loading && (
-          <EmptyState icon={<Search className="h-7 w-7" strokeWidth={1.5} />} title="No results" hint={`Nothing on ${SOURCE_LABEL[source]} matched “${debounced}”.`} />
+          <EmptyState icon={<Search className="h-7 w-7" strokeWidth={1.5} />} title={tr('src.noResults')} hint={tr('src.nothingOn', { source: SOURCE_LABEL[source], q: debounced })} />
         )}
         {results && results.length > 0 && (
           <ul className={loading ? 'opacity-60 transition-opacity' : 'transition-opacity'}>

@@ -7,8 +7,10 @@ import { ErrorState, SectionHeader, cx } from '../components/common'
 import { TrackList } from '../components/TrackList'
 import { HeroHeader, Page, PlayButtons, useTint } from './Page'
 import { PageSkeleton } from './Album'
+import { useT } from '../i18n'
 
 export function ArtistPage({ id }: { id: string }): ReactNode {
+  const tr = useT()
   const res = useResource<ArtistDetail>(`artist:${id}`, (s) => api.artist(id, s))
   const artist = res.data
   const heroImages = useMemo(
@@ -38,16 +40,16 @@ export function ArtistPage({ id }: { id: string }): ReactNode {
       <HeroHeader
         images={heroImages}
         round
-        kind="Artist"
+        kind={tr('artist.kind')}
         title={artist.name}
-        meta={artist.followers != null ? <p>{artist.followers.toLocaleString()} followers</p> : null}
+        meta={artist.followers != null ? <p>{tr('artist.followers', { count: artist.followers })}</p> : null}
       />
       <PlayButtons tracks={artist.topTracks} context={context} />
       {res.error && <ErrorState message={res.error} onRetry={res.reload} />}
 
       {artist.topTracks.length > 0 && (
         <section className="mb-10 fade-up">
-          <SectionHeader title="Popular" />
+          <SectionHeader title={tr('artist.popular')} />
           <TrackList tracks={popular} context={context} header={false} />
           {artist.topTracks.length > 5 && (
             <button
@@ -56,17 +58,17 @@ export function ArtistPage({ id }: { id: string }): ReactNode {
               onClick={() => setExpanded((v) => !v)}
               className="mt-2 rounded-full px-3 py-1.5 text-sm font-semibold text-fg-muted hover:text-fg"
             >
-              {expanded ? 'Show less' : 'Show more'}
+              {expanded ? tr('artist.showLess') : tr('artist.showMore')}
             </button>
           )}
         </section>
       )}
 
-      <Shelf title="Discography" cards={albums} />
+      <Shelf title={tr('artist.discography')} cards={albums} />
 
       {bio && (
         <section className="mb-6 max-w-2xl fade-up">
-          <SectionHeader title="About" />
+          <SectionHeader title={tr('artist.about')} />
           <p className={cx('text-sm leading-relaxed whitespace-pre-line text-fg-muted', !bioOpen && 'line-clamp-4')}>{bio}</p>
           {longBio && (
             <button
@@ -75,7 +77,7 @@ export function ArtistPage({ id }: { id: string }): ReactNode {
               onClick={() => setBioOpen((v) => !v)}
               className="mt-2 text-sm font-semibold text-fg hover:underline"
             >
-              {bioOpen ? 'Show less' : 'Read more'}
+              {bioOpen ? tr('artist.showLess') : tr('artist.readMore')}
             </button>
           )}
         </section>

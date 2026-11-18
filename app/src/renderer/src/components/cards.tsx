@@ -7,6 +7,7 @@ import { useNav } from '../store/nav'
 import { api, playback } from '../services'
 import { useUi } from '../store/ui'
 import { describeError } from '../api/errors'
+import { t, useT } from '../i18n'
 
 export type CardItem =
   | { kind: 'album'; item: Album }
@@ -37,13 +38,14 @@ function subtitle(card: CardItem): string {
       return [card.item.year, kind ?? artistNames(card.item.artists)].filter(Boolean).join(' • ')
     }
     case 'playlist':
-      return card.item.owner?.name ? `By ${card.item.owner.name}` : card.item.trackCount ? `${card.item.trackCount} songs` : 'Playlist'
+      return card.item.owner?.name ? t('card.by', { name: card.item.owner.name }) : card.item.trackCount ? t('common.song', { count: Number(card.item.trackCount) }) : t('nav.playlist')
     case 'artist':
-      return 'Artist'
+      return t('card.artist')
   }
 }
 
 export function MediaCard({ card }: { card: CardItem }): ReactNode {
+  const t = useT()
   const go = useNav((s) => s.go)
   const title = card.kind === 'playlist' ? card.item.name : card.kind === 'album' ? card.item.title : card.item.name
   const round = card.kind === 'artist'
@@ -60,7 +62,7 @@ export function MediaCard({ card }: { card: CardItem }): ReactNode {
         <Artwork images={card.item.artwork} size={200} round={round} alt="" className="h-full w-full shadow-lg shadow-black/40" />
         <button
           type="button"
-          aria-label={`Play ${title}`}
+          aria-label={t('card.play', { title })}
           onClick={(e) => {
             e.stopPropagation()
             void playCollection(card)
@@ -92,6 +94,7 @@ export function CardGrid({ cards, leading }: { cards: CardItem[]; leading?: Reac
 
 /** Horizontally scrolling shelf with arrow buttons on desktop. */
 export function Shelf({ title, cards }: { title: string; cards: CardItem[] }): ReactNode {
+  const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   const scroll = (dir: 1 | -1): void => {
     const el = ref.current
@@ -103,10 +106,10 @@ export function Shelf({ title, cards }: { title: string; cards: CardItem[] }): R
       <div className="mb-2 flex items-end justify-between">
         <h2 className="text-xl font-bold tracking-tight">{title}</h2>
         <div className="hidden gap-1 md:flex">
-          <button aria-label="Scroll left" onClick={() => scroll(-1)} className="rounded-full p-1.5 text-fg-muted hover:bg-white/6 hover:text-fg">
+          <button aria-label={t('ui.scrollLeft')} onClick={() => scroll(-1)} className="rounded-full p-1.5 text-fg-muted hover:bg-white/6 hover:text-fg">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <button aria-label="Scroll right" onClick={() => scroll(1)} className="rounded-full p-1.5 text-fg-muted hover:bg-white/6 hover:text-fg">
+          <button aria-label={t('ui.scrollRight')} onClick={() => scroll(1)} className="rounded-full p-1.5 text-fg-muted hover:bg-white/6 hover:text-fg">
             <ChevronRight className="h-5 w-5" />
           </button>
         </div>

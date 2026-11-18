@@ -1,28 +1,30 @@
 import type { StatsDelta, StatsHistoryItem, StatsRange, StatsSummary } from '../api/types'
+import { formatDate, formatNumber } from '../i18n/format'
+import { getLanguage, getLocale, t, type MessageKey } from '../i18n'
 import { artistNames } from './format'
 import { pickImage } from './url'
 
-export const RANGE_TABS: ReadonlyArray<{ id: StatsRange; label: string }> = [
-  { id: 'week', label: 'Week' },
-  { id: 'month', label: 'Month' },
-  { id: 'year', label: 'Year' },
-  { id: 'all', label: 'All time' }
+export const RANGE_TABS: ReadonlyArray<{ id: StatsRange; labelKey: MessageKey }> = [
+  { id: 'week', labelKey: 'stats.week' },
+  { id: 'month', labelKey: 'stats.month' },
+  { id: 'year', labelKey: 'stats.year' },
+  { id: 'all', labelKey: 'stats.all' }
 ]
 
 /** 47 → "47 min", 135 → "2 h 15 min", 0.4 → "<1 min". */
 export function formatMinutes(minutes: number): string {
-  if (!Number.isFinite(minutes) || minutes <= 0) return '0 min'
-  if (minutes < 1) return '<1 min'
+  if (!Number.isFinite(minutes) || minutes <= 0) return t('dur.min', { m: 0 })
+  if (minutes < 1) return t('dur.minShort')
   const total = Math.round(minutes)
   const h = Math.floor(total / 60)
   const m = total % 60
-  if (h === 0) return `${m} min`
-  return m === 0 ? `${h} h` : `${h} h ${m} min`
+  if (h === 0) return t('dur.min', { m })
+  return m === 0 ? t('dur.hShort', { h }) : t('dur.hmShort', { h, m })
 }
 
 /** The big headline number: whole minutes with thousands separators. */
 export function formatBigMinutes(minutes: number): string {
-  return Math.round(Number.isFinite(minutes) ? Math.max(0, minutes) : 0).toLocaleString('en-US')
+  return formatNumber(Math.round(Number.isFinite(minutes) ? Math.max(0, minutes) : 0))
 }
 
 export interface DeltaView {
@@ -33,13 +35,13 @@ export interface DeltaView {
 /** "+25% vs last week", "-12 min vs last month", or null when there is nothing to compare. */
 export function describeDelta(delta: StatsDelta | null, range: StatsRange): DeltaView | null {
   if (!delta || range === 'all') return null
-  const unit = range === 'week' ? 'last week' : range === 'month' ? 'last month' : 'last year'
+  const unit = t(range === 'week' ? 'stats.unitWeek' : range === 'month' ? 'stats.unitMonth' : 'stats.unitYear')
   const direction = delta.minutes > 0 ? 'up' : delta.minutes < 0 ? 'down' : 'flat'
-  if (direction === 'flat') return { direction, text: `Same as ${unit}` }
+  if (direction === 'flat') return { direction, text: t('stats.deltaSame', { unit }) }
   const sign = delta.minutes > 0 ? '+' : '-'
   const body =
     delta.minutesPct != null ? `${sign}${Math.abs(Math.round(delta.minutesPct))}%` : `${sign}${formatMinutes(Math.abs(delta.minutes))}`
-  return { direction, text: `${body} vs ${unit}` }
+  return { direction, text: t('stats.deltaVs', { body, unit }) }
 }
 
 /** Whether the "next period" arrow is usable (offset 0 is the current period). */
@@ -67,10 +69,28 @@ export function barRatios(items: ReadonlyArray<StatsHistoryItem>, minRatio = 0.0
 export function shortDate(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
   if (!y || !m || !d) return iso
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  return formatDate(new Date(Date.UTC(y, m - 1, d)), { month: 'short', day: 'numeric', timeZone: 'UTC' })
 }
 
 // ---- Recap card data -------------------------------------------------------
+
+/** Period caption ("Nov 16 – 22, 2026"): English keeps the server's label, other languages are formatted locally with Intl. */
+export function periodLabel(s: Pick<StatsSummary, 'range' | 'start' | 'end' | 'label'>): string {
+  if (s.range === 'all') return t('stats.all')
+  if (getLanguage() === 'en' && s.label) return s.label
+  const parse = (iso: string | null): Date | null => {
+    const [y, m, d] = (iso ?? '').split('-').map(Number)
+    return y && m && d ? new Date(Date.UTC(y, m - 1, d)) : null
+  }
+  const start = parse(s.start)
+  if (!start) return s.label
+  const fmt = (o: Intl.DateTimeFormatOptions): Intl.DateTimeFormat => new Intl.DateTimeFormat(getLocale(), { ...o, timeZone: 'UTC' })
+  if (s.range === 'year') return fmt({ year: 'numeric' }).format(start)
+  if (s.range === 'month') return fmt({ month: 'long', year: 'numeric' }).format(start)
+  const end = parse(s.end)
+  const last = end ? new Date(end.getTime() - 86_400_000) : new Date(start.getTime() + 6 * 86_400_000)
+  return fmt({ month: 'short', day: 'numeric', year: 'numeric' }).formatRange(start, last)
+}
 
 export interface RecapArtist {
   name: string
@@ -88,14 +108,13 @@ export interface RecapData {
   topTrack: { title: string; artist: string; coverUrl: string | null; plays: number } | null
 }
 
-const HEADINGS: Record<StatsRange, string> = { week: 'Weekly recap', month: 'Monthly recap', year: 'Yearly recap', all: 'All-time recap' }
 
 /** Everything the 1080×1920 recap image needs, derived from a summary. */
 export function buildRecapData(s: StatsSummary, maxArtists = 5): RecapData {
   const top = s.topTracks[0]
   return {
-    heading: HEADINGS[s.range],
-    periodLabel: s.label,
+    heading: t(`stats.recap.${s.range}` as const),
+    periodLabel: periodLabel(s),
     totalMinutes: s.totals.minutes,
     plays: s.totals.plays,
     delta: describeDelta(s.delta, s.range),

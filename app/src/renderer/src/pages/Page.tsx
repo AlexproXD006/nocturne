@@ -9,6 +9,7 @@ import { rgbString } from '../lib/color'
 import { Artwork, IconButton, cx } from '../components/common'
 import { TopBar } from '../components/Shell'
 import { useNav } from '../store/nav'
+import { useT } from '../i18n'
 
 /** Scrollable page with a top bar that turns solid once content scrolls under it. */
 export function Page({ children, header, tint }: { children: ReactNode; header?: ReactNode; tint?: string }): ReactNode {
@@ -38,20 +39,21 @@ export function Page({ children, header, tint }: { children: ReactNode; header?:
 }
 
 export function PlayButtons({ tracks, context, children }: { tracks: Track[]; context: QueueContext; children?: ReactNode }): ReactNode {
+  const tr = useT()
   const playTracks = playback.playTracks
   const disabled = tracks.length === 0
   return (
     <div className="my-6 flex items-center gap-3">
       <button
         type="button"
-        aria-label="Play"
+        aria-label={tr('page.play')}
         disabled={disabled}
         onClick={() => void playTracks(tracks, 0, context, { shuffle: false })}
         className="flex h-14 w-14 items-center justify-center rounded-full bg-accent text-ink-950 shadow-lg shadow-black/40 transition hover:scale-105 active:scale-95 disabled:opacity-40"
       >
         <Play className="ml-1 h-6 w-6" fill="currentColor" />
       </button>
-      <IconButton label="Shuffle play" size="lg" disabled={disabled} onClick={() => void playTracks(tracks, Math.floor(Math.random() * tracks.length), context, { shuffle: true })}>
+      <IconButton label={tr('page.shuffle')} size="lg" disabled={disabled} onClick={() => void playTracks(tracks, Math.floor(Math.random() * tracks.length), context, { shuffle: true })}>
         <Shuffle className="h-6 w-6" />
       </IconButton>
       {children}
@@ -75,10 +77,11 @@ export function HeroHeader({
   round?: boolean
   fallback?: ReactNode
 }): ReactNode {
+  const tr = useT()
   return (
     <header className="fade-up flex flex-col items-center gap-6 pt-2 text-center md:flex-row md:items-end md:text-left">
       {fallback ?? (
-        <Artwork images={images} size={260} round={round} alt={`${title} artwork`} className="h-48 w-48 shrink-0 shadow-2xl shadow-black/60 md:h-56 md:w-56" />
+        <Artwork images={images} size={260} round={round} alt={tr('page.artwork', { title })} className="h-48 w-48 shrink-0 shadow-2xl shadow-black/60 md:h-56 md:w-56" />
       )}
       <div className="min-w-0 max-w-full">
         <p className="text-xs font-semibold tracking-wide uppercase">{kind}</p>

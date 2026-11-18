@@ -48,7 +48,7 @@ export interface NocturneBridge {
      * opens `url` (http/https only). Resolves false when the OS has no notification support.
      * Optional so older preloads / test fakes stay valid.
      */
-    notifyUpdate?(info: { version: string; url: string }): Promise<boolean>
+    notifyUpdate?(info: { version: string; url: string; locale?: string }): Promise<boolean>
   }
 }
 

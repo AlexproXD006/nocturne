@@ -11,6 +11,7 @@ import { plural } from '../lib/format'
 import { Button, Field, InlineError, inputClass } from '../pages/admin/ui'
 import { Artwork, IconButton, Spinner, cx } from './common'
 import { Modal } from './Modal'
+import { t, useT } from '../i18n'
 
 /** True when the connected server supports creating / editing playlists. Hide all editing UI otherwise. */
 export function usePlaylistsEnabled(): boolean {
@@ -26,9 +27,9 @@ export interface PlaylistValues {
 
 function validate(v: PlaylistValues): string | null {
   const name = v.name.trim()
-  if (!name) return 'Give your playlist a name.'
-  if (name.length > PLAYLIST_NAME_MAX) return `Names can be at most ${PLAYLIST_NAME_MAX} characters.`
-  if (v.description.trim().length > PLAYLIST_DESCRIPTION_MAX) return `Descriptions can be at most ${PLAYLIST_DESCRIPTION_MAX} characters.`
+  if (!name) return t('plui.nameRequired')
+  if (name.length > PLAYLIST_NAME_MAX) return t('plui.nameMax', { max: PLAYLIST_NAME_MAX })
+  if (v.description.trim().length > PLAYLIST_DESCRIPTION_MAX) return t('plui.descMax', { max: PLAYLIST_DESCRIPTION_MAX })
   return null
 }
 
@@ -48,6 +49,7 @@ function PlaylistFields({
   error: string | null
   busy: boolean
 }): ReactNode {
+  const tr = useT()
   const ids = useId()
   const nameRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
@@ -64,7 +66,7 @@ function PlaylistFields({
         onSubmit()
       }}
     >
-      <Field label="Name" htmlFor={`${ids}-name`}>
+      <Field label={tr('plui.name')} htmlFor={`${ids}-name`}>
         <input
           id={`${ids}-name`}
           ref={nameRef}
@@ -76,14 +78,14 @@ function PlaylistFields({
           aria-required="true"
           disabled={busy}
           autoComplete="off"
-          placeholder="My playlist"
+          placeholder={tr('plui.namePlaceholder')}
           onChange={(e) => onChange({ ...values, name: e.target.value })}
         />
       </Field>
       <Field
-        label="Description (optional)"
+        label={tr('plui.desc')}
         htmlFor={`${ids}-desc`}
-        hint={descLeft <= 50 ? <span className={descLeft < 0 ? 'text-[#ff9b9b]' : undefined}>{descLeft} characters left</span> : undefined}
+        hint={descLeft <= 50 ? <span className={descLeft < 0 ? 'text-[#ff9b9b]' : undefined}>{tr('plui.charsLeft', { count: descLeft })}</span> : undefined}
       >
         <textarea
           id={`${ids}-desc`}
@@ -92,7 +94,7 @@ function PlaylistFields({
           value={values.description}
           maxLength={PLAYLIST_DESCRIPTION_MAX}
           disabled={busy}
-          placeholder="Add an optional description"
+          placeholder={tr('plui.descPlaceholder')}
           onChange={(e) => onChange({ ...values, description: e.target.value })}
         />
       </Field>
@@ -139,6 +141,7 @@ export function PlaylistFormDialog({
   onSubmit: (v: PlaylistValues) => Promise<void>
   onClose: () => void
 }): ReactNode {
+  const tr = useT()
   const formId = useId()
   const form = usePlaylistForm(initial, async (v) => {
     await onSubmit(v)
@@ -153,7 +156,7 @@ export function PlaylistFormDialog({
       footer={
         <>
           <Button disabled={form.busy} onClick={onClose}>
-            Cancel
+            {tr('common.cancel')}
           </Button>
           <Button type="submit" form={formId} variant="primary" busy={form.busy} disabled={!form.valid}>
             {submitLabel}
@@ -168,15 +171,16 @@ export function PlaylistFormDialog({
 
 /** "New playlist" dialog used by the Library: creates the playlist and opens it. */
 export function CreatePlaylistDialog({ onClose }: { onClose: () => void }): ReactNode {
+  const tr = useT()
   const go = useNav((s) => s.go)
   return (
     <PlaylistFormDialog
-      title="New playlist"
-      submitLabel="Create"
+      title={tr('plui.new')}
+      submitLabel={tr('plui.create')}
       onClose={onClose}
       onSubmit={async (v) => {
         const created = await createPlaylist(api, v)
-        useUi.getState().toast(`Created ${created.name || v.name}`)
+        useUi.getState().toast(tr('plui.created', { name: created.name || v.name }))
         if (created?.id) go({ name: 'playlist', id: created.id })
       }}
     />
@@ -185,6 +189,7 @@ export function CreatePlaylistDialog({ onClose }: { onClose: () => void }): Reac
 
 /** Library grid tile that opens the create dialog. Sized like a MediaCard. */
 export function NewPlaylistTile({ onClick }: { onClick: () => void }): ReactNode {
+  const tr = useT()
   return (
     <button
       type="button"
@@ -194,8 +199,8 @@ export function NewPlaylistTile({ onClick }: { onClick: () => void }): ReactNode
       <span className="mb-3 flex aspect-square w-full items-center justify-center rounded-lg border-2 border-dashed border-line bg-white/[0.03] text-fg-muted transition-colors group-hover:border-accent/60 group-hover:text-accent">
         <Plus className="h-10 w-10" strokeWidth={1.6} aria-hidden />
       </span>
-      <span className="block truncate text-[15px] font-semibold">New playlist</span>
-      <span className="mt-0.5 block truncate text-[13px] text-fg-muted">Create your own</span>
+      <span className="block truncate text-[15px] font-semibold">{tr('plui.new')}</span>
+      <span className="mt-0.5 block truncate text-[13px] text-fg-muted">{tr('plui.createOwn')}</span>
     </button>
   )
 }
@@ -215,7 +220,7 @@ export function notifyAdd(playlist: Pick<Playlist, 'id' | 'name'>, out: AddOutco
   }
   toast(out.message, 'info', {
     action: {
-      label: again.length === 1 ? 'Add again' : 'Add them again',
+      label: again.length === 1 ? t('plui.addAgain') : t('plui.addThemAgain'),
       run: () => void addAgain({ id: playlist.id, name: out.name || playlist.name }, again)
     }
   })
@@ -232,7 +237,7 @@ async function addAgain(playlist: Pick<Playlist, 'id' | 'name'>, ids: string[]):
       { allowDuplicates: true }
     )
     // A server without duplicate support ignores the flag and skips them again.
-    if (res.added === 0 && res.skipped > 0) toast(`${res.message}. This server doesn't allow the same song twice in a playlist.`, 'error')
+    if (res.added === 0 && res.skipped > 0) toast(t('plui.noDuplicates', { message: res.message }), 'error')
     else toast(res.message)
   } catch (err) {
     toast(describeError(err), 'error')
@@ -251,11 +256,12 @@ export function AddToPlaylistButton({
   size?: 'sm' | 'md' | 'lg'
   className?: string
 }): ReactNode {
+  const tr = useT()
   const enabled = usePlaylistsEnabled()
   const open = usePlaylistUi((s) => s.openPicker)
   if (!enabled) return null
   return (
-    <IconButton label="Add to playlist" size={size} disabled={tracks.length === 0} onClick={() => open(tracks, label)} className={className}>
+    <IconButton label={tr('plui.addTo')} size={size} disabled={tracks.length === 0} onClick={() => open(tracks, label)} className={className}>
       <ListPlus className={size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'} />
     </IconButton>
   )
@@ -269,6 +275,7 @@ function matches(p: Playlist, q: string): boolean {
 
 /** The picker dialog: search the user's editable playlists, or create a new one with the songs in it. */
 export function AddToPlaylistDialog({ tracks, label, onClose }: { tracks: Track[]; label: string; onClose: () => void }): ReactNode {
+  const tr = useT()
   const list = useResource<Playlist[]>(EDITABLE_PLAYLISTS_KEY, (signal) => fetchEditablePlaylists(api, signal))
   const [step, setStep] = useState<'pick' | 'create'>('pick')
   const [query, setQuery] = useState('')
@@ -281,7 +288,7 @@ export function AddToPlaylistDialog({ tracks, label, onClose }: { tracks: Track[
 
   const form = usePlaylistForm({ name: '', description: '' }, async (v) => {
     const created = await createPlaylist(api, { ...v, tracks })
-    toast(`Added to ${created.name || v.name}`)
+    toast(t('pl.addedTo', { name: created.name || v.name }))
     onClose()
   })
 
@@ -302,18 +309,18 @@ export function AddToPlaylistDialog({ tracks, label, onClose }: { tracks: Track[
   if (step === 'create') {
     return (
       <Modal
-        title="New playlist"
-        description={<span className="block truncate">With {label}</span>}
+        title={tr('plui.new')}
+        description={<span className="block truncate">{tr('plui.with', { label })}</span>}
         size="md"
         dismissible={!form.busy}
         onClose={onClose}
         footer={
           <>
             <Button disabled={form.busy} onClick={() => setStep('pick')} icon={<ArrowLeft />}>
-              Back
+              {tr('plui.back')}
             </Button>
             <Button type="submit" form={formId} variant="primary" busy={form.busy} disabled={!form.valid}>
-              Create and add
+              {tr('plui.createAndAdd')}
             </Button>
           </>
         }
@@ -325,11 +332,11 @@ export function AddToPlaylistDialog({ tracks, label, onClose }: { tracks: Track[
 
   const busy = busyId !== null
   return (
-    <Modal title="Add to playlist" description={<span className="block truncate">{label}</span>} size="md" dismissible={!busy} onClose={onClose}>
+    <Modal title={tr('plui.addTo')} description={<span className="block truncate">{label}</span>} size="md" dismissible={!busy} onClose={onClose}>
       <div className="relative mb-3">
         <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
         <label htmlFor={searchId} className="sr-only">
-          Search your playlists
+          {tr('plui.search')}
         </label>
         <input
           id={searchId}
@@ -337,13 +344,13 @@ export function AddToPlaylistDialog({ tracks, label, onClose }: { tracks: Track[
           data-autofocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search your playlists"
+          placeholder={tr('plui.search')}
           autoComplete="off"
           className={cx(inputClass, 'pl-10')}
         />
       </div>
       <InlineError message={error} />
-      <ul className="-mx-2 pb-2" aria-label="Your playlists" aria-busy={busy || list.loading || undefined}>
+      <ul className="-mx-2 pb-2" aria-label={tr('plui.yours')} aria-busy={busy || list.loading || undefined}>
         <li>
           <button
             type="button"
@@ -357,7 +364,7 @@ export function AddToPlaylistDialog({ tracks, label, onClose }: { tracks: Track[
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-white/[0.08] text-fg">
               <Plus className="h-5 w-5" aria-hidden />
             </span>
-            <span className="min-w-0 truncate text-sm font-semibold">New playlist…</span>
+            <span className="min-w-0 truncate text-sm font-semibold">{tr('plui.newEllipsis')}</span>
           </button>
         </li>
         {list.loading && (
@@ -369,12 +376,12 @@ export function AddToPlaylistDialog({ tracks, label, onClose }: { tracks: Track[
           <li className="px-2 py-4 text-sm text-fg-muted">
             {list.error}{' '}
             <button type="button" onClick={list.reload} className="font-semibold text-fg underline-offset-2 hover:underline">
-              Try again
+              {tr('common.retry')}
             </button>
           </li>
         )}
-        {list.data && list.data.length === 0 && <li className="px-2 py-4 text-sm text-fg-muted">You don't have any playlists of your own yet.</li>}
-        {list.data && list.data.length > 0 && playlists.length === 0 && <li className="px-2 py-4 text-sm text-fg-muted">No playlists match “{query.trim()}”.</li>}
+        {list.data && list.data.length === 0 && <li className="px-2 py-4 text-sm text-fg-muted">{tr('plui.none')}</li>}
+        {list.data && list.data.length > 0 && playlists.length === 0 && <li className="px-2 py-4 text-sm text-fg-muted">{tr('plui.noMatch', { query: query.trim() })}</li>}
         {playlists.map((p) => (
           <li key={p.id}>
             <button
@@ -386,7 +393,7 @@ export function AddToPlaylistDialog({ tracks, label, onClose }: { tracks: Track[
               <Artwork images={p.artwork} size={44} className="h-11 w-11 shrink-0" rounded="rounded-md" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{p.name}</span>
-                {typeof p.trackCount === 'number' && <span className="block truncate text-xs text-fg-muted">{plural(p.trackCount, 'song')}</span>}
+                {typeof p.trackCount === 'number' && <span className="block truncate text-xs text-fg-muted">{plural(p.trackCount)}</span>}
               </span>
               {busyId === p.id && <Spinner className="h-4 w-4 shrink-0" />}
             </button>

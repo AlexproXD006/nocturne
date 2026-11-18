@@ -6,6 +6,7 @@ import { api, platform } from '../services'
 import { useLikes } from '../store/likes'
 import { useUi } from '../store/ui'
 import { describeError } from '../api/errors'
+import { useT } from '../i18n'
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
@@ -56,10 +57,12 @@ export function Artwork({
 }
 
 export function Spinner({ className }: { className?: string }): ReactNode {
-  return <Loader2 className={cx('animate-spin text-fg-muted', className ?? 'h-5 w-5')} aria-label="Loading" />
+  const t = useT()
+  return <Loader2 className={cx('animate-spin text-fg-muted', className ?? 'h-5 w-5')} aria-label={t('ui.loading')} />
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }): ReactNode {
+  const t = useT()
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-20 text-center fade-up">
       <AlertCircle className="h-8 w-8 text-fg-subtle" strokeWidth={1.5} />
@@ -69,7 +72,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
           onClick={onRetry}
           className="mt-1 inline-flex items-center gap-2 rounded-full bg-white/8 px-4 py-2 text-sm font-medium hover:bg-white/12"
         >
-          <RotateCcw className="h-4 w-4" /> Try again
+          <RotateCcw className="h-4 w-4" /> {t('ui.tryAgain')}
         </button>
       )}
     </div>
@@ -129,13 +132,14 @@ export function IconButton({
 }
 
 export function LikeButton({ trackId, serverValue, size = 'sm' }: { trackId: string; serverValue?: boolean; size?: 'sm' | 'md' }): ReactNode {
+  const t = useT()
   const liked = useLikes((s) => s.overrides[trackId] ?? serverValue === true)
   const pending = useLikes((s) => Boolean(s.pending[trackId]))
   return (
     <button
       type="button"
-      aria-label={liked ? 'Remove from liked songs' : 'Save to liked songs'}
-      title={liked ? 'Remove from liked songs' : 'Save to liked songs'}
+      aria-label={liked ? t('ui.unlike') : t('ui.like')}
+      title={liked ? t('ui.unlike') : t('ui.like')}
       aria-pressed={liked}
       disabled={pending}
       onClick={(e) => {

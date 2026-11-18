@@ -3,6 +3,7 @@ import { invalidateLyrics } from '../../../hooks/useLyrics'
 import { resources } from '../../../lib/resource'
 import { describeLyricsFile, type LyricsFileDescription } from '../../../lyrics/match'
 import { MAX_LYRICS_BYTES } from '../../../lyrics/ttml'
+import { t } from '../../../i18n'
 import { api } from '../../../services'
 
 export const LYRICS_ACCEPT = '.ttml,.lrc,.xml,.dfxp,application/ttml+xml,text/xml,application/xml'
@@ -15,13 +16,13 @@ export function isLyricsFileName(name: string): boolean {
 
 /** Reads a text file (File.text where available, FileReader otherwise). Rejects files over 1 MiB before reading. */
 export function readLyricsFile(file: Blob): Promise<string> {
-  if (file.size > MAX_LYRICS_BYTES) return Promise.reject(new Error('The file is larger than 1 MiB.'))
-  if (file.size === 0) return Promise.reject(new Error('The file is empty.'))
+  if (file.size > MAX_LYRICS_BYTES) return Promise.reject(new Error(t('lfile.tooBig')))
+  if (file.size === 0) return Promise.reject(new Error(t('lfile.empty')))
   if (typeof file.text === 'function') return file.text()
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result ?? ''))
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read the file.'))
+    reader.onerror = () => reject(reader.error ?? new Error(t('lfile.unreadable')))
     reader.readAsText(file)
   })
 }
@@ -35,13 +36,13 @@ export interface LoadedLyricsFile {
 /** Reads and describes a lyrics file. Never rejects: unreadable files come back invalid with `desc.error`. */
 export async function loadLyricsFile(file: { name: string } & Blob): Promise<LoadedLyricsFile> {
   if (!isLyricsFileName(file.name)) {
-    return { name: file.name, content: '', desc: { format: 'lrc', valid: false, error: 'Not a lyrics file (.ttml, .xml or .lrc).' } }
+    return { name: file.name, content: '', desc: { format: 'lrc', valid: false, error: t('lfile.notLyrics') } }
   }
   try {
     const content = await readLyricsFile(file)
     return { name: file.name, content, desc: describeLyricsFile(file.name, content) }
   } catch (err) {
-    const error = err instanceof Error && err.message ? err.message : 'Could not read the file.'
+    const error = err instanceof Error && err.message ? err.message : t('lfile.unreadable')
     return { name: file.name, content: '', desc: { format: file.name.toLowerCase().endsWith('.lrc') ? 'lrc' : 'ttml', valid: false, error } }
   }
 }
@@ -63,7 +64,7 @@ export async function removeLyrics(trackId: string): Promise<void> {
 /** Validates a chosen file client-side (same rules as the server) and stores it. Throws a readable Error. */
 export async function uploadLyricsFile(trackId: string, file: { name: string } & Blob): Promise<LyricsFormat> {
   const loaded = await loadLyricsFile(file)
-  if (!loaded.desc.valid) throw new Error(loaded.desc.error ?? 'Not a valid lyrics file.')
+  if (!loaded.desc.valid) throw new Error(loaded.desc.error ?? t('lfile.invalid'))
   await saveLyrics(trackId, loaded.desc.format, loaded.content)
   return loaded.desc.format
 }

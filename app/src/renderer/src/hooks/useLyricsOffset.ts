@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { t } from '../i18n'
 import { api } from '../services'
 import { clampOffset, OFFSET_STEP_MS } from '../lyrics/offset'
 import { useUi } from '../store/ui'
@@ -30,7 +31,7 @@ export function useLyricsOffset(trackId: string | undefined, initial: number | u
     const d = dirty.current
     dirty.current = null
     if (!d) return
-    api.setLyricsOffset(d.id, d.ms).catch(() => useUi.getState().toast("Couldn't save the lyrics offset.", 'error'))
+    api.setLyricsOffset(d.id, d.ms).catch(() => useUi.getState().toast(t('lyrics.offsetSaveFailed'), 'error'))
   }, [])
 
   // New track (or freshly loaded lyrics): adopt the server value after saving anything pending.
