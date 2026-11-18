@@ -2,6 +2,20 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.0-beta.3 — 2026-11-18
+
+**Nocturne en español (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- La app ya está en español e inglés: elige el idioma en Ajustes o en el inicio de sesión (por defecto, el del sistema).
+- Fechas, números y duraciones con el formato de tu idioma.
+- Notificaciones de Android y de escritorio traducidas.
+
+### Correcciones
+
+- Las pestañas de Admin ya no se cortan en pantallas medianas.
+
 ## 1.1.0-beta.2 — 2026-11-18
 
 **Más fiable: escuchas, descargas y subidas (beta)** · android, windows, linux, ios
