@@ -338,6 +338,11 @@ async def mark_played(
     # Update NOVA's play count and last_played
     if inserted:
         try:
+            from .listenbrainz import enqueue_listen
+            enqueue_listen(account["id"], nova_db.get_track(track_id) or {}, played_at, body.playId)
+        except Exception:
+            pass
+        try:
             nova_db.update_track_play_count(track_id)
         except Exception:
             pass

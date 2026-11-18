@@ -33,6 +33,8 @@ from .routes_updates import router as updates_router
 from .routes_playlists import router as playlists_router
 from .routes_spotify import router as spotify_router
 from .routes_stats import router as stats_router
+from .routes_radio import router as radio_router
+from .routes_listenbrainz import router as listenbrainz_router
 
 logger = logging.getLogger("nocturne")
 
@@ -127,6 +129,8 @@ v1_app.include_router(updates_router)
 v1_app.include_router(playlists_router)
 v1_app.include_router(spotify_router)
 v1_app.include_router(stats_router)
+v1_app.include_router(radio_router)
+v1_app.include_router(listenbrainz_router)
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +177,14 @@ def setup_nocturne(main_app: Any, mount_web: bool = True) -> None:
             pass
     except Exception as e:
         logger.error("Nocturne: job recovery failed: %s", e)
+
+    # ListenBrainz scrobble queue (persisted; retries with backoff).
+    try:
+        import asyncio
+        from .listenbrainz import worker_loop as _lb_worker
+        main_app.state.lb_worker = asyncio.get_running_loop().create_task(_lb_worker())
+    except Exception as e:
+        logger.error("Nocturne: ListenBrainz worker not started: %s", type(e).__name__)
 
     # Mount /v1 sub-application
     main_app.mount("/v1", v1_app)

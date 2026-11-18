@@ -43,6 +43,8 @@ async def server_info():
             "admin": True,
             "connect": True,
             "playlists": True,
+            "radio": True,
+            "listenbrainz": True,
             "spotifyImport": has_spotify,
             "sources": sources,
             "uploadMaxBytes": config.UPLOAD_MAX_BYTES,

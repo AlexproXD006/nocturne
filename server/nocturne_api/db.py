@@ -334,6 +334,36 @@ _MIGRATIONS: list[tuple[int, str]] = [
         CREATE UNIQUE INDEX IF NOT EXISTS idx_v1_plays_play_id
             ON v1_plays(user_id, play_id) WHERE play_id IS NOT NULL;
     """),
+    # 11: ListenBrainz scrobbling (nocturne_api/listenbrainz.py). The user token is
+    # encrypted at rest with the same helper as the Spotify tokens; the queue holds
+    # listens waiting to be submitted (retry with backoff survives restarts).
+    (11, """
+        CREATE TABLE IF NOT EXISTS v1_listenbrainz (
+            user_id     TEXT PRIMARY KEY,
+            token       TEXT NOT NULL,
+            lb_user     TEXT,
+            enabled     INTEGER NOT NULL DEFAULT 1,
+            now_playing INTEGER NOT NULL DEFAULT 0,
+            last_ok_at  TEXT,
+            last_error  TEXT,
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS v1_listenbrainz_queue (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id         TEXT NOT NULL,
+            play_id         TEXT,
+            listened_at     INTEGER NOT NULL,
+            payload         TEXT NOT NULL,
+            attempts        INTEGER NOT NULL DEFAULT 0,
+            next_attempt_at TEXT NOT NULL,
+            last_error      TEXT,
+            created_at      TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_v1_lbq_due ON v1_listenbrainz_queue(next_attempt_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_v1_lbq_play
+            ON v1_listenbrainz_queue(user_id, play_id) WHERE play_id IS NOT NULL;
+    """),
 ]
 
 def migrate() -> None:
