@@ -2,6 +2,14 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.1-beta.5 — 2026-11-18
+
+**Portadas más rápidas (beta)** · android, windows, linux, ios
+
+### Correcciones
+
+- Las portadas cargan primero las que estás viendo (también al saltar al final de una playlist larga) y el servidor guarda las miniaturas para servirlas al instante.
+
 ## 1.1.1-beta.4 — 2026-11-18
 
 **Arreglo del parpadeo (beta)** · android, windows, linux, ios
