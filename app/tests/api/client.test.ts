@@ -611,6 +611,14 @@ describe('endpoints', () => {
     expect(f.calls[0]!.body).toEqual({ playedSeconds: 42, at: '2026-01-02T03:04:05.000Z' })
   })
 
+  it('reportPlayed sends the client playId and the listen start time when given', async () => {
+    const f = fakeFetch(() => emptyResponse())
+    const h = harness(f)
+    h.session.current!.expiresAt = h.clock.t + 3_600_000
+    await h.client.reportPlayed('t1', 30.2, { playId: 'abc-12345', at: '2026-01-01T00:00:00.000Z' })
+    expect(f.calls[0]!.body).toEqual({ playedSeconds: 30, at: '2026-01-01T00:00:00.000Z', playId: 'abc-12345' })
+  })
+
   it('statsSummary and statsHistory call the stats endpoints with their query', async () => {
     const f = fakeFetch(() => jsonResponse({}))
     const h = harness(f)

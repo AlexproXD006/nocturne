@@ -465,9 +465,14 @@ export class ApiClient {
     return this.request(liked ? 'PUT' : 'DELETE', `/v1/library/tracks/${encodeURIComponent(trackId)}`)
   }
 
-  reportPlayed(trackId: string, playedSeconds: number): Promise<void> {
+  /** `playId` (client generated) lets the server ignore a report that is sent twice; `at` is when the listen began. */
+  reportPlayed(trackId: string, playedSeconds: number, opts?: { playId?: string; at?: string }): Promise<void> {
     return this.request('POST', `/v1/tracks/${encodeURIComponent(trackId)}/played`, {
-      body: { playedSeconds: Math.round(playedSeconds), at: new Date(this.now()).toISOString() }
+      body: {
+        playedSeconds: Math.round(playedSeconds),
+        at: opts?.at ?? new Date(this.now()).toISOString(),
+        ...(opts?.playId ? { playId: opts.playId } : {})
+      }
     })
   }
 

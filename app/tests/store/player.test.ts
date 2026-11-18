@@ -880,7 +880,45 @@ describe('scrobbling', () => {
     tick(d, 0, 30)
     expect(d.reportPlayed).not.toHaveBeenCalled() // not mid-track
     await d.s().next()
-    expect(d.reportPlayed).toHaveBeenCalledExactlyOnceWith('t0', 30)
+    expect(d.reportPlayed).toHaveBeenCalledExactlyOnceWith('t0', 30, expect.any(Object))
+  })
+
+  it('persists the listen in progress every ~15 s with a stable playId, and sends that playId on report', async () => {
+    const persistListen = vi.fn()
+    const dropListen = vi.fn()
+    const c = await playing(2, 0, { persistListen, dropListen })
+    tick(c, 0, 14)
+    expect(persistListen).not.toHaveBeenCalled()
+    tick(c, 15, 31)
+    const calls = persistListen.mock.calls.map((x) => x[0])
+    expect(calls.map((x) => x.seconds)).toEqual([15, 30])
+    const id = calls[0].playId
+    expect(id).toBeTruthy()
+    expect(calls[1].playId).toBe(id)
+    expect(calls[0]).toMatchObject({ trackId: 't0', at: new Date(T0).toISOString() })
+    await c.s().next()
+    expect(c.reportPlayed).toHaveBeenCalledExactlyOnceWith('t0', 31, expect.objectContaining({ playId: id }))
+    expect(dropListen).not.toHaveBeenCalled()
+  })
+
+  it('drops the persisted entry of a listen that never counted, and uses a new playId per track and repeat', async () => {
+    const persistListen = vi.fn()
+    const dropListen = vi.fn()
+    const c = await playing(3, 0, { persistListen, dropListen })
+    tick(c, 0, 20)
+    const first = persistListen.mock.calls[0]![0].playId
+    await c.s().next()
+    tick(c, 0, 16)
+    expect(dropListen).toHaveBeenCalledWith(first)
+    expect(persistListen.mock.calls.at(-1)![0].playId).not.toBe(first)
+    expect(c.reportPlayed).not.toHaveBeenCalled()
+  })
+
+  it('a persistence failure never breaks playback', async () => {
+    const c = await playing(2, 0, { persistListen: () => { throw new Error('quota') }, dropListen: () => { throw new Error('x') } })
+    expect(() => tick(c, 0, 40)).not.toThrow()
+    await c.s().next()
+    expect(c.reportPlayed).toHaveBeenCalledTimes(1)
   })
 
   it('reports the real listened seconds, once, at the end of the track', async () => {
@@ -888,7 +926,7 @@ describe('scrobbling', () => {
     tick(c, 0, 199)
     c.engine.events.onEnded()
     await flush(20)
-    expect(c.reportPlayed).toHaveBeenCalledExactlyOnceWith('t0', 199)
+    expect(c.reportPlayed).toHaveBeenCalledExactlyOnceWith('t0', 199, expect.any(Object))
   })
 
   it('does not count seeks / jumps as listened time', async () => {
@@ -921,7 +959,7 @@ describe('scrobbling', () => {
     c.s().seek(100)
     tick(c, 101, 110)
     c.s().stop()
-    expect(c.reportPlayed).toHaveBeenCalledExactlyOnceWith('t0', 30)
+    expect(c.reportPlayed).toHaveBeenCalledExactlyOnceWith('t0', 30, expect.any(Object))
   })
 
   it('short tracks count as listened after half their length', async () => {
@@ -934,7 +972,7 @@ describe('scrobbling', () => {
     await d.s().playTracks([track('short', { duration: 40 })])
     for (let t = 0; t <= 20; t++) d.engine.events.onTime(t, 40)
     await d.s().playTracks([track('other', { duration: 40 })])
-    expect(d.reportPlayed).toHaveBeenCalledExactlyOnceWith('short', 20)
+    expect(d.reportPlayed).toHaveBeenCalledExactlyOnceWith('short', 20, expect.any(Object))
   })
 
   it('each track is tracked separately', async () => {

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
@@ -15,10 +15,13 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.{ts,tsx}'],
+    // Editor/agent backup copies (foo.test.ts.cnbak, *.bak-x) must never be collected.
+    exclude: [...configDefaults.exclude, '**/*.bak*', '**/*.cnbak*', '**/*bak'],
     restoreMocks: true,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
+      exclude: [...(configDefaults.coverage.exclude ?? []), '**/*.bak*', '**/*.cnbak*', '**/*bak'],
       include: [
         'src/main/security.ts',
         'src/main/secure-store.ts',

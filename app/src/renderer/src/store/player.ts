@@ -2,6 +2,7 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import type { StreamInfo, Track } from '../api/types'
 import { describeError } from '../api/errors'
 import * as Q from '../player/queue'
+import { newPlayId, PERSIST_EVERY_S } from '../lib/playQueue'
 
 /** The subset of AudioEngine the store relies on (lets tests use a fake). */
 export interface PlaybackEngine {
@@ -70,7 +71,11 @@ export interface PlayerDeps {
     onReactiveChange(reactive: boolean): void
   }): PlaybackEngine
   resolveStream(trackId: string): Promise<StreamInfo>
-  reportPlayed?(trackId: string, seconds: number): void
+  reportPlayed?(trackId: string, seconds: number, meta?: { playId: string; at: string; dur: number }): void
+  /** Persists the listen in progress (~every 15 s) so it survives the app being killed. */
+  persistListen?(listen: { playId: string; trackId: string; seconds: number; at: string; dur: number }): void
+  /** The listen ended without counting as a play: forget its persisted entry. */
+  dropListen?(playId: string): void
   getCrossfade(): number
   initialVolume?: number
   initialMuted?: boolean
@@ -88,7 +93,10 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
   const now = deps.now ?? Date.now
   const streams = new Map<string, { url: string; expiresAt: number }>()
   const retried = new Set<string>()
-  let played = { uid: '', trackId: '', seconds: 0, last: 0, reported: false, dur: 0 }
+  let played = { uid: '', trackId: '', seconds: 0, last: 0, reported: false, dur: 0, playId: '', at: '', persisted: 0 }
+  const newListen = (uid: string, trackId: string, last: number, dur: number): typeof played => ({
+    uid, trackId, seconds: 0, last, reported: false, dur, playId: newPlayId(), at: new Date(now()).toISOString(), persisted: 0
+  })
 
   async function resolveUrl(trackId: string, force = false): Promise<string> {
     const cached = streams.get(trackId)
@@ -98,6 +106,17 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     streams.set(trackId, { url: info.url, expiresAt: Number.isFinite(parsed) ? parsed : now() + 5 * 60_000 })
     if (streams.size > 64) streams.delete(streams.keys().next().value as string)
     return info.url
+  }
+
+  /** The listen being left did not count (or already went out): its persisted entry is not needed. */
+  function forgetListen(): void {
+    if (played.playId && !played.reported) {
+      try {
+        deps.dropListen?.(played.playId)
+      } catch {
+        /* best effort */
+      }
+    }
   }
 
   /**
@@ -112,7 +131,7 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     if (p.seconds >= 30 || (dur > 0 && p.seconds >= dur * 0.5)) {
       p.reported = true
       try {
-        deps.reportPlayed(p.trackId, p.seconds)
+        deps.reportPlayed(p.trackId, p.seconds, { playId: p.playId, at: p.at, dur })
       } catch {
         /* best effort */
       }
@@ -122,10 +141,21 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
   function trackPlayback(c: number): void {
     const item = Q.currentItem(store.getState().queue)
     if (!item) return
-    if (played.uid !== item.uid) played = { uid: item.uid, trackId: item.track.id, seconds: 0, last: c, reported: false, dur: item.track.duration }
+    if (played.uid !== item.uid) {
+      forgetListen()
+      played = newListen(item.uid, item.track.id, c, item.track.duration)
+    }
     const delta = c - played.last
     if (delta > 0 && delta < 2) played.seconds += delta
     played.last = c
+    if (played.seconds - played.persisted >= PERSIST_EVERY_S && !played.reported) {
+      played.persisted = played.seconds
+      try {
+        deps.persistListen?.({ playId: played.playId, trackId: played.trackId, seconds: Math.round(played.seconds), at: played.at, dur: played.dur })
+      } catch {
+        /* best effort */
+      }
+    }
   }
 
   let preloadingKey: string | null = null
@@ -239,8 +269,8 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
       // repeat one
       reportIfListened()
       engine.seek(0)
-      played.reported = false
-      played.seconds = 0
+      forgetListen()
+      played = newListen(played.uid, played.trackId, played.last, played.dur)
       void engine.play()
       return
     }
@@ -407,6 +437,8 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
 
     stop() {
       reportIfListened()
+      forgetListen()
+      played = newListen('', '', 0, 0)
       engine.stop()
       set({ queue: { ...Q.emptyQueue, repeat: get().queue.repeat, shuffle: get().queue.shuffle }, status: 'idle', position: 0, duration: 0, error: null })
     }

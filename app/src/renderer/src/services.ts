@@ -10,6 +10,7 @@ import { useUi } from './store/ui'
 import { defaultDeviceName } from './lib/deviceName'
 import { resolveTracks } from './player/resolveTracks'
 import { createPlayback } from './player/playback'
+import { createPlayQueue } from './lib/playQueue'
 
 export { platform }
 
@@ -36,13 +37,32 @@ export function getEngine(): AudioEngine | null {
   return engineRef
 }
 
+/** Durable queue of play reports: a play is not lost when the app is killed or offline. */
+export const playQueue = createPlayQueue({
+  owner: () => useSession.getState().session?.user.id ?? '',
+  send: (p) => api.reportPlayed(p.trackId, p.seconds, { playId: p.playId, at: p.at })
+})
+
+function scrobbleOff(): boolean {
+  return useSession.getState().server?.capabilities?.scrobble === false
+}
+
 export const usePlayer = createPlayerStore({
   createEngine: (events) => (engineRef = new AudioEngine(events)),
   resolveStream: (trackId) => api.stream(trackId),
-  reportPlayed: (trackId, seconds) => {
-    if (useSession.getState().server?.capabilities?.scrobble === false) return
-    void api.reportPlayed(trackId, seconds).catch(() => undefined)
+  reportPlayed: (trackId, seconds, meta) => {
+    if (scrobbleOff()) return
+    if (!meta) {
+      void api.reportPlayed(trackId, seconds).catch(() => undefined)
+      return
+    }
+    playQueue.complete({ trackId, seconds: Math.round(seconds), ...meta })
+    void playQueue.flush().catch(() => undefined)
   },
+  persistListen: (listen) => {
+    if (!scrobbleOff()) playQueue.save(listen)
+  },
+  dropListen: (playId) => playQueue.drop(playId),
   getCrossfade: () => useSettings.getState().crossfade,
   initialVolume: useSettings.getState().volume,
   initialMuted: useSettings.getState().muted,
@@ -82,3 +102,19 @@ useSession.subscribe((s, prev) => {
   const prevCapable = prev.server?.capabilities?.connect === true
   if (s.status !== prev.status || capable !== prevCapable) syncConnect(s.status, capable)
 })
+
+// Send plays left over from a previous run (app killed, offline) once signed in, and whenever we are back online.
+function flushPlays(): void {
+  if (!scrobbleOff()) void playQueue.flush().catch(() => undefined)
+}
+useSession.subscribe((s, prev) => {
+  if (s.status === 'signedIn' && prev.status !== 'signedIn') flushPlays()
+})
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('online', flushPlays)
+}
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') flushPlays()
+  })
+}

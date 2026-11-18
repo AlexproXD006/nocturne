@@ -94,7 +94,7 @@ In development the renderer comes from the electron-vite dev server, with a rela
 | --- | --- | --- | --- |
 | Detection | `window.nocturne` exists | `Capacitor.isNativePlatform()` and platform `android` | fallback; `VITE_HOSTED=true` marks the hosted build |
 | Secure storage | IPC to main, `safeStorage` (DPAPI, Keychain, libsecret / kwallet) | `@aparajita/capacitor-secure-storage` (Android Keystore) | `sessionStorage` (cleared with the tab) |
-| Now playing | `navigator.mediaSession` (media keys, SMTC, MPRIS) | `capacitor-music-controls-plugin` notification, plus `mediaSession` | `mediaSession` |
+| Now playing | `navigator.mediaSession` (media keys, SMTC, MPRIS) | `mediaSession` (native Media3 notification) | `mediaSession` |
 | Window controls | Custom title bar via IPC | none | none |
 | Open link | IPC, validated in main | `window.open` with `noopener` | `window.open` with `noopener` |
 

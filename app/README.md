@@ -251,7 +251,7 @@ Details, threat model and server-side requirements: [docs/SECURITY.md](docs/SECU
 | Area | Technology |
 | --- | --- |
 | Desktop shell | Electron 45, electron-builder 26, electron-vite 6 |
-| Android shell | Capacitor 8 (`@capacitor/android`, `app`, `status-bar`), `capacitor-music-controls-plugin`, `@aparajita/capacitor-secure-storage` |
+| Android shell | Capacitor 8 (`@capacitor/android`, `app`, `status-bar`), `@aparajita/capacitor-secure-storage` |
 | UI | React 19, Tailwind CSS 4, lucide-react, Inter (variable) |
 | State | Zustand 5 |
 | Build | Vite 8, TypeScript 5.9 |
