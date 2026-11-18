@@ -2,6 +2,15 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.1-beta.4 — 2026-11-18
+
+**Arreglo del parpadeo (beta)** · android, windows, linux, ios
+
+### Correcciones
+
+- La portada del reproductor ya no se queda vacía al cambiar de canción y el fondo no parpadea.
+- Los controles de la notificación y la pantalla de bloqueo vuelven a tener «Siguiente» (se quita el corazón).
+
 ## 1.1.1-beta.3 — 2026-11-18
 
 **Aviso de actualización visible en todos los temas (beta)** · android, windows, linux, ios

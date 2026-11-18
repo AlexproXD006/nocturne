@@ -7,8 +7,8 @@ android {
         applicationId "es.alexcloudweb.nocturne"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 100100136
-        versionName "1.1.1-beta.3"
+        versionCode 100100137
+        versionName "1.1.1-beta.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
