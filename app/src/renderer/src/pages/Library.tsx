@@ -109,6 +109,7 @@ function LibraryGrid({ tab }: { tab: LibraryTab }): ReactNode {
   return (
     <>
       <CardGrid
+        total={paged.total}
         cards={paged.items}
         leading={
           canCreate || canImport ? (
@@ -146,7 +147,7 @@ function LibrarySongs(): ReactNode {
         {paged.total > 0 && <span className="text-sm text-fg-muted">{plural(paged.total)}</span>}
       </div>
       <PlayButtons tracks={paged.items} context={ctx} />
-      <TrackList tracks={paged.items} context={ctx} />
+      <TrackList tracks={paged.items} context={ctx} total={paged.total} />
       {!paged.done && (
         <div ref={paged.sentinel} className="flex justify-center py-8">
           {paged.loading && <Spinner />}
@@ -213,7 +214,7 @@ export function LikedPage(): ReactNode {
       {paged.done && paged.items.length === 0 && (
         <EmptyState icon={<Heart className="h-9 w-9" strokeWidth={1.4} />} title={tr('lib.likedEmpty')} hint={tr('lib.likedEmptyHint')} />
       )}
-      {paged.items.length > 0 && <TrackList tracks={paged.items} context={ctx} />}
+      {paged.items.length > 0 && <TrackList tracks={paged.items} context={ctx} total={paged.total} />}
       {!paged.done && (
         <div ref={paged.sentinel} className="flex justify-center py-8">
           {paged.loading && <Spinner />}

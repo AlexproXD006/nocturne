@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Clock3, Disc3, GripVertical, ListEnd, ListMinus, ListMusic, ListPlus, MoreHorizontal, Pause, Play, UserRound } from 'lucide-react'
 import type { Track } from '../api/types'
 import type { QueueContext } from '../player/queue'
@@ -12,6 +12,8 @@ import { Menu, useMenu } from './Menu'
 import { usePlaylistsEnabled } from './Playlists'
 import { usePlaylistUi } from '../store/playlists'
 import { useT } from '../i18n'
+import { FastScroll } from './FastScroll'
+import { letterFor, sortText, type SortKey } from '../lib/fastScroll'
 
 export function Equalizer({ paused }: { paused?: boolean }): ReactNode {
   return (
@@ -256,7 +258,9 @@ export function TrackList({
   header = true,
   onRemove,
   onMove,
-  rowKeys
+  rowKeys,
+  total,
+  sortedBy
 }: {
   tracks: Track[]
   context: QueueContext
@@ -269,8 +273,14 @@ export function TrackList({
   onMove?: (from: number, to: number) => void
   /** Stable React keys per row (e.g. playlist entry ids, so the same song can appear twice). Default: id + index. */
   rowKeys?: readonly string[]
+  /** Items on the server for paged lists (shown in the fast-scroll position bubble). */
+  total?: number
+  /** List is sorted by this field: the fast-scroll bubble shows the A–Z letter instead of the position. */
+  sortedBy?: SortKey
 }): ReactNode {
   const tr = useT()
+  const rootRef = useRef<HTMLDivElement>(null)
+  const letterAt = useMemo(() => (sortedBy ? (i: number) => letterFor(tracks[i] ? sortText(tracks[i]!, sortedBy) : '') : undefined), [sortedBy, tracks])
   const currentId = useNowTrack()?.id
   const nowCtx = useNowContext()
   const sameContext = nowCtx?.type === context.type && nowCtx?.id === context.id
@@ -300,7 +310,7 @@ export function TrackList({
   }))
 
   return (
-    <div role="table" aria-label={tr('tl.tracks')} className="-mx-3">
+    <div ref={rootRef} role="table" aria-label={tr('tl.tracks')} className="-mx-3">
       {header && (
         <div
           role="row"
@@ -332,6 +342,7 @@ export function TrackList({
           dnd={hasMove ? dnd : undefined}
         />
       ))}
+      <FastScroll anchorRef={rootRef} count={tracks.length} total={total} letterAt={letterAt} />
     </div>
   )
 }

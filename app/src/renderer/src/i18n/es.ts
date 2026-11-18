@@ -320,6 +320,7 @@ export const es: Record<MessageKey, string> = {
   'tl.drag': 'Arrastra para reordenar',
   'tl.addTrackToQueue': 'Añadir {title} a la cola',
   'tl.more': 'Más opciones para {title}',
+  'fs.label': 'Desplazamiento rápido',
   'tl.tracks': 'Canciones',
   'tl.title': 'Título',
   'tl.album': 'Álbum',

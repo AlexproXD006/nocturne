@@ -2,6 +2,7 @@ import { useRef, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, Play } from 'lucide-react'
 import type { Album, Artist, Playlist } from '../api/types'
 import { Artwork, cx } from './common'
+import { FastScroll } from './FastScroll'
 import { artistNames } from '../lib/format'
 import { useNav } from '../store/nav'
 import { api, playback } from '../services'
@@ -85,13 +86,15 @@ export function MediaCard({ card }: { card: CardItem }): ReactNode {
   )
 }
 
-export function CardGrid({ cards, leading }: { cards: CardItem[]; leading?: ReactNode }): ReactNode {
+export function CardGrid({ cards, leading, total }: { cards: CardItem[]; leading?: ReactNode; total?: number }): ReactNode {
+  const ref = useRef<HTMLDivElement>(null)
   return (
-    <div className="-mx-2.5 grid grid-cols-2 gap-x-1 gap-y-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+    <div ref={ref} className="-mx-2.5 grid grid-cols-2 gap-x-1 gap-y-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
       {leading}
       {cards.map((c) => (
         <MediaCard key={`${c.kind}:${c.item.id}`} card={c} />
       ))}
+      <FastScroll anchorRef={ref} count={cards.length} total={total} />
     </div>
   )
 }

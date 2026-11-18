@@ -319,6 +319,7 @@ export const en = {
   'tl.drag': 'Drag to reorder',
   'tl.addTrackToQueue': 'Add {title} to queue',
   'tl.more': 'More options for {title}',
+  'fs.label': 'Fast scroll',
   'tl.tracks': 'Tracks',
   'tl.title': 'Title',
   'tl.album': 'Album',
