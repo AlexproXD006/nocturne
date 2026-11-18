@@ -104,6 +104,9 @@ public final class NocturneMediaService extends MediaLibraryService {
     private String buttonsKey = "";
     @Nullable private String currentUid;
     @Nullable private String retriedUid;
+    /** Consecutive failed tracks skipped automatically; playback stops after MAX_AUTO_SKIPS. */
+    private int errorStreak;
+    private static final int MAX_AUTO_SKIPS = 2;
     private boolean externalQueuePending;
     private boolean shuffleOn;
     private String contextName = "";
@@ -374,7 +377,12 @@ public final class NocturneMediaService extends MediaLibraryService {
     /** Applies (and persists) the equalizer state; safe at any time, also while audio is playing. */
     void cmdSetEq(EqPrefs.State state) {
         EqPrefs.save(this, state);
+        boolean before = eqProcessor.isActive();
         eqProcessor.setState(state);
+        // The processor is only in the audio pipeline while it has work to do; a seek to the current position
+        // makes ExoPlayer rebuild the pipeline when that changes.
+        ExoPlayer p = player;
+        if (p != null && p.getMediaItemCount() > 0 && before != eqProcessor.isActive()) p.seekTo(p.getCurrentMediaItemIndex(), Math.max(0, p.getCurrentPosition()));
     }
 
     void cmdSetLyricsEnabled(boolean enabled) {
@@ -554,11 +562,19 @@ public final class NocturneMediaService extends MediaLibraryService {
                 return;
             }
             retriedUid = null;
-            Log.w(TAG, "playback error " + error.getErrorCodeName());
+            Throwable cause = error.getCause();
+            Log.w("NocturneMedia", "playback error " + error.getErrorCodeName() + " (" + error.errorCode + "): " + error.getMessage()
+                + (cause != null ? " / cause: " + cause.getClass().getSimpleName() + ": " + cause.getMessage() : ""));
+            errorStreak++;
             try {
-                EventHub.emit(new JSONObject().put("type", "error").put("message", getString(R.string.nocturne_media_error)));
+                EventHub.emit(new JSONObject().put("type", "error").put("message", getString(R.string.nocturne_media_error) + " (" + error.getErrorCodeName() + ")"));
             } catch (JSONException ignored) {
                 /* never */
+            }
+            if (errorStreak > MAX_AUTO_SKIPS) {
+                // Something systematic is wrong: stop instead of racing through the whole queue.
+                p.pause();
+                return;
             }
             if (p.hasNextMediaItem()) {
                 p.seekToNextMediaItem();
@@ -627,6 +643,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         long d = p.getDuration();
         if (d != C.TIME_UNSET && d > 0) listen.setDuration(d);
         listen.tick(pos, p.isPlaying());
+        if (p.isPlaying() && pos > 3000) errorStreak = 0;
         emitPosition();
         if (System.currentTimeMillis() - lastPersistAt >= PERSIST_MS) persistSession();
         if (lyricsEnabled && lrc != null && lrcTrackId.equals(currentTrackId())) {

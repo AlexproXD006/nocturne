@@ -9,76 +9,95 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /**
- * Media3 {@link AudioProcessor} running the 10-band equalizer ({@link EqDsp}) on float PCM. It sits in the
- * {@code DefaultAudioSink} of the service's ExoPlayer, so it works with the app closed and in Android Auto.
- * 16/24/32-bit integer and float input are accepted; the output is always 32-bit float. Per-channel filter
- * state, coefficients recomputed on every sample-rate change, smoothed parameter ramps (see {@link EqDsp}).
+ * Media3 {@link AudioProcessor} running the 10-band equalizer ({@link EqDsp}) inside the service's
+ * {@code DefaultAudioSink}, so it works with the app closed and in Android Auto.
+ *
+ * <p>Conservative by design (a bad format negotiation breaks playback): it only handles 16-bit PCM and float
+ * PCM and outputs <b>the same encoding it receives</b>; anything else makes it inactive (pure passthrough). It is
+ * inactive too while the equalizer is disabled or flat, so users who do not use it get the stock audio pipeline.
+ * Math is done in float internally; {@code queueInput} never throws (on any problem the input is copied through).
  */
 @OptIn(markerClass = UnstableApi.class)
 public final class EqAudioProcessor extends BaseAudioProcessor {
     private static final int CHUNK_FRAMES = 256;
 
     private final EqDsp dsp = new EqDsp();
+    private volatile boolean wanted = false;
     private int encoding = C.ENCODING_INVALID;
     private int channels = 2;
     private float[] scratch = new float[CHUNK_FRAMES * 2];
 
     /** Thread-safe: callable from any thread while audio is playing. */
     public void setState(EqPrefs.State s) {
-        dsp.setTarget(s == null ? EqDsp.Params.FLAT : new EqDsp.Params(s.enabled, s.preampDb, s.gains));
+        EqDsp.Params p = s == null ? EqDsp.Params.FLAT : new EqDsp.Params(s.enabled, s.preampDb, s.gains);
+        dsp.setTarget(p);
+        wanted = p.enabled && (p.preampDb != 0 || anyGain(p.gains));
+    }
+
+    private static boolean anyGain(double[] g) {
+        for (double v : g) if (v != 0) return true;
+        return false;
     }
 
     @Override
-    protected AudioFormat onConfigure(AudioFormat input) throws UnhandledAudioFormatException {
+    public boolean isActive() {
+        // Still active while ramping back to flat so a disable does not click; it drops out at the next flush.
+        return super.isActive() && (wanted || !dsp.isPassthrough());
+    }
+
+    @Override
+    protected AudioFormat onConfigure(AudioFormat input) {
         int enc = input.encoding;
-        boolean ok = enc == C.ENCODING_PCM_16BIT || enc == C.ENCODING_PCM_24BIT || enc == C.ENCODING_PCM_32BIT || enc == C.ENCODING_PCM_FLOAT;
-        if (!ok || input.channelCount < 1 || input.channelCount > 8) {
-            // Unknown layouts are left alone (inactive) instead of failing playback.
-            return AudioFormat.NOT_SET;
+        if ((enc != C.ENCODING_PCM_16BIT && enc != C.ENCODING_PCM_FLOAT) || input.channelCount < 1 || input.channelCount > 8 || input.sampleRate <= 0) {
+            return AudioFormat.NOT_SET; // unknown layout: leave the audio alone
         }
         encoding = enc;
         channels = input.channelCount;
         scratch = new float[CHUNK_FRAMES * channels];
         dsp.configure(input.sampleRate, channels);
-        return new AudioFormat(input.sampleRate, channels, C.ENCODING_PCM_FLOAT);
+        return input; // same encoding, rate and channels out as in
     }
 
     @Override
     public void queueInput(ByteBuffer in) {
-        int bytesPer = encoding == C.ENCODING_PCM_16BIT ? 2 : encoding == C.ENCODING_PCM_24BIT ? 3 : 4;
-        int frames = in.remaining() / (bytesPer * channels);
-        if (frames == 0) {
-            in.position(in.limit());
-            return;
+        try {
+            process(in);
+        } catch (RuntimeException e) {
+            // Never break playback: pass the bytes through untouched.
+            in.rewind();
+            ByteBuffer out = replaceOutputBuffer(in.remaining());
+            out.put(in);
+            out.flip();
         }
-        ByteBuffer out = replaceOutputBuffer(frames * channels * 4).order(ByteOrder.nativeOrder());
+    }
+
+    private void process(ByteBuffer in) {
+        final boolean is16 = encoding == C.ENCODING_PCM_16BIT;
+        final int bytesPer = is16 ? 2 : 4;
+        final int frameBytes = bytesPer * channels;
+        final int frames = in.remaining() / frameBytes;
+        final int total = in.remaining();
+        ByteBuffer out = replaceOutputBuffer(total).order(ByteOrder.nativeOrder());
         ByteBuffer src = in.order(ByteOrder.nativeOrder());
         int done = 0;
         while (done < frames) {
             int n = Math.min(CHUNK_FRAMES, frames - done);
             int samples = n * channels;
-            for (int i = 0; i < samples; i++) scratch[i] = readSample(src);
+            for (int i = 0; i < samples; i++) scratch[i] = is16 ? src.getShort() * (1f / 32768f) : src.getFloat();
             dsp.process(scratch, 0, n);
-            for (int i = 0; i < samples; i++) out.putFloat(scratch[i]);
+            for (int i = 0; i < samples; i++) {
+                float v = scratch[i];
+                if (is16) {
+                    int q = Math.round(v * 32768f);
+                    out.putShort((short) (q > 32767 ? 32767 : (q < -32768 ? -32768 : q)));
+                } else {
+                    out.putFloat(v);
+                }
+            }
             done += n;
         }
-        in.position(in.limit()); // everything consumed (a trailing partial frame cannot occur)
+        while (src.hasRemaining()) out.put(src.get()); // trailing partial frame, if any
         out.flip();
-    }
-
-    private float readSample(ByteBuffer b) {
-        switch (encoding) {
-            case C.ENCODING_PCM_16BIT:
-                return b.getShort() * (1f / 32768f);
-            case C.ENCODING_PCM_24BIT: {
-                int v = (b.get() & 0xFF) | ((b.get() & 0xFF) << 8) | (b.get() << 16); // little endian, sign-extended
-                return v * (1f / 8388608f);
-            }
-            case C.ENCODING_PCM_32BIT:
-                return (float) (b.getInt() / 2147483648.0);
-            default:
-                return b.getFloat();
-        }
     }
 
     @Override
