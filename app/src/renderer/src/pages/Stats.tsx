@@ -26,7 +26,7 @@ function HistoryChart({ data, summary }: { data: StatsHistory; summary: StatsSum
     !!summary && (summary.start == null || (start >= summary.start && (summary.end == null || start < summary.end)))
   const label = tr(data.period === 'week' ? 'st.perWeek' : 'st.perMonth')
   return (
-    <figure className="mt-2">
+    <figure className="mt-2 min-w-0">
       <svg viewBox={`0 0 ${bars.length * step} ${H}`} preserveAspectRatio="none" className="h-36 w-full" role="img" aria-label={label}>
         {bars.map((b, i) => {
           const h = Math.max(b.ratio * (H - 4), b.ratio > 0 ? 2 : 0)
@@ -107,9 +107,9 @@ export function StatsPage(): ReactNode {
 
   return (
     <Page>
-      <div className="fade-up flex flex-wrap items-center justify-between gap-3 pt-2">
+      <div className="fade-up flex flex-wrap items-center justify-between gap-x-3 gap-y-3 pt-2">
         <h1 className="text-3xl font-extrabold tracking-tight">{tr('st.title')}</h1>
-        <div role="tablist" aria-label={tr('st.period')} className="g-seg inline-flex rounded-full bg-ink-900 p-1">
+        <div role="tablist" aria-label={tr('st.period')} className="g-seg inline-flex max-w-full min-w-0 rounded-full bg-ink-900 p-1 max-sm:flex max-sm:w-full">
           {RANGE_TABS.map((t) => (
             <button
               key={t.id}
@@ -118,7 +118,7 @@ export function StatsPage(): ReactNode {
               aria-selected={range === t.id}
               onClick={() => pick(t.id)}
               className={cx(
-                'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                'rounded-full px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors max-sm:min-w-0 max-sm:flex-1 max-sm:px-2',
                 range === t.id ? 'bg-accent text-ink-950' : 'text-fg-muted hover:text-fg'
               )}
             >
@@ -134,7 +134,7 @@ export function StatsPage(): ReactNode {
             <ChevronLeft className="h-5 w-5" />
           </IconButton>
         )}
-        <p className="min-w-0 flex-1 truncate text-lg font-semibold" aria-live="polite">{data ? periodLabel(data) : ' '}</p>
+        <p className="min-w-0 flex-1 text-lg font-semibold whitespace-nowrap" aria-live="polite">{data ? periodLabel(data, true) : ' '}</p>
         {range !== 'all' && (
           <IconButton label={tr('st.next')} onClick={() => setOffset((o) => Math.max(0, o - 1))} disabled={!canGoForward(range, offset)}>
             <ChevronRight className="h-5 w-5" />
@@ -144,9 +144,11 @@ export function StatsPage(): ReactNode {
           <button
             type="button"
             onClick={() => setSharing(true)}
-            className="ml-1 inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-ink-950 transition-transform active:scale-95"
+            aria-label={tr('st.share')}
+            title={tr('st.share')}
+            className="ml-1 inline-flex shrink-0 items-center gap-2 rounded-full bg-accent p-2.5 text-sm font-semibold text-ink-950 transition-transform active:scale-95 sm:px-4 sm:py-2"
           >
-            <Share2 className="h-4 w-4" /> {tr('st.share')}
+            <Share2 className="h-4 w-4" /> <span className="max-sm:hidden">{tr('st.share')}</span>
           </button>
         )}
       </div>
@@ -170,7 +172,7 @@ export function StatsPage(): ReactNode {
               {delta.text}
             </p>
           )}
-          <dl className="mt-5 grid max-w-md grid-cols-3 gap-4 text-sm">
+          <dl className="mt-5 grid max-w-md grid-cols-3 gap-3 text-sm [&_dt]:truncate [&>div]:min-w-0">
             <div><dt className="text-fg-subtle">{tr('st.plays')}</dt><dd className="text-lg font-bold tabular-nums">{formatNumber(data.totals.plays)}</dd></div>
             <div><dt className="text-fg-subtle">{tr('st.tracks')}</dt><dd className="text-lg font-bold tabular-nums">{formatNumber(data.totals.distinctTracks)}</dd></div>
             <div><dt className="text-fg-subtle">{tr('st.artists')}</dt><dd className="text-lg font-bold tabular-nums">{formatNumber(data.totals.distinctArtists)}</dd></div>
@@ -187,7 +189,7 @@ export function StatsPage(): ReactNode {
       )}
 
       {data && !empty && (
-        <div className="mt-10 grid gap-10 lg:grid-cols-2">
+        <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-2 [&>section]:min-w-0">
           <section aria-label={tr('st.topTracks')}>
             <SectionHeader title={tr('st.topTracks')} />
             <ol>

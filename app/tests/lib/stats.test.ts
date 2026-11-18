@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { setLanguagePref } from '@/i18n'
-import { barRatios, periodLabel, buildRecapData, canGoForward, describeDelta, formatBigMinutes, formatMinutes, shortDate } from '@/lib/stats'
+import { setLanguagePref, t as tt } from '@/i18n'
+import { RANGE_TABS, barRatios, periodLabel, buildRecapData, canGoForward, describeDelta, formatBigMinutes, formatMinutes, shortDate } from '@/lib/stats'
 import type { StatsSummary } from '@/api/types'
 
 const track = (id: string, title: string) => ({
@@ -113,6 +113,23 @@ describe('localised stats (es)', () => {
     expect(periodLabel(summary({ range: 'year', start: '2026-01-01', end: '2027-01-01' }))).toBe('2026')
     expect(periodLabel(summary({ range: 'all', start: null, end: null }))).toBe('Todo el tiempo')
     expect(periodLabel(summary({ range: 'week', start: null, end: null, label: 'raw' }))).toBe('raw')
+  })
+
+  it('compact period labels fit a phone header', () => {
+    const week = summary({ range: 'week', start: '2026-11-16', end: '2026-11-23' })
+    setLanguagePref('es')
+    expect(periodLabel(week, true)).toMatch(/^16\s?[–-]\s?22 nov$/)
+    expect(periodLabel(summary({ range: 'month', start: '2026-11-01', end: '2026-12-01' }), true)).toBe('noviembre de 2026')
+    expect(periodLabel(summary({ range: 'year', start: '2026-01-01', end: '2027-01-01' }), true)).toBe('2026')
+    setLanguagePref('en')
+    expect(periodLabel(week, true)).toMatch(/^Nov 16\s?[–-]\s?22$/)
+    setLanguagePref('es')
+  })
+
+  it('uses a short all-time tab label', () => {
+    expect(RANGE_TABS.find((t) => t.id === 'all')!.labelKey).toBe('stats.allShort')
+    setLanguagePref('es')
+    expect(tt('stats.allShort')).toBe('Siempre')
   })
 
   it('localises the delta text, recap heading and short dates', () => {

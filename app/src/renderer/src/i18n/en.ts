@@ -62,6 +62,7 @@ export const en = {
   'stats.month': 'Month',
   'stats.year': 'Year',
   'stats.all': 'All time',
+  'stats.allShort': 'All time',
   'stats.deltaSame': 'Same as {unit}',
   'stats.deltaVs': '{body} vs {unit}',
   'stats.unitWeek': 'last week',

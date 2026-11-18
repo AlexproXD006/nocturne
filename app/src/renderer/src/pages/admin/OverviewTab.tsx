@@ -139,7 +139,7 @@ export function OverviewTab({ onNavigate }: { onNavigate: (tab: AdminTab) => voi
           <strong className="text-fg">{tr('adm.ov.keystoreWarn')}</strong> — {tr('adm.ov.keystoreWarn2')}
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button icon={<KeyRound />} busy={ksBusy} onClick={() => void downloadKeystore()}>
+          <Button className="max-w-full !h-auto min-h-10 !whitespace-normal py-2 text-left" icon={<KeyRound />} busy={ksBusy} onClick={() => void downloadKeystore()}>
             {tr('adm.ov.keystoreDl')}
           </Button>
         </div>

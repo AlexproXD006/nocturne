@@ -23,7 +23,7 @@ export function Page({ children, header, tint }: { children: ReactNode; header?:
     <div
       ref={ref}
       onScroll={(e) => setSolid(e.currentTarget.scrollTop > 40)}
-      className="relative h-full overflow-y-auto"
+      className="relative h-full overflow-y-auto overflow-x-hidden"
     >
       {tint && (
         <div

@@ -8,7 +8,7 @@ export const RANGE_TABS: ReadonlyArray<{ id: StatsRange; labelKey: MessageKey }>
   { id: 'week', labelKey: 'stats.week' },
   { id: 'month', labelKey: 'stats.month' },
   { id: 'year', labelKey: 'stats.year' },
-  { id: 'all', labelKey: 'stats.all' }
+  { id: 'all', labelKey: 'stats.allShort' }
 ]
 
 /** 47 → "47 min", 135 → "2 h 15 min", 0.4 → "<1 min". */
@@ -75,9 +75,9 @@ export function shortDate(iso: string): string {
 // ---- Recap card data -------------------------------------------------------
 
 /** Period caption ("Nov 16 – 22, 2026"): English keeps the server's label, other languages are formatted locally with Intl. */
-export function periodLabel(s: Pick<StatsSummary, 'range' | 'start' | 'end' | 'label'>): string {
+export function periodLabel(s: Pick<StatsSummary, 'range' | 'start' | 'end' | 'label'>, compact = false): string {
   if (s.range === 'all') return t('stats.all')
-  if (getLanguage() === 'en' && s.label) return s.label
+  if (!compact && getLanguage() === 'en' && s.label) return s.label
   const parse = (iso: string | null): Date | null => {
     const [y, m, d] = (iso ?? '').split('-').map(Number)
     return y && m && d ? new Date(Date.UTC(y, m - 1, d)) : null
@@ -89,7 +89,8 @@ export function periodLabel(s: Pick<StatsSummary, 'range' | 'start' | 'end' | 'l
   if (s.range === 'month') return fmt({ month: 'long', year: 'numeric' }).format(start)
   const end = parse(s.end)
   const last = end ? new Date(end.getTime() - 86_400_000) : new Date(start.getTime() + 6 * 86_400_000)
-  return fmt({ month: 'short', day: 'numeric', year: 'numeric' }).formatRange(start, last)
+  // Compact (page header): drop the year so "16–22 nov" always fits a phone.
+  return fmt(compact ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }).formatRange(start, last)
 }
 
 export interface RecapArtist {

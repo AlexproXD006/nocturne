@@ -370,6 +370,9 @@ textarea {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
 
 :focus-visible {
   outline: 2px solid var(--color-accent);

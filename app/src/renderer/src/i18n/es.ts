@@ -63,6 +63,7 @@ export const es: Record<MessageKey, string> = {
   'stats.month': 'Mes',
   'stats.year': 'Año',
   'stats.all': 'Todo el tiempo',
+  'stats.allShort': 'Siempre',
   'stats.deltaSame': 'Igual que {unit}',
   'stats.deltaVs': '{body} respecto a {unit}',
   'stats.unitWeek': 'la semana pasada',
