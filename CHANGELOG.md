@@ -2,6 +2,15 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.0-beta.5 — 2026-11-18
+
+**Mixes hechos para ti (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Mixes diarios «Hecho para ti» según lo que escuchas, más «Redescubre» y «Lo más escuchado este mes», con portada propia.
+- Guarda cualquier mix como playlist.
+
 ## 1.1.0-beta.4 — 2026-11-18
 
 **Temporizador, reproducción automática y ListenBrainz (beta)** · android, windows, linux, ios
