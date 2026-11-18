@@ -66,7 +66,7 @@ export function ListToolbar({
                 }}
                 placeholder={tr('ts.placeholder')}
                 aria-label={tr('ts.search')}
-                className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle [&::-webkit-search-cancel-button]:hidden"
+                className="min-w-0 flex-1 appearance-none bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle [&::-webkit-search-cancel-button]:hidden"
               />
               {query !== '' && (
                 <>
