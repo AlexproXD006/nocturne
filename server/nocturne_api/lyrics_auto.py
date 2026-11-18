@@ -112,6 +112,11 @@ class _RateLimiter:
                 now = time.monotonic()
             self._next = now + self.min_interval
 
+    def penalize(self, seconds: float) -> None:
+        """Pause every caller (all threads) for `seconds` after a 429."""
+        with self._lock:
+            self._next = max(self._next, time.monotonic() + seconds)
+
     def reset(self) -> None:
         with self._lock:
             self._next = 0.0
@@ -172,6 +177,9 @@ def _http_get_json(path: str, params: dict, deadline: Optional[float] = None) ->
             ra = r.headers.get("Retry-After", "")
             if ra.isdigit():
                 delay = max(delay, float(ra))
+            if r.status_code == 429:
+                # lrclib throttles per client: slow the whole process down, not just this call
+                _LIMITER.penalize(min(delay, BACKOFF_MAX_S))
         if attempt >= MAX_RETRIES:
             break
         wait = min(delay, BACKOFF_MAX_S)

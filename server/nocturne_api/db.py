@@ -328,6 +328,12 @@ _MIGRATIONS: list[tuple[int, str]] = [
         CREATE INDEX IF NOT EXISTS idx_v1_plays_user_time
             ON v1_plays(user_id, played_at);
     """),
+    # 10: client-generated play id so a queued report that is re-sent is deduped
+    (10, """
+        ALTER TABLE v1_plays ADD COLUMN play_id TEXT;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_v1_plays_play_id
+            ON v1_plays(user_id, play_id) WHERE play_id IS NOT NULL;
+    """),
 ]
 
 def migrate() -> None:

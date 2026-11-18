@@ -304,6 +304,17 @@ def scan_and_upsert(directory: str) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _notify_threadsafe(manager: "DownloadManager", loop: "asyncio.AbstractEventLoop | None", job: dict) -> None:
+    """Notify listeners from a worker thread (never call get_event_loop() there)."""
+    if loop is None or loop.is_closed():
+        return
+    coro = manager._notify(dict(job))
+    try:
+        asyncio.run_coroutine_threadsafe(coro, loop)
+    except Exception:
+        coro.close()
+
+
 class DownloadManager:
     def __init__(self) -> None:
         self.download_queue: dict[str, dict] = {}
@@ -362,7 +373,7 @@ class DownloadManager:
         Search for tracks using spotdl.
         Returns a list of candidate dicts with keys: title, artist, album, url.
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         results = await loop.run_in_executor(self._executor, self._search_sync, query)
         return results
 
@@ -451,7 +462,7 @@ class DownloadManager:
 
     async def search_youtube(self, query: str) -> list[dict]:
         """Search YouTube using yt-dlp and return up to 8 results."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         results = await loop.run_in_executor(self._executor, self._search_youtube_sync, query)
         return results
 
@@ -531,10 +542,7 @@ class DownloadManager:
             job["progress"] = progress
             if error is not None:
                 job["error"] = error
-            try:
-                asyncio.run_coroutine_threadsafe(self._notify(dict(job)), main_loop)
-            except Exception:
-                pass
+            _notify_threadsafe(self, main_loop, job)
 
         try:
             import yt_dlp  # type: ignore
@@ -723,10 +731,7 @@ class DownloadManager:
             job["progress"] = progress
             if error is not None:
                 job["error"] = error
-            try:
-                asyncio.run_coroutine_threadsafe(self._notify(dict(job)), main_loop)
-            except Exception:
-                pass
+            _notify_threadsafe(self, main_loop, job)
 
         try:
             _update("downloading", 5)

@@ -159,6 +159,21 @@ def setup_nocturne(main_app: Any, mount_web: bool = True) -> None:
     except Exception as e:
         logger.error("Nocturne: Spotify import recovery failed: %s", e)
 
+    # Download/import jobs in flight before the restart can never finish.
+    try:
+        from .jobs_recovery import recover_interrupted_jobs, watchdog_loop
+        n = recover_interrupted_jobs()
+        if n:
+            logger.info("Nocturne: marked %d interrupted job(s) as failed", n)
+        # setup_nocturne runs inside the startup event, so a loop is running.
+        import asyncio
+        try:
+            main_app.state.jobs_watchdog = asyncio.get_running_loop().create_task(watchdog_loop())
+        except RuntimeError:
+            pass
+    except Exception as e:
+        logger.error("Nocturne: job recovery failed: %s", e)
+
     # Mount /v1 sub-application
     main_app.mount("/v1", v1_app)
     logger.info("Nocturne: /v1 API mounted.")

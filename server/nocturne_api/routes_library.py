@@ -9,7 +9,7 @@ import os
 sys.path.insert(0, "/opt/music-server/backend")
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from .auth import require_user
@@ -296,6 +296,24 @@ async def unlike_track(track_id: str, account: dict = Depends(require_user)):
 class PlayedBody(BaseModel):
     playedSeconds: Optional[float] = 0
     at: Optional[str] = None
+    # Optional client-generated id; a repeated (user, playId) is ignored.
+    playId: Optional[str] = Field(default=None, min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+def _play_time(at: Optional[str]) -> str:
+    """Client-reported time of the listen (queued reports arrive late); never in the future."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if at:
+        try:
+            d = datetime.fromisoformat(at.replace("Z", "+00:00"))
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=timezone.utc)
+            if d <= now:
+                return d.astimezone(timezone.utc).isoformat()
+        except ValueError:
+            pass
+    return now.isoformat()
 
 
 @router.post("/tracks/{track_id}/played", status_code=204)
@@ -307,20 +325,21 @@ async def mark_played(
     if not nova_db.get_track(track_id):
         raise HTTPException(status_code=404, detail={"message": "Track not found.", "code": "not_found"})
 
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).isoformat()
+    played_at = _play_time(body.at)
+
+    # Store in our plays table (duplicate playId -> ignored, no double count)
+    with connect() as conn:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO v1_plays(user_id, track_id, played_at, seconds, play_id) VALUES (?,?,?,?,?)",
+            (account["id"], track_id, played_at, body.playedSeconds or 0, body.playId),
+        )
+        inserted = (cur.rowcount or 0) > 0
 
     # Update NOVA's play count and last_played
-    try:
-        nova_db.update_track_play_count(track_id)
-    except Exception:
-        pass
-
-    # Store in our plays table
-    with connect() as conn:
-        conn.execute(
-            "INSERT INTO v1_plays(user_id, track_id, played_at, seconds) VALUES (?,?,?,?)",
-            (account["id"], track_id, now, body.playedSeconds or 0),
-        )
+    if inserted:
+        try:
+            nova_db.update_track_play_count(track_id)
+        except Exception:
+            pass
     from fastapi import Response
     return Response(status_code=204)

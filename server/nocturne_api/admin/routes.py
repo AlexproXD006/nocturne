@@ -470,6 +470,7 @@ async def rescan_library(account: dict = Depends(require_admin)):
 # Uploads
 # ---------------------------------------------------------------------------
 
+_UPLOAD_CHUNK = 1024 * 1024
 _ALLOWED_EXTS = {".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wav"}
 
 
@@ -485,17 +486,32 @@ async def upload_track(
             detail={"message": f"Unsupported file type: {ext}", "code": "unsupported_media_type"},
         )
 
-    content = await file.read()
-    if len(content) > config.UPLOAD_MAX_BYTES:
-        raise HTTPException(status_code=413, detail={"message": "File too large.", "code": "payload_too_large"})
-
     music_dir = Path(config.MUSIC_ROOT)
     uploads_dir = music_dir / "uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
     dest = _unique_upload_dest(uploads_dir, file.filename or "", ext)
 
-    with open(dest, "wb") as f:
-        f.write(content)
+    # Stream to disk in chunks; the size limit is enforced while streaming so a
+    # huge upload is never held in memory and is aborted as soon as it is over.
+    written = 0
+    try:
+        with open(dest, "wb") as f:
+            while True:
+                chunk = await file.read(_UPLOAD_CHUNK)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > config.UPLOAD_MAX_BYTES:
+                    raise HTTPException(
+                        status_code=413, detail={"message": "File too large.", "code": "payload_too_large"}
+                    )
+                f.write(chunk)
+    except BaseException:
+        try:
+            dest.unlink()
+        except Exception:
+            pass
+        raise
 
     try:
         # Module-level helpers (there is no `Downloader` class; the old import

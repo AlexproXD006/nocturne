@@ -194,7 +194,7 @@ async def startup() -> None:
     logger.info("Database initialised at %s", db.DB_PATH)
 
     # Scan existing files in a thread so we don't block the event loop
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     added = await loop.run_in_executor(None, dl.scan_and_upsert, MUSIC_DIR)
     logger.info("Startup scan complete — %d new track(s) imported", len(added))
 
@@ -819,7 +819,7 @@ async def upload_file(file: UploadFile) -> dict:
     
     # Search and save lyrics for the uploaded track (offload to thread)
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         lyrics = await loop.run_in_executor(None, dl.search_lyrics, track.get("artist", ""), track.get("title", ""))
         if lyrics:
             lrc_path = await loop.run_in_executor(None, dl.save_lyrics_file, str(file_path), track.get("artist", ""), track.get("title", ""), lyrics)
@@ -904,7 +904,7 @@ async def get_lyrics(track_id: str) -> dict:
     artist = track.get("artist", "")
     title = track.get("title", "")
     if artist and title:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             lyrics = await asyncio.wait_for(
                 loop.run_in_executor(None, dl.search_lyrics, artist, title),
@@ -975,7 +975,7 @@ async def generate_lyrics(track_id: str, force_whisper: bool = False) -> dict:
     if not artist or not title:
         return {"error": "Track missing artist or title"}
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     try:
         # STEP 1: Always fetch real lyrics first (for forced alignment)
@@ -1042,7 +1042,7 @@ async def sync_custom_lyrics(track_id: str, body: SyncLyricsRequest) -> dict:
     if not body.lyrics or len(body.lyrics.strip()) < 20:
         return {"error": "Lyrics too short (minimum 20 chars)"}
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         lrc_content = await loop.run_in_executor(
             None, lg.generate_lrc_from_audio, file_path, artist, title, body.lyrics.strip()

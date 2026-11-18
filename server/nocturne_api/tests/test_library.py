@@ -140,3 +140,47 @@ async def test_home(client, user_token):
         assert "title" in s
         assert "kind" in s
         assert "items" in s
+
+
+# ---------------------------------------------------------------------------
+# played: playId dedupe, client timestamp
+# ---------------------------------------------------------------------------
+
+def _plays(user_track="track001"):
+    from nocturne_api.db import connect
+    with connect() as c:
+        return c.execute("SELECT * FROM v1_plays WHERE track_id=? ORDER BY id", (user_track,)).fetchall()
+
+
+async def test_played_play_id_dedupes(client, user_token):
+    headers = {"Authorization": f"Bearer {user_token}"}
+    before = len([r for r in _plays() if r["play_id"] == "pid-dedupe-0001"])
+    body = {"playedSeconds": 12, "playId": "pid-dedupe-0001"}
+    assert (await client.post("/tracks/track001/played", json=body, headers=headers)).status_code == 204
+    body2 = {"playedSeconds": 99, "playId": "pid-dedupe-0001"}
+    assert (await client.post("/tracks/track001/played", json=body2, headers=headers)).status_code == 204
+    rows = [r for r in _plays() if r["play_id"] == "pid-dedupe-0001"]
+    assert before == 0 and len(rows) == 1 and rows[0]["seconds"] == 12
+
+
+async def test_played_without_play_id_is_not_deduped(client, user_token):
+    headers = {"Authorization": f"Bearer {user_token}"}
+    n = len(_plays())
+    for _ in range(2):
+        assert (await client.post("/tracks/track001/played", json={"playedSeconds": 5}, headers=headers)).status_code == 204
+    assert len(_plays()) == n + 2
+
+
+async def test_played_rejects_bad_play_id_and_uses_at(client, user_token):
+    headers = {"Authorization": f"Bearer {user_token}"}
+    r = await client.post("/tracks/track001/played", json={"playId": "x y!"}, headers=headers)
+    assert r.status_code in (400, 422)
+    r = await client.post("/tracks/track001/played",
+                          json={"playId": "pid-at-00001", "at": "2026-01-02T03:04:05Z"}, headers=headers)
+    assert r.status_code == 204
+    row = [x for x in _plays() if x["play_id"] == "pid-at-00001"][0]
+    assert row["played_at"].startswith("2026-01-02T03:04:05")
+    r = await client.post("/tracks/track001/played",
+                          json={"playId": "pid-fut-0001", "at": "2999-01-01T00:00:00Z"}, headers=headers)
+    row = [x for x in _plays() if x["play_id"] == "pid-fut-0001"][0]
+    assert not row["played_at"].startswith("2999")

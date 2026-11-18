@@ -128,3 +128,19 @@ async def test_non_admin_cannot_access_admin_routes(client, user_token):
     for path in ["/admin/stats", "/admin/users", "/admin/tracks", "/admin/jobs"]:
         r = await client.get(path, headers={"Authorization": f"Bearer {user_token}"})
         assert r.status_code == 403, f"Expected 403 for {path}, got {r.status_code}"
+
+
+# ---------------------------------------------------------------------------
+# uploads are streamed with the size limit enforced
+# ---------------------------------------------------------------------------
+
+async def test_upload_too_large_is_rejected_and_cleaned(client, admin_token, monkeypatch):
+    from pathlib import Path
+    from nocturne_api import config
+    monkeypatch.setattr(config, "UPLOAD_MAX_BYTES", 1024)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    files = {"file": ("big.mp3", b"\0" * 4096, "audio/mpeg")}
+    r = await client.post("/admin/uploads", files=files, headers=headers)
+    assert r.status_code == 413
+    left = list((Path(config.MUSIC_ROOT) / "uploads").glob("*big*"))
+    assert left == []
