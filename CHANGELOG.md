@@ -2,6 +2,15 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.0-beta.9 — 2026-11-18
+
+**Ajustes en Estadísticas (beta)** · android, windows, linux, ios
+
+### Correcciones
+
+- Estadísticas en el móvil: ya no se desplaza de lado ni aparece un cuadro blanco junto al reproductor.
+- La fecha del periodo se ve completa y las pestañas caben en una línea.
+
 ## 1.1.0-beta.8 — 2026-11-18
 
 **Buscar en playlists, acciones masivas y desplazamiento rápido (beta)** · android, windows, linux, ios
