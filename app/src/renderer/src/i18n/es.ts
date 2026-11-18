@@ -564,7 +564,7 @@ export const es: Record<MessageKey, string> = {
   'st.share': 'Compartir resumen',
   'st.totals': 'Totales',
   'st.minutes': 'minutos escuchados',
-  'st.plays': 'Reproducciones',
+  'st.plays': 'Escuchas',
   'st.tracks': 'Canciones',
   'st.artists': 'Artistas',
   'st.perWeek': 'Minutos por semana',
