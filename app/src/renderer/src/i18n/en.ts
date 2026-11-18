@@ -263,6 +263,8 @@ export const en = {
   'vis.minimal': 'Minimal',
   // Lyrics view
   'lyr.off': 'Lyrics are turned off in Settings.',
+  'lyrics.lookupFailed': 'Lyrics lookup failed ({status})',
+  'lyrics.badResponse': 'The lyrics service sent an unexpected response',
   'lyr.idle': 'Play something to see its lyrics.',
   'lyr.error': 'Couldn\'t load lyrics right now.',
   'lyr.instrumental': '♪ Instrumental',

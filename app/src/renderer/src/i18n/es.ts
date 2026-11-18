@@ -264,6 +264,8 @@ export const es: Record<MessageKey, string> = {
   'vis.minimal': 'Mínimo',
   // Lyrics view
   'lyr.off': 'Las letras están desactivadas en Ajustes.',
+  'lyrics.lookupFailed': 'Falló la búsqueda de letras ({status})',
+  'lyrics.badResponse': 'El servicio de letras envió una respuesta inesperada',
   'lyr.idle': 'Reproduce algo para ver su letra.',
   'lyr.error': 'No se ha podido cargar la letra ahora mismo.',
   'lyr.instrumental': '♪ Instrumental',

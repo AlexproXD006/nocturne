@@ -44,8 +44,8 @@ export function Tabs<T extends string>({
   }
 
   return (
-    <div className="hide-scrollbar -mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
-      <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="inline-flex min-w-full gap-1 border-b border-line md:min-w-0">
+    <div className="hide-scrollbar -mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
+      <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="inline-flex min-w-full gap-1 border-b border-line md:flex md:min-w-0 md:flex-wrap">
         {tabs.map((t) => {
           const selected = t.id === value
           return (

@@ -1,4 +1,5 @@
 import { LruCache } from '../lib/lru'
+import { t } from '../i18n'
 
 export interface LrclibRecord {
   id: number
@@ -148,9 +149,9 @@ export class LrclibClient {
       await this.sleep(delay)
       return this.get<T>(path, signal, 1)
     }
-    if (!res.ok) throw new Error(`Lyrics lookup failed (${res.status})`)
+    if (!res.ok) throw new Error(t('lyrics.lookupFailed', { status: String(res.status) }))
     const type = res.headers.get('Content-Type') ?? ''
-    if (!type.includes('json')) throw new Error('Lyrics service sent an unexpected response')
+    if (!type.includes('json')) throw new Error(t('lyrics.badResponse'))
     return (await res.json()) as T
   }
 }
