@@ -3,7 +3,7 @@ GET /v1/updates/{platform}
 
 Public (no auth) in-app update feed. Reads <NOCTURNE_DOWNLOADS_DIR>/latest.json
 (default /opt/nocturne/downloads/latest.json; edited by hand on each release) and returns the entry for the requested
-platform. Platforms: android, android-beta, windows, desktop.
+platform. Platforms: android, android-beta, ios, ios-beta, windows, desktop.
 
 "android-beta" is the feed pre-release Android builds follow; it should always
 point at the newest of the latest beta and the latest stable.
@@ -44,7 +44,7 @@ router = APIRouter(tags=["updates"])
 LATEST_PATH = os.path.join(config.DOWNLOADS_DIR, "latest.json")
 
 # The only platforms we publish builds for.
-KNOWN_PLATFORMS = {"android", "android-beta", "windows", "desktop"}
+KNOWN_PLATFORMS = {"android", "android-beta", "ios", "ios-beta", "windows", "desktop"}
 
 
 def _load_latest() -> dict:
@@ -66,6 +66,8 @@ def _load_latest() -> dict:
 _FEED_SOURCES = {
     "android": ("stable", "android", "android"),
     "android-beta": ("beta", "android", "android-beta"),
+    "ios": ("stable", "ios", "ios"),
+    "ios-beta": ("beta", "ios", "ios-beta"),
     "windows": ("stable", "windows", "windows"),
     "desktop": ("stable", "windows", "windows"),
 }
@@ -194,12 +196,13 @@ _STABLE_ROUTES = {
     "linux": "linux",
     "linux-deb": "linux-deb",
     "linux-rpm": "linux-rpm",
+    "ios": "ios",
 }
 _STABLE_LOCAL = {
     "android": ("android", "nocturne.apk", "nocturne.apk", "android"),
     "windows": ("windows", "nocturne-windows-x64.zip", "Nocturne-Windows-x64.zip", "windows"),
 }
-_BETA_ROUTES = {"android": "android-beta"}
+_BETA_ROUTES = {"android": "android-beta", "ios": "ios-beta"}
 _BETA_LOCAL = {"android": ("android", "nocturne.apk", "nocturne.apk", "android-beta")}
 
 

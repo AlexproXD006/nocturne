@@ -21,7 +21,7 @@ good data, no releases yet). Each <release> is
     }
 
 with platform keys android, windows (NSIS setup), windows-portable,
-linux (AppImage), linux-deb and linux-rpm. "url" is the asset's GitHub
+linux (AppImage), linux-deb, linux-rpm and ios (unsigned .ipa). "url" is the asset's GitHub
 browser_download_url; callers must never hand it to the apps directly (they
 build download URLs as serverUrl + url), only redirect to it.
 
@@ -134,6 +134,8 @@ _PLATFORM_PATTERNS: dict[str, re.Pattern] = {
     "linux": re.compile(r"\.appimage$", re.I),
     "linux-deb": re.compile(r"\.deb$", re.I),
     "linux-rpm": re.compile(r"\.rpm$", re.I),
+    # Unsigned iOS build (Nocturne-<v>-unsigned.ipa), sideloaded via AltStore & co.
+    "ios": re.compile(r"\.ipa$", re.I),
 }
 PLATFORM_KEYS = tuple(_PLATFORM_PATTERNS)
 

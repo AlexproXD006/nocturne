@@ -79,6 +79,7 @@ def mount_downloads(app) -> None:
     win_path = _DOWNLOADS_DIR / "nocturne-windows-x64.zip"
     page_path = _DOWNLOADS_DIR / "descargar.html"
     changelog_path = _DOWNLOADS_DIR / "changelog.json"
+    altstore_path = _DOWNLOADS_DIR / "altstore.json"
 
     @app.get("/descargar", dependencies=[Depends(_legacy_guard)], include_in_schema=False)
     @app.get("/descargar/", dependencies=[Depends(_legacy_guard)], include_in_schema=False)
@@ -99,14 +100,19 @@ def mount_downloads(app) -> None:
         "linux": ("stable", "linux", None),
         "linux-deb": ("stable", "linux-deb", None),
         "linux-rpm": ("stable", "linux-rpm", None),
+        "ios": ("stable", "ios", None),
+        "ios-beta": ("beta", "ios", None),
     }
 
-    def _make_redirect(channel: str, asset_key: str, fallback):
+    def _make_redirect(channel: str, asset_key: str, fallback, page: bool = False):
         async def _redirect():
             gh = await releases.get_releases()
             rel = (gh or {}).get(channel) or {}
             asset = (rel.get("assets") or {}).get(asset_key)
-            if asset and asset.get("url"):
+            if page and asset and rel.get("html_url"):
+                # iOS: an .ipa cannot be installed from a browser, so send people to the release page.
+                target = rel["html_url"]
+            elif asset and asset.get("url"):
                 target = asset["url"]
             elif fallback:
                 target = fallback
@@ -126,11 +132,22 @@ def mount_downloads(app) -> None:
     for _name, (_channel, _key, _fallback) in redirect_targets.items():
         app.add_api_route(
             f"/descargar/{_name}",
-            _make_redirect(_channel, _key, _fallback),
+            _make_redirect(_channel, _key, _fallback, page=_key == "ios"),
             methods=["GET", "HEAD"],
             include_in_schema=False,
             dependencies=[Depends(_legacy_guard)],
         )
+
+    # AltStore/SideStore source for the iOS build. Public, CORS-open and never
+    # redirected (AltStore fetches it directly, also from the legacy host).
+    @app.api_route("/altstore.json", methods=["GET", "HEAD"], include_in_schema=False)
+    async def _altstore():
+        if not altstore_path.is_file():
+            return Response(content="AltStore source not available.", media_type="text/plain", status_code=404)
+        resp = FileResponse(str(altstore_path), media_type="application/json")
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return _add_security(resp)
 
     @app.api_route("/nocturne.apk", methods=["GET", "HEAD"], include_in_schema=False)
     async def _download_apk():

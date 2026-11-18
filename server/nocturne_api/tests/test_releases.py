@@ -283,7 +283,7 @@ async def test_updates_no_releases_yet(client, github, downloads):
 
 
 async def test_updates_unknown_platform(client, github, downloads):
-    assert (await client.get("/updates/ios")).status_code == 404
+    assert (await client.get("/updates/symbian")).status_code == 404
     assert github.calls == 0
 
 
@@ -367,3 +367,42 @@ async def test_redirect_unavailable_is_404(web_client, github, target):
     r = await web_client.get(f"/descargar/{target}")
     assert r.status_code == 404
     assert "not available" in r.text
+
+
+# ── iOS (unsigned .ipa, AltStore) ────────────────────────────────────────────
+
+def _ios_payload():
+    b = "v1.1.0-beta.1"
+    return [
+        _release(b, prerelease=True, body="iOS beta", assets=[
+            _asset(b, "Nocturne-1.1.0-beta.1-android-release.apk", 5_000_000, SHA_BETA_APK),
+            _asset(b, "Nocturne-1.1.0-beta.1-unsigned.ipa", 9_000_000, "9" * 64),
+        ]),
+        _release("v1.0.9", assets=[_asset("v1.0.9", "Nocturne-1.0.9-android-release.apk", 5_000_000, SHA_APK)]),
+    ]
+
+
+def test_resolve_picks_ipa():
+    res = releases.resolve(_ios_payload(), REPO)
+    assert res["beta"]["assets"]["ios"]["name"] == "Nocturne-1.1.0-beta.1-unsigned.ipa"
+    assert "ios" not in res["stable"]["assets"]
+
+
+async def test_updates_ios_beta_feed(client, github, downloads):
+    github.payload = _ios_payload()
+    r = await client.get("/updates/ios-beta")
+    assert r.status_code == 200
+    assert r.json() == {"version": "1.1.0-beta.1", "url": "/descargar/ios-beta",
+                        "sha256": "9" * 64, "notes": "iOS beta"}
+
+
+async def test_updates_ios_stable_has_no_build(client, github, downloads):
+    github.payload = _ios_payload()
+    assert (await client.get("/updates/ios")).status_code == 404
+
+
+async def test_descargar_ios_redirects_to_release_page(web_client, github):
+    github.payload = _ios_payload()
+    r = await web_client.get("/descargar/ios-beta", follow_redirects=False)
+    assert r.status_code == 302
+    assert r.headers["location"] == f"https://github.com/{REPO}/releases/tag/v1.1.0-beta.1"

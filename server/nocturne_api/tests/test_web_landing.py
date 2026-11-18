@@ -126,3 +126,24 @@ async def test_forwarded_host_only_from_trusted_proxy(tmp_path, monkeypatch):
     async with AsyncClient(transport=t, base_url="http://t", headers=hdr) as c:
         assert (await c.get("/", follow_redirects=False)).status_code == 301
 
+
+async def test_altstore_json(tmp_path, monkeypatch):
+    from nocturne_api import web
+    dl = tmp_path / "dl"
+    dl.mkdir()
+    monkeypatch.setattr(web, "_DOWNLOADS_DIR", dl)
+    hosts = ("spotify.alexcloudweb.es", "nocturne.alexcloudweb.es")
+    for h in hosts:
+        (tmp_path / "a" / h).mkdir(parents=True)
+        (tmp_path / "b" / h).mkdir(parents=True)
+    for h in hosts:
+        async with await _legacy(tmp_path / "a" / h, {"host": h}) as c:
+            assert (await c.get("/altstore.json", follow_redirects=False)).status_code == 404
+    (dl / "altstore.json").write_text('{"name":"Nocturne"}')
+    for h in hosts:
+        async with await _legacy(tmp_path / "b" / h, {"host": h}) as c:
+            r = await c.get("/altstore.json", follow_redirects=False)
+            assert r.status_code == 200
+            assert r.headers["content-type"].startswith("application/json")
+            assert r.headers["access-control-allow-origin"] == "*"
+            assert r.json() == {"name": "Nocturne"}
