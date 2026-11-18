@@ -3,6 +3,7 @@ import type { ApiClient } from '../api/client'
 import type { Page, Playlist, PlaylistDetail, Track } from '../api/types'
 import { resources, type ResourceCache } from '../lib/resource'
 import { t } from '../i18n'
+import { chunk } from '../lib/bulk'
 
 /**
  * Playlist editing helpers shared by the Library, the Playlist page and the "Add to playlist" picker.
@@ -84,27 +85,40 @@ export async function addTracks(
   opts: { allowDuplicates?: boolean } = {}
 ): Promise<AddOutcome> {
   const ids = [...new Set(tracks.map((t) => t.id))]
-  const res = opts.allowDuplicates ? await api.addToPlaylist(playlist.id, ids, { allowDuplicates: true }) : await api.addToPlaylist(playlist.id, ids)
-  const added = Number.isFinite(res?.added) ? res.added : ids.length
-  const skippedIds = Array.isArray(res?.skipped) ? res.skipped.filter((x): x is string => typeof x === 'string') : []
-  const skipped = Array.isArray(res?.skipped) ? res.skipped.length : 0
+  // Big selections go in chunks so no single request exceeds server limits.
+  let added = 0
+  const skippedIds: string[] = []
+  let last: Awaited<ReturnType<PlaylistApi['addToPlaylist']>> | undefined
+  for (const part of chunk(ids)) {
+    const res = opts.allowDuplicates ? await api.addToPlaylist(playlist.id, part, { allowDuplicates: true }) : await api.addToPlaylist(playlist.id, part)
+    added += Number.isFinite(res?.added) ? res.added : part.length
+    if (Array.isArray(res?.skipped)) skippedIds.push(...res.skipped.filter((x): x is string => typeof x === 'string'))
+    last = res
+  }
+  const skipped = skippedIds.length
   invalidatePlaylists(playlist.id, cache)
-  const name = res?.playlist?.name || playlist.name
+  const name = last?.playlist?.name || playlist.name
   return { added, skipped, skippedIds, name, message: describeAdd(name, ids.length, added, skipped) }
 }
 
 /** Creates a playlist (optionally with songs), seeds its page cache and refreshes the lists. */
 export async function createPlaylist(
-  api: Pick<PlaylistApi, 'createPlaylist'>,
+  api: Pick<PlaylistApi, 'createPlaylist'> & Partial<Pick<PlaylistApi, 'addToPlaylist'>>,
   input: { name: string; description?: string; tracks?: Track[] },
   cache: ResourceCache = resources
 ): Promise<PlaylistDetail> {
   const name = input.name.trim()
   const description = input.description?.trim()
   const trackIds = input.tracks?.length ? [...new Set(input.tracks.map((t) => t.id))] : undefined
-  const created = await api.createPlaylist({ name, ...(description ? { description } : {}), ...(trackIds ? { trackIds } : {}) })
+  const parts = trackIds ? chunk(trackIds) : []
+  const created = await api.createPlaylist({ name, ...(description ? { description } : {}), ...(parts[0] ? { trackIds: parts[0] } : {}) })
   if (created && typeof created.id === 'string') {
-    cache.set(playlistKey(created.id), { ...created, tracks: Array.isArray(created.tracks) ? created.tracks : [] })
+    if (parts.length > 1 && api.addToPlaylist) {
+      for (const part of parts.slice(1)) await api.addToPlaylist(created.id, part)
+      cache.invalidate(playlistKey(created.id))
+    } else {
+      cache.set(playlistKey(created.id), { ...created, tracks: Array.isArray(created.tracks) ? created.tracks : [] })
+    }
   }
   invalidatePlaylists(undefined, cache)
   return created

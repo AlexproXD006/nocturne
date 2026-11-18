@@ -84,7 +84,7 @@ export function AlbumPage({ id }: { id: string }): ReactNode {
         <AddToPlaylistButton tracks={album.tracks} label={album.title} size="lg" />
       </PlayButtons>
       {res.error && <ErrorState message={res.error} onRetry={res.reload} />}
-      <TrackList tracks={album.tracks} context={context} showArt={false} showAlbum={false} />
+      <TrackList tracks={album.tracks} context={context} showArt={false} showAlbum={false} searchable />
     </Page>
   )
 }

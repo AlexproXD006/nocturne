@@ -97,7 +97,7 @@ export function MixPage({ id }: { id: string }): ReactNode {
       {mix.tracks.length === 0 ? (
         <EmptyState icon={<ListMusic className="h-9 w-9" strokeWidth={1.4} />} title={tr('mix.kind')} hint={tr('mix.empty')} />
       ) : (
-        <TrackList tracks={mix.tracks} context={context} />
+        <TrackList tracks={mix.tracks} context={context} searchable />
       )}
     </Page>
   )

@@ -1,5 +1,5 @@
-import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Clock3, Disc3, GripVertical, ListEnd, ListMinus, ListMusic, ListPlus, MoreHorizontal, Pause, Play, UserRound } from 'lucide-react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Check, Clock3, Disc3, GripVertical, ListEnd, ListMinus, ListMusic, ListPlus, MoreHorizontal, Pause, Play, UserRound } from 'lucide-react'
 import type { Track } from '../api/types'
 import type { QueueContext } from '../player/queue'
 import { playback } from '../services'
@@ -13,6 +13,9 @@ import { usePlaylistsEnabled } from './Playlists'
 import { usePlaylistUi } from '../store/playlists'
 import { useT } from '../i18n'
 import { FastScroll } from './FastScroll'
+import { BulkBar, ListToolbar } from './TrackListTools'
+import { ConfirmDialog } from './ConfirmDialog'
+import { filterIndices, selectionClick, toggleAll, type SelectionState } from '../lib/bulk'
 import { letterFor, sortText, type SortKey } from '../lib/fastScroll'
 
 export function Equalizer({ paused }: { paused?: boolean }): ReactNode {
@@ -60,9 +63,16 @@ interface RowProps {
   onRemove?: (index: number) => void
   /** Editable playlist (desktop): drag-and-drop reordering via a grip handle. */
   dnd?: { start: (index: number) => void; drop: (index: number) => void; end: () => void }
+  /** Multi-select mode: rows show a checkbox and clicks toggle instead of playing. */
+  selecting?: boolean
+  selected?: boolean
+  /** Click on a row while selecting (or with Ctrl/Cmd): toggles / extends the selection. */
+  onSelect?: (index: number, shift: boolean) => void
+  /** Long press on touch: enters selection mode with this row selected. */
+  onLongPress?: (index: number) => void
 }
 
-const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCurrent, isPlaying, onPlay, onRemove, dnd }: RowProps): ReactNode {
+const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCurrent, isPlaying, onPlay, onRemove, dnd, selecting, selected, onSelect, onLongPress }: RowProps): ReactNode {
   const tr = useT()
   const { menu, open, close } = useMenu()
   const go = useNav((s) => s.go)
@@ -73,6 +83,13 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
   // text selection elsewhere in the row behave normally.
   const [armed, setArmed] = useState(false)
   const [over, setOver] = useState(false)
+  const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null)
+  const touched = useRef(false)
+  const swallowClick = useRef(false)
+  const cancelPress = (): void => {
+    if (press.current) clearTimeout(press.current.timer)
+    press.current = null
+  }
 
   const items = [
     { label: tr('tl.playNext'), icon: <ListPlus />, onSelect: () => (playback.addNext([track]), toast(tr('tl.willPlayNext', { title: track.title }))) },
@@ -84,6 +101,7 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
   ]
 
   const activate = (): void => (isCurrent ? toggle() : onPlay(index))
+  const pick = (shift: boolean): void => onSelect?.(index, shift)
   const quickQueue = (): void => {
     const undo = playback.addToQueue([track])
     toast(tr('tl.addedToQueue'), 'info', undo ? { action: { label: tr('tl.undo'), run: undo } } : undefined)
@@ -94,6 +112,30 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
       role="row"
       tabIndex={0}
       aria-current={isCurrent || undefined}
+      aria-selected={selecting ? Boolean(selected) : undefined}
+      onPointerDown={
+        onLongPress
+          ? (e) => {
+              touched.current = e.pointerType === 'touch'
+              if (e.pointerType !== 'touch' || selecting) return
+              cancelPress()
+              press.current = {
+                x: e.clientX,
+                y: e.clientY,
+                timer: setTimeout(() => {
+                  press.current = null
+                  swallowClick.current = true
+                  onLongPress(index)
+                }, 450)
+              }
+            }
+          : undefined
+      }
+      onPointerMove={(e) => {
+        if (press.current && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 8) cancelPress()
+      }}
+      onPointerUp={cancelPress}
+      onPointerCancel={cancelPress}
       draggable={dnd ? armed : undefined}
       onDragStart={
         dnd &&
@@ -132,16 +174,29 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
           dnd.end()
         })
       }
-      onDoubleClick={activate}
+      onDoubleClick={selecting ? undefined : activate}
       onClick={(e) => {
+        if (swallowClick.current) {
+          swallowClick.current = false
+          return
+        }
+        if (onSelect && (selecting || e.ctrlKey || e.metaKey)) {
+          pick(e.shiftKey)
+          return
+        }
         // Single tap plays on touch screens; desktop uses double-click like other players.
         if ((e.nativeEvent as PointerEvent).pointerType === 'touch') activate()
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') activate()
+        if (selecting && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault()
+          pick(e.shiftKey)
+        } else if (e.key === 'Enter') activate()
       }}
       onContextMenu={(e) => {
         e.preventDefault()
+        // A touch long press selects the row (see onLongPress); the "more" button still opens the menu.
+        if (onLongPress && touched.current) return
         open(e.clientX, e.clientY)
       }}
       className={cx(
@@ -149,11 +204,25 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
         'grid-cols-[28px_minmax(0,1fr)_auto] md:grid-cols-[28px_minmax(0,1fr)_minmax(0,0.7fr)_auto]',
         !showAlbum && 'md:grid-cols-[28px_minmax(0,1fr)_auto]',
         'hover:bg-white/[0.05] focus-visible:bg-white/[0.05]',
-        over && 'ring-1 ring-accent/60'
+        over && 'ring-1 ring-accent/60',
+        selected && 'bg-accent/[0.12] hover:bg-accent/[0.16]'
       )}
     >
       <div className="relative flex w-7 items-center justify-center text-fg-muted tabular-nums">
-        <span className={cx('group-hover:invisible', isCurrent && 'invisible')}>{index + 1}</span>
+        {selecting && (
+          <span
+            role="checkbox"
+            aria-checked={Boolean(selected)}
+            aria-label={tr('bk.row', { title: track.title })}
+            className={cx(
+              'absolute z-10 flex h-5 w-5 items-center justify-center rounded-md border',
+              selected ? 'border-accent bg-accent text-ink-950' : 'border-white/35 bg-ink-900/80'
+            )}
+          >
+            {selected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+          </span>
+        )}
+        <span className={cx('group-hover:invisible', (isCurrent || selecting) && 'invisible')}>{index + 1}</span>
         {isCurrent && !isPlaying && <Equalizer paused />}
         {isCurrent && isPlaying && (
           <span className="absolute group-hover:invisible">
@@ -162,12 +231,13 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
         )}
         <button
           type="button"
+          tabIndex={selecting ? -1 : undefined}
           aria-label={isCurrent && isPlaying ? tr('tl.pauseTrack', { title: track.title }) : tr('tl.playTrack', { title: track.title })}
           onClick={(e) => {
             e.stopPropagation()
             activate()
           }}
-          className="absolute inset-0 hidden items-center justify-center text-fg group-hover:flex"
+          className={cx('absolute inset-0 hidden items-center justify-center text-fg', !selecting && 'group-hover:flex')}
         >
           {isCurrent && isPlaying ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="h-4 w-4" fill="currentColor" />}
         </button>
@@ -260,7 +330,10 @@ export function TrackList({
   onMove,
   rowKeys,
   total,
-  sortedBy
+  sortedBy,
+  searchable = false,
+  selectable,
+  onRemoveMany
 }: {
   tracks: Track[]
   context: QueueContext
@@ -277,24 +350,89 @@ export function TrackList({
   total?: number
   /** List is sorted by this field: the fast-scroll bubble shows the A–Z letter instead of the position. */
   sortedBy?: SortKey
+  /** Shows a search field that filters the visible rows (accent/case-insensitive). */
+  searchable?: boolean
+  /** Multi-select + bulk actions bar. Default: on whenever the column header is shown. */
+  selectable?: boolean
+  /** Editable playlist: remove these rows (original-list items, in order). Resolves when done. */
+  onRemoveMany?: (items: { index: number; track: Track }[]) => void | Promise<void>
 }): ReactNode {
   const tr = useT()
   const rootRef = useRef<HTMLDivElement>(null)
-  const letterAt = useMemo(() => (sortedBy ? (i: number) => letterFor(tracks[i] ? sortText(tracks[i]!, sortedBy) : '') : undefined), [sortedBy, tracks])
   const currentId = useNowTrack()?.id
   const nowCtx = useNowContext()
   const sameContext = nowCtx?.type === context.type && nowCtx?.id === context.id
   const isPlaying = useNowPlaying()
+  const canSelect = (selectable ?? header) && tracks.length > 1
 
-  const onPlay = useCallback(
-    (index: number) => void playback.playTracks(tracks, index, context),
-    [tracks, context]
+  const [query, setQuery] = useState('')
+  const [selecting, setSelecting] = useState(false)
+  const [sel, setSel] = useState<SelectionState>({ selected: new Set(), anchor: null })
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  const filtering = query.trim() !== ''
+
+  // `view` = indices into `tracks` that are shown; everything below works on the shown rows.
+  const view = useMemo(() => filterIndices(tracks, query), [tracks, query])
+  const viewTracks = useMemo(() => (filtering ? view.map((i) => tracks[i]!) : tracks), [filtering, view, tracks])
+  const keyAt = useCallback((i: number): string => rowKeys?.[i] ?? `${tracks[i]!.id}:${i}`, [rowKeys, tracks])
+  const viewKeys = useMemo(() => view.map(keyAt), [view, keyAt])
+  const letterAt = useMemo(
+    () => (sortedBy ? (i: number) => letterFor(viewTracks[i] ? sortText(viewTracks[i]!, sortedBy) : '') : undefined),
+    [sortedBy, viewTracks]
   )
+
+  const selectedViewIdx = useMemo(() => viewKeys.flatMap((k, vi) => (sel.selected.has(k) ? [vi] : [])), [viewKeys, sel.selected])
+  const selectedTracks = useMemo(() => selectedViewIdx.map((vi) => viewTracks[vi]!), [selectedViewIdx, viewTracks])
+
+  const exitSelect = useCallback((): void => {
+    setSelecting(false)
+    setSel({ selected: new Set(), anchor: null })
+  }, [])
+  useEffect(() => {
+    if (!selecting) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && !confirmRemove) exitSelect()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selecting, exitSelect, confirmRemove])
+  // The list changed under the selection (e.g. rows removed): drop the keys that no longer exist.
+  useEffect(() => {
+    if (!selecting) return
+    const all = new Set(tracks.map((_, i) => keyAt(i)))
+    setSel((s) => (s.selected.size === 0 || [...s.selected].every((k) => all.has(k)) ? s : { ...s, selected: new Set([...s.selected].filter((k) => all.has(k))) }))
+  }, [tracks, keyAt, selecting])
+
+  const viewKeysRef = useRef(viewKeys)
+  viewKeysRef.current = viewKeys
+  const onSelect = useCallback((vi: number, shift: boolean): void => {
+    setSelecting(true)
+    setSel((s) => selectionClick(s, viewKeysRef.current[vi]!, viewKeysRef.current, shift))
+  }, [])
+  const onLongPress = useCallback((vi: number): void => {
+    setSelecting(true)
+    setSel({ selected: new Set([viewKeysRef.current[vi]!]), anchor: viewKeysRef.current[vi]! })
+    try {
+      navigator.vibrate?.(15)
+    } catch {
+      /* haptics are best-effort */
+    }
+  }, [])
+
+  const viewRef = useRef(view)
+  viewRef.current = view
+  const onPlay = useCallback(
+    (index: number) => void playback.playTracks(viewTracks, index, context),
+    [viewTracks, context]
+  )
+  const removeRef = useRef(onRemove)
+  removeRef.current = onRemove
+  const removeAt = useCallback((vi: number) => removeRef.current?.(viewRef.current[vi]!), [])
 
   const dragFrom = useRef<number | null>(null)
   const moveRef = useRef(onMove)
   moveRef.current = onMove
-  const hasMove = Boolean(onMove)
+  const hasMove = Boolean(onMove) && !filtering && !selecting
   const [dnd] = useState(() => ({
     start: (i: number) => {
       dragFrom.current = i
@@ -311,6 +449,18 @@ export function TrackList({
 
   return (
     <div ref={rootRef} role="table" aria-label={tr('tl.tracks')} className="-mx-3">
+      {header && (searchable || canSelect) && (
+        <ListToolbar
+          searchable={searchable}
+          selectable={canSelect}
+          query={query}
+          onQuery={setQuery}
+          shown={view.length}
+          total={tracks.length}
+          selecting={selecting}
+          onToggleSelect={() => (selecting ? exitSelect() : setSelecting(true))}
+        />
+      )}
       {header && (
         <div
           role="row"
@@ -328,21 +478,51 @@ export function TrackList({
           </span>
         </div>
       )}
-      {tracks.map((t, i) => (
-        <TrackRow
-          key={rowKeys?.[i] ?? `${t.id}:${i}`}
-          track={t}
-          index={i}
-          showArt={showArt}
-          showAlbum={showAlbum}
-          isCurrent={t.id === currentId && (sameContext || context.type === 'search' || context.type === 'home')}
-          isPlaying={isPlaying}
-          onPlay={onPlay}
-          onRemove={onRemove}
-          dnd={hasMove ? dnd : undefined}
+      {filtering && view.length === 0 && <p className="px-3 py-10 text-center text-sm text-fg-muted">{tr('ts.noMatches', { q: query.trim() })}</p>}
+      {view.map((oi, vi) => {
+        const t = tracks[oi]!
+        return (
+          <TrackRow
+            key={viewKeys[vi]}
+            track={t}
+            index={vi}
+            showArt={showArt}
+            showAlbum={showAlbum}
+            isCurrent={t.id === currentId && (sameContext || context.type === 'search' || context.type === 'home')}
+            isPlaying={isPlaying}
+            onPlay={onPlay}
+            onRemove={onRemove ? removeAt : undefined}
+            dnd={hasMove ? dnd : undefined}
+            selecting={selecting}
+            selected={selecting && sel.selected.has(viewKeys[vi]!)}
+            onSelect={canSelect ? onSelect : undefined}
+            onLongPress={canSelect ? onLongPress : undefined}
+          />
+        )
+      })}
+      <FastScroll anchorRef={rootRef} count={viewTracks.length} total={filtering ? undefined : total} letterAt={letterAt} />
+      {selecting && (
+        <BulkBar
+          tracks={selectedTracks}
+          allSelected={view.length > 0 && selectedViewIdx.length === view.length}
+          onSelectAll={() => setSel((s) => toggleAll(s, viewKeys))}
+          onClose={exitSelect}
+          onRemove={onRemoveMany ? () => selectedTracks.length > 0 && setConfirmRemove(true) : undefined}
         />
-      ))}
-      <FastScroll anchorRef={rootRef} count={tracks.length} total={total} letterAt={letterAt} />
+      )}
+      {confirmRemove && onRemoveMany && (
+        <ConfirmDialog
+          title={tr('bk.removeQ', { count: selectedViewIdx.length })}
+          message={tr('bk.removeMsg')}
+          confirmLabel={tr('common.delete')}
+          tone="danger"
+          onClose={() => setConfirmRemove(false)}
+          onConfirm={async () => {
+            await onRemoveMany(selectedViewIdx.map((vi) => ({ index: view[vi]!, track: viewTracks[vi]! })))
+            exitSelect()
+          }}
+        />
+      )}
     </div>
   )
 }

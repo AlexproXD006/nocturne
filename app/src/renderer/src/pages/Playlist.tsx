@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronUp, ListMusic, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, ListMusic, ListPlus, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
 import { api } from '../services'
 import { useResource } from '../hooks/useResource'
 import type { PlaylistDetail, PlaylistTrack } from '../api/types'
@@ -7,7 +7,8 @@ import { describeError } from '../api/errors'
 import { resources } from '../lib/resource'
 import { useNav } from '../store/nav'
 import { useUi } from '../store/ui'
-import { invalidatePlaylists, moveItem, playlistKey } from '../store/playlists'
+import { addTracks, invalidatePlaylists, moveItem, playlistKey, usePlaylistUi } from '../store/playlists'
+import { mapLimit } from '../lib/bulk'
 import { Artwork, EmptyState, ErrorState, IconButton, cx } from '../components/common'
 import { TrackList } from '../components/TrackList'
 import { Menu, useMenu } from '../components/Menu'
@@ -200,6 +201,43 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
     [applyTracks, id, key]
   )
 
+  /** Removes several rows at once (bulk action): optimistic, concurrent requests, Undo re-adds the songs at the end. */
+  const removeMany = useCallback(
+    async (items: { index: number; track: PlaylistTrack }[]): Promise<void> => {
+      const before = resources.peek<PlaylistDetail>(key)
+      if (!before || items.length === 0) return
+      const drop = new Set(items.map((i) => i.index))
+      const picked = items.map((i) => before.tracks[i.index]).filter((t): t is PlaylistTrack => Boolean(t))
+      const op = ++opSeq.current
+      resources.mutate<PlaylistDetail>(key, (p) => ({ ...p, tracks: p.tracks.filter((_, i) => !drop.has(i)), trackCount: p.tracks.length - drop.size }))
+      const toast = useUi.getState().toast
+      try {
+        // Without entry ids the server removes every copy of a song, so each song id is sent once.
+        const jobs = picked.every((t) => t.entryId) ? picked : [...new Map(picked.map((t) => [t.id, t])).values()]
+        await mapLimit(jobs, 6, (t) => (t.entryId ? api.removePlaylistEntry(id, t.entryId) : api.removeFromPlaylist(id, t.id)))
+        invalidatePlaylists()
+        toast(tr('bk.removed', { count: picked.length }), 'info', {
+          action: {
+            label: tr('tl.undo'),
+            run: () => {
+              void addTracks(api, { id, name: before.name }, picked, undefined, { allowDuplicates: true })
+                .then(() => {
+                  resources.invalidate(key)
+                  toast(tr('bk.restored', { count: picked.length }))
+                })
+                .catch((err: unknown) => toast(describeError(err), 'error'))
+            }
+          }
+        })
+      } catch (err) {
+        void op
+        resources.invalidate(key)
+        toast(describeError(err), 'error')
+      }
+    },
+    [id, key, tr]
+  )
+
   // `reorderPlaylist` sends entry ids when every row has one (duplicates stay distinct), else song ids.
   const move = useCallback(
     (from: number, to: number) => {
@@ -287,7 +325,15 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
       ) : canEdit && editing ? (
         <PlaylistEditList tracks={pl.tracks} onMove={move} onRemove={remove} />
       ) : (
-        <TrackList tracks={pl.tracks} rowKeys={keys} context={context} onRemove={canEdit ? remove : undefined} onMove={canEdit ? move : undefined} />
+        <TrackList
+          tracks={pl.tracks}
+          rowKeys={keys}
+          context={context}
+          searchable
+          onRemove={canEdit ? remove : undefined}
+          onMove={canEdit ? move : undefined}
+          onRemoveMany={canEdit ? removeMany : undefined}
+        />
       )}
 
       {menu && (
@@ -296,6 +342,7 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
           y={menu.y}
           onClose={close}
           items={[
+            { label: tr('bk.addAllOther'), icon: <ListPlus />, onSelect: () => usePlaylistUi.getState().openPicker(pl.tracks, pl.name) },
             { label: tr('pp.editDetails'), icon: <Pencil />, onSelect: () => setDialog('details') },
             { label: tr('pp.delete'), icon: <Trash2 />, onSelect: () => setDialog('delete') }
           ]}
