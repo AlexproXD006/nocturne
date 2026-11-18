@@ -248,7 +248,7 @@ function Popover({ anchor, onClose }: { anchor: HTMLElement; onClose: () => void
       role="dialog"
       aria-label="Devices"
       style={{ left: pos.left, bottom: pos.bottom, width: 340 }}
-      className="fade-up fixed z-[100] max-h-[70vh] overflow-y-auto rounded-xl border border-line bg-ink-800/95 p-3 shadow-2xl shadow-black/60 backdrop-blur-xl"
+      className="fade-up g-pop fixed z-[100] max-h-[70vh] overflow-y-auto rounded-xl border border-line bg-ink-800/95 p-3 shadow-2xl shadow-black/60 backdrop-blur-xl"
     >
       <PanelBody />
     </div>,
@@ -277,14 +277,14 @@ export function DevicesSheet(): ReactNode {
   if (!open) return null
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end justify-center" role="presentation">
-      <div className="absolute inset-0 bg-black/60" onClick={hide} aria-hidden />
+      <div className="g-scrim absolute inset-0 bg-black/60" onClick={hide} aria-hidden />
       <div
         role="dialog"
         aria-label="Devices"
-        className="fade-up relative max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border-t border-line bg-ink-800 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
+        className="fade-up g-pop g-sheet relative max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border-t border-line bg-ink-800 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" aria-hidden />
-        <IconButton label="Close devices" size="sm" onClick={hide} className="absolute right-2 top-2">
+        <IconButton label="Close devices" size="sm" onClick={hide} className="absolute! right-2 top-2">
           <X className="h-4 w-4" />
         </IconButton>
         <PanelBody />
@@ -382,7 +382,7 @@ export function RemoteSuggestion(): ReactNode {
   if (!candidate) return null
   const t = candidate.state.track!
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-ink-700/90 p-2 pl-3 shadow-xl shadow-black/40 backdrop-blur-xl">
+    <div className="g-float flex items-center gap-2 rounded-xl bg-ink-700/90 p-2 pl-3 shadow-xl shadow-black/40 backdrop-blur-xl">
       <MonitorSpeaker className="h-4 w-4 shrink-0 text-accent" />
       <button type="button" onClick={openDevices} className="min-w-0 flex-1 text-left">
         <p className="truncate text-sm font-semibold">{t.title}</p>

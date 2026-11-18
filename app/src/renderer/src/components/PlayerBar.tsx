@@ -57,7 +57,7 @@ export function PlayerBar(): ReactNode {
 
   return (
     <div className="app-chrome hidden shrink-0 flex-col md:flex">
-    <footer className="flex h-[84px] shrink-0 items-center gap-6 border-t border-line bg-ink-950 px-4" aria-label="Player">
+    <footer className="g-chrome flex h-[84px] shrink-0 items-center gap-6 border-t border-line bg-ink-950 px-4" aria-label="Player">
       <NowPlayingInfo />
       <div className="flex w-[min(42vw,640px)] flex-col items-center gap-1">
         <TransportControls />
@@ -107,7 +107,7 @@ export function MiniPlayer(): ReactNode {
   }
   return (
     <div className="px-2 md:hidden">
-      <div className={cx('overflow-hidden rounded-xl shadow-xl shadow-black/40', remote && 'ring-1 ring-accent/40')}>
+      <div className={cx('g-float overflow-hidden rounded-xl shadow-xl shadow-black/40', remote && 'ring-1 ring-accent/40')}>
       <div
         role="button"
         tabIndex={0}

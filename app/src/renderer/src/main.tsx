@@ -13,6 +13,8 @@ async function setupAndroid(): Promise<void> {
     const { StatusBar, Style } = await import('@capacitor/status-bar')
     await StatusBar.setStyle({ style: Style.Dark })
     await StatusBar.setOverlaysWebView({ overlay: true })
+    // Transparent overlay over the navy backdrop (matches theme-color / capacitor.config.ts).
+    await StatusBar.setBackgroundColor({ color: '#070a12' })
   } catch {
     /* status bar plugin unavailable */
   }

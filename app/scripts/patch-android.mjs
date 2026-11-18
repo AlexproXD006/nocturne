@@ -21,7 +21,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const APP_ID = 'es.alexcloudweb.nocturne'
-export const BACKGROUND = '#08080b'
+export const BACKGROUND = '#070a12'
 export const ICON_PLATE = '#0e0e12'
 
 export const PERMISSIONS = [

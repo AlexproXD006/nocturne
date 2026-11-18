@@ -178,7 +178,7 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     show: false,
     frame: false,
-    backgroundColor: '#09090c',
+    backgroundColor: '#070a12',
     title: 'Nocturne',
     icon: join(__dirname, '../../build/icon.png'),
     autoHideMenuBar: true,

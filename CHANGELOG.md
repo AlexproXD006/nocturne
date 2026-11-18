@@ -2,6 +2,21 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.0-beta.1 — 2026-11-18
+
+**Midnight Glass, iOS y nuevo icono (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Nuevo diseño Midnight Glass: azul noche, paneles de cristal y el color de la portada tiñendo el cristal; es el tema por defecto (los demás temas siguen disponibles).
+- Versión para iPhone/iPad (.ipa para instalar con AltStore, SideStore o Sideloadly) con reproducción en segundo plano y controles en la pantalla de bloqueo.
+- Nuevo icono de la app.
+- Fuente de AltStore en nocturne.alexcloudweb.es/altstore.json para recibir actualizaciones en iOS.
+
+### Correcciones
+
+- El botón de cerrar del panel de dispositivos en el móvil vuelve a estar arriba a la derecha.
+
 ## 1.0.9 — 2026-11-18
 
 **Estadísticas y recaps** · web, android, windows, linux

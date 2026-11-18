@@ -35,16 +35,16 @@ function installedVersion(): string {
 
 /**
  * The feed to query, or null when updates don't apply (hosted/self-hosted web).
- * Pre-release Android builds follow the beta channel (`android-beta`), whose
+ * Pre-release Android/iOS builds follow the beta channel (`android-beta` / `ios-beta`), whose
  * feed always points at the newest of the latest beta and the latest stable.
  */
 export function targetPlatform(installed: string = installedVersion()): string | null {
   if (platform.hostedOrigin) return null
   if (platform.kind === 'android') return isPrerelease(installed) ? 'android-beta' : 'android'
   if (platform.kind === 'desktop') return 'desktop'
-  // iOS has no feed of its own yet: the server's `desktop` feed carries the release version (the
-  // download link is overridden below, so only the version number is used).
-  if (platform.kind === 'ios') return 'desktop'
+  // iOS has its own feed (`ios` / `ios-beta`, like Android). The download link is overridden below
+  // (release page / AltStore source), so only the version number is used.
+  if (platform.kind === 'ios') return isPrerelease(installed) ? 'ios-beta' : 'ios'
   return null // web: the browser app updates itself
 }
 

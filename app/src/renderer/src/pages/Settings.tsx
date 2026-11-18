@@ -15,7 +15,7 @@ import { AdaptiveSettingsPanel } from './AdaptiveSettings'
 
 function Section({ title, children }: { title: string; children: ReactNode }): ReactNode {
   return (
-    <section className="mb-6 rounded-2xl bg-white/[0.035] p-5 fade-up">
+    <section className="g-card mb-6 rounded-2xl bg-white/[0.035] p-5 fade-up">
       <h2 className="mb-4 text-lg font-bold tracking-tight">{title}</h2>
       <div className="space-y-5">{children}</div>
     </section>
@@ -38,6 +38,10 @@ const MOTION: { id: MotionPref; label: string }[] = [
 // mirroring the override blocks in styles.css. The accent dot uses the live
 // accent, so it is not duplicated here.
 const THEME_PREVIEW: Record<ThemeId, { bg: string; fg: string }> = {
+  glass: {
+    bg: 'radial-gradient(90% 90% at 15% 0%, rgb(143 180 255 / 0.55) 0%, transparent 60%), radial-gradient(80% 80% at 100% 100%, rgb(86 70 200 / 0.5) 0%, transparent 60%), #070a12',
+    fg: '#eef2fa'
+  },
   dark: { bg: '#08080b', fg: '#f3f3f6' },
   adaptive: {
     bg: 'radial-gradient(120% 90% at 20% 10%, #ff7a5c 0%, transparent 55%), radial-gradient(100% 80% at 100% 100%, #7b5cff 0%, transparent 60%), #07070a',

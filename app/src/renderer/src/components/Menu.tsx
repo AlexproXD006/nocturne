@@ -58,7 +58,7 @@ export function Menu({ x, y, items, onClose }: { x: number; y: number; items: Me
       ref={ref}
       role="menu"
       style={{ left: pos.left, top: pos.top }}
-      className="fade-up fixed z-[100] min-w-52 rounded-xl border border-line bg-ink-800/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl"
+      className="fade-up g-pop g-menu fixed z-[100] min-w-52 rounded-xl border border-line bg-ink-800/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl"
     >
       {items.map((it) => (
         <button

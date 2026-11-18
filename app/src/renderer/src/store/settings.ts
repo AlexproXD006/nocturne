@@ -7,6 +7,7 @@ export type { AdaptiveSettings } from '../lib/adaptive'
 export type VisualizerStyle = 'aurora' | 'spectrum' | 'minimal'
 export type MotionPref = 'system' | 'reduced' | 'full'
 export type ThemeId =
+  | 'glass'
   | 'dark'
   | 'adaptive'
   | 'oled'
@@ -24,6 +25,7 @@ export type AccentId = 'adaptive' | AccentPresetId
 
 /** Selectable interface themes, in display order. */
 export const THEMES: { id: ThemeId; label: string }[] = [
+  { id: 'glass', label: 'Midnight Glass' },
   { id: 'dark', label: 'Dark' },
   { id: 'adaptive', label: 'Adaptive' },
   { id: 'oled', label: 'OLED' },
@@ -77,13 +79,35 @@ export const DEFAULT_SETTINGS: Settings = {
   lyrics: true,
   volume: 0.8,
   muted: false,
-  theme: 'dark',
+  theme: 'glass',
   accent: 'adaptive',
   adaptive: DEFAULT_ADAPTIVE,
   deviceName: ''
 }
 
 const KEY = 'nocturne.settings.v1'
+/** Set once the 1.1.0 default-theme migration has run (so a later explicit "Dark" choice sticks). */
+const THEME_MIGRATION_KEY = 'nocturne.theme-migrated.v110'
+
+/**
+ * 1.1.0 made "Midnight Glass" the default theme. A saved 'dark' (or missing) theme could only have been
+ * the old default or an explicit pick we cannot tell apart, so it moves to 'glass' exactly once; every
+ * other saved theme (Adaptive, OLED, Nord, …) is left alone. After the marker is written, choosing
+ * Dark again is respected.
+ */
+export function migrateTheme(s: Settings, alreadyMigrated: boolean): Settings {
+  return !alreadyMigrated && s.theme === 'dark' ? { ...s, theme: 'glass' } : s
+}
+
+function loadInitial(): Settings {
+  const loaded = sanitizeSettings(readJson<unknown>(KEY, {}))
+  const done = readJson<unknown>(THEME_MIGRATION_KEY, false) === true
+  if (done) return loaded
+  const next = migrateTheme(loaded, false)
+  writeJson(THEME_MIGRATION_KEY, true)
+  if (next !== loaded) writeJson(KEY, next)
+  return next
+}
 
 export function sanitizeSettings(raw: unknown): Settings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof Settings, unknown>>
@@ -112,7 +136,7 @@ interface SettingsStore extends Settings {
 }
 
 export const useSettings = create<SettingsStore>((set, get) => ({
-  ...sanitizeSettings(readJson<unknown>(KEY, {})),
+  ...loadInitial(),
   update(patch) {
     const next = sanitizeSettings({ ...pick(get()), ...patch })
     set(next)

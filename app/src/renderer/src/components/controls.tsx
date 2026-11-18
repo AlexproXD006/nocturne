@@ -90,7 +90,7 @@ export function TransportControls({ size = 'md' }: { size?: 'md' | 'lg' }): Reac
         disabled={!hasQueue}
         onClick={() => p().toggle()}
         className={cx(
-          'no-drag flex items-center justify-center rounded-full bg-fg text-ink-950 transition hover:scale-[1.04] active:scale-95 disabled:opacity-40',
+          'g-play no-drag flex items-center justify-center rounded-full bg-fg text-ink-950 transition hover:scale-[1.04] active:scale-95 disabled:opacity-40',
           big ? 'h-16 w-16' : 'h-9 w-9'
         )}
       >

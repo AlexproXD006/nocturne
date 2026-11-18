@@ -59,7 +59,7 @@ export function Card({
   id?: string
 }): ReactNode {
   return (
-    <section aria-labelledby={title && id ? id : undefined} className={cx('fade-up rounded-2xl bg-ink-850 p-4 sm:p-5', className)}>
+    <section aria-labelledby={title && id ? id : undefined} className={cx('g-card fade-up rounded-2xl bg-ink-850 p-4 sm:p-5', className)}>
       {(title || action) && (
         <div className="mb-4 flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
           {title && (

@@ -104,7 +104,7 @@ export function StatsPage(): ReactNode {
     <Page>
       <div className="fade-up flex flex-wrap items-center justify-between gap-3 pt-2">
         <h1 className="text-3xl font-extrabold tracking-tight">Stats</h1>
-        <div role="tablist" aria-label="Period" className="inline-flex rounded-full bg-ink-900 p-1">
+        <div role="tablist" aria-label="Period" className="g-seg inline-flex rounded-full bg-ink-900 p-1">
           {RANGE_TABS.map((t) => (
             <button
               key={t.id}

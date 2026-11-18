@@ -75,7 +75,7 @@ export function Modal({ title, description, onClose, children, footer, dismissib
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[110] flex items-end justify-center bg-black/65 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      className="g-scrim fixed inset-0 z-[110] flex items-end justify-center bg-black/65 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && dismissible) closeRef.current()
       }}
@@ -88,7 +88,7 @@ export function Modal({ title, description, onClose, children, footer, dismissib
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className={`fade-up flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-line bg-ink-850 pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-black/70 outline-none sm:rounded-2xl sm:pb-0 ${size === 'md' ? 'sm:max-w-lg' : 'sm:max-w-md'}`}
+        className={`fade-up g-pop g-sheet flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-line bg-ink-850 pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-black/70 outline-none sm:rounded-2xl sm:pb-0 ${size === 'md' ? 'sm:max-w-lg' : 'sm:max-w-md'}`}
       >
         <div className="flex items-start justify-between gap-4 px-5 pt-5">
           <div className="min-w-0">

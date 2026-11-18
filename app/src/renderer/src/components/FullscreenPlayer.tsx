@@ -80,7 +80,7 @@ export function FullscreenPlayer(): ReactNode {
       aria-label="Now playing"
       onPointerMove={wake}
       onPointerDown={wake}
-      className={cx('fixed inset-0 z-50 flex flex-col overflow-hidden bg-ink-950 text-fg fade-up', idle && 'cursor-none')}
+      className={cx('fs-open fixed inset-0 z-50 flex flex-col overflow-hidden bg-ink-950 text-fg fade-up', idle && 'cursor-none')}
       style={{ ['--accent-rgb' as string]: `${accent.r} ${accent.g} ${accent.b}` }}
     >
       {/* Backdrop: blurred cover + reactive visuals */}
@@ -121,7 +121,7 @@ export function FullscreenPlayer(): ReactNode {
       </header>
 
       {/* Mobile tabs */}
-      <nav className="relative z-10 mx-auto mb-2 flex gap-1 rounded-full bg-white/8 p-1 lg:hidden" aria-label="Now playing views">
+      <nav className="g-seg relative z-10 mx-auto mb-2 flex gap-1 rounded-full bg-white/8 p-1 lg:hidden" aria-label="Now playing views">
         {(['player', 'lyrics', 'queue'] as MobileTab[]).map((t) => (
           <button
             key={t}
@@ -165,7 +165,7 @@ export function FullscreenPlayer(): ReactNode {
               <LikeButton trackId={track.id} serverValue={track.liked} size="md" />
             </div>
           </div>
-          <div className={cx('mt-5 w-full max-w-[520px] transition-opacity duration-500', idle && 'lg:opacity-60')}>
+          <div className={cx('g-ctl mt-5 w-full max-w-[520px] transition-opacity duration-500', idle && 'lg:opacity-60')}>
             <SeekBar />
             <div className="mt-3 flex justify-center">
               <TransportControls size="lg" />
@@ -193,7 +193,7 @@ export function FullscreenPlayer(): ReactNode {
           <div className="min-h-0 min-w-0 flex-1">
             {(tab === 'lyrics' || (tab === 'player' && sidePane === 'lyrics')) && <LyricsView track={track} size="lg" />}
             {(tab === 'queue' || (tab === 'player' && sidePane === 'queue')) && (
-              <div className="h-full rounded-2xl bg-black/20 pt-2 backdrop-blur-md">
+              <div className="g-fs-panel h-full rounded-2xl bg-black/20 pt-2 backdrop-blur-md">
                 <QueuePanel />
               </div>
             )}

@@ -62,7 +62,7 @@ export function Sidebar(): ReactNode {
   const playlists = useResource('library:playlists:sidebar', (signal) => api.libraryPlaylists(0, 50, signal))
   return (
     <aside className="hidden w-[248px] shrink-0 flex-col gap-2 p-2 pr-0 md:flex" aria-label="Main navigation">
-      <nav className="rounded-2xl bg-ink-900 p-3">
+      <nav className="g-panel rounded-2xl bg-ink-900 p-3">
         <div className="mb-3 flex items-center gap-2.5 px-2 pt-1">
           <Logo />
           <span className="text-lg font-bold tracking-tight">Nocturne</span>
@@ -85,7 +85,7 @@ export function Sidebar(): ReactNode {
           )
         })}
       </nav>
-      <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-ink-900 py-3">
+      <div className="g-panel flex min-h-0 flex-1 flex-col rounded-2xl bg-ink-900 py-3">
         <p className="px-5 pb-2 text-xs font-semibold tracking-wide text-fg-subtle uppercase">Playlists</p>
         <div className="min-h-0 flex-1 overflow-y-auto px-2">
           <button
@@ -130,7 +130,7 @@ export function TopBar({ children, solid }: { children?: ReactNode; solid?: bool
   const admin = useSession(isAdmin)
   const { menu, open, close } = useMenu()
   return (
-    <div className={cx('safe-top sticky top-0 z-20 flex min-h-16 items-center gap-3 px-4 transition-colors md:px-6', solid ? 'bg-ink-900/90 backdrop-blur-xl' : 'bg-transparent')}>
+    <div className={cx('safe-top sticky top-0 z-20 flex min-h-16 items-center gap-3 px-4 transition-colors md:px-6', solid ? 'g-top bg-ink-900/90 backdrop-blur-xl' : 'bg-transparent')}>
       <div className="hidden gap-2 md:flex">
         <IconButton label="Go back" onClick={back} disabled={!canBack} className="bg-black/40">
           <ChevronLeft className="h-5 w-5" />
@@ -177,7 +177,7 @@ export function MobileNav(): ReactNode {
   const route = useNav((s) => s.route)
   const go = useNav((s) => s.go)
   return (
-    <nav className="app-chrome-fade safe-bottom flex shrink-0 justify-around bg-gradient-to-t from-ink-950 via-ink-950/95 to-ink-950/80 pt-1 md:hidden" aria-label="Main navigation">
+    <nav className="app-chrome-fade g-nav safe-bottom flex shrink-0 justify-around bg-gradient-to-t from-ink-950 via-ink-950/95 to-ink-950/80 pt-1 md:hidden" aria-label="Main navigation">
       {NAV.map(({ route: r, label, icon: Icon }) => {
         const active = isActive(route, r)
         return (
@@ -206,8 +206,8 @@ export function Toasts(): ReactNode {
           <div
             key={t.id}
             className={cx(
-              'fade-up pointer-events-auto flex max-w-md items-center gap-1 rounded-lg py-1 pr-1 pl-4 text-sm font-medium shadow-2xl shadow-black/50',
-              t.tone === 'error' ? 'bg-[#3a1d22] text-[#ffd5d5]' : 'bg-fg text-ink-950'
+              'fade-up g-toast pointer-events-auto flex max-w-md items-center gap-1 rounded-lg py-1 pr-1 pl-4 text-sm font-medium shadow-2xl shadow-black/50',
+              t.tone === 'error' ? 'g-toast-error bg-[#3a1d22] text-[#ffd5d5]' : 'bg-fg text-ink-950'
             )}
           >
             <button type="button" onClick={() => dismiss(t.id)} className="min-w-0 py-1.5 text-left">
@@ -230,8 +230,8 @@ export function Toasts(): ReactNode {
             key={t.id}
             onClick={() => dismiss(t.id)}
             className={cx(
-              'fade-up pointer-events-auto max-w-md rounded-lg px-4 py-2.5 text-sm font-medium shadow-2xl shadow-black/50',
-              t.tone === 'error' ? 'bg-[#3a1d22] text-[#ffd5d5]' : 'bg-fg text-ink-950'
+              'fade-up g-toast pointer-events-auto max-w-md rounded-lg px-4 py-2.5 text-sm font-medium shadow-2xl shadow-black/50',
+              t.tone === 'error' ? 'g-toast-error bg-[#3a1d22] text-[#ffd5d5]' : 'bg-fg text-ink-950'
             )}
           >
             {t.message}

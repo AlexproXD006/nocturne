@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const svc = vi.hoisted(() => ({
-  platform: { kind: 'desktop' as 'desktop' | 'android' | 'web', hostedOrigin: null as string | null },
+  platform: { kind: 'desktop' as 'desktop' | 'android' | 'ios' | 'web', hostedOrigin: null as string | null },
   checkUpdate: vi.fn(),
   session: { session: { serverUrl: 'https://music.example.com' } as { serverUrl: string } | null, lastServerUrl: '' }
 }))
@@ -27,6 +27,9 @@ describe('targetPlatform', () => {
     svc.platform.kind = 'android'
     expect(targetPlatform('1.0.0')).toBe('android')
     expect(targetPlatform('1.0.1-beta.2')).toBe('android-beta')
+    svc.platform.kind = 'ios'
+    expect(targetPlatform('1.0.0')).toBe('ios')
+    expect(targetPlatform('1.1.0-beta.1')).toBe('ios-beta')
     svc.platform.kind = 'web'
     expect(targetPlatform('1.0.0')).toBeNull()
     svc.platform.kind = 'desktop'

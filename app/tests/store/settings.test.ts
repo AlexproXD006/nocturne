@@ -181,6 +181,56 @@ describe('adaptive settings', () => {
   })
 })
 
+describe('Midnight Glass default theme (1.1.0)', () => {
+  const MIG = 'nocturne.theme-migrated.v110'
+  const load = async () => {
+    vi.resetModules()
+    const mod = await import('@/store/settings')
+    return mod
+  }
+
+  it('is the default for new installs', async () => {
+    expect(DEFAULT_SETTINGS.theme).toBe('glass')
+    const mod = await load()
+    expect(mod.useSettings.getState().theme).toBe('glass')
+    vi.resetModules()
+  })
+
+  it('moves an old saved Dark (the previous default) to Midnight Glass once and persists it', async () => {
+    localStorage.setItem(KEY, JSON.stringify({ theme: 'dark', volume: 0.3 }))
+    const mod = await load()
+    expect(mod.useSettings.getState().theme).toBe('glass')
+    expect(mod.useSettings.getState().volume).toBe(0.3)
+    expect(JSON.parse(localStorage.getItem(KEY)!).theme).toBe('glass')
+    expect(localStorage.getItem(MIG)).toBe('true')
+    vi.resetModules()
+  })
+
+  it('keeps explicit non-default themes untouched', async () => {
+    for (const theme of ['adaptive', 'nord', 'oled']) {
+      localStorage.clear()
+      localStorage.setItem(KEY, JSON.stringify({ theme }))
+      const mod = await load()
+      expect(mod.useSettings.getState().theme).toBe(theme)
+    }
+    vi.resetModules()
+  })
+
+  it('respects choosing Dark again after the migration ran', async () => {
+    localStorage.setItem(MIG, 'true')
+    localStorage.setItem(KEY, JSON.stringify({ theme: 'dark' }))
+    const mod = await load()
+    expect(mod.useSettings.getState().theme).toBe('dark')
+    vi.resetModules()
+  })
+
+  it('keeps every legacy theme selectable', async () => {
+    const { THEMES } = await load()
+    expect(THEMES.map((t) => t.id)).toEqual(expect.arrayContaining(['glass', 'dark', 'adaptive', 'oled', 'dim', 'midnight', 'gruvbox']))
+    vi.resetModules()
+  })
+})
+
 describe('prefersReducedMotion', () => {
   it('"reduced" and "full" ignore the OS setting', () => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))

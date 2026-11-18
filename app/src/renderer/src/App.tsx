@@ -9,7 +9,7 @@ import { resources } from './lib/resource'
 import { pickImage } from './lib/url'
 import { usePalette } from './hooks/useAccent'
 import { useAdaptiveRoot } from './hooks/useAdaptive'
-import { FALLBACK_ACCENT, paletteAccent } from './lib/color'
+import { FALLBACK_ACCENT, paletteAccent, type Rgb } from './lib/color'
 import { useMediaSession } from './hooks/useMediaSession'
 import { useShortcuts } from './hooks/useShortcuts'
 import { useTheme } from './hooks/useTheme'
@@ -36,6 +36,9 @@ import { PlaylistPage } from './pages/Playlist'
 import { SearchPage } from './pages/Search'
 import { SettingsPage } from './pages/Settings'
 import { StatsPage } from './pages/Stats'
+
+/** Ice blue: Midnight Glass's idle accent before a cover colour is known. */
+const GLASS_ACCENT: Rgb = { r: 143, g: 180, b: 255 }
 
 class RouteBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   override state = { error: null as Error | null }
@@ -99,7 +102,7 @@ function SidePanel(): ReactNode {
   return (
     <aside
       aria-label={panel === 'queue' ? 'Queue' : 'Lyrics'}
-      className="app-main fade-up m-2 ml-0 hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-2xl bg-ink-900 md:flex"
+      className="app-main g-side fade-up m-2 ml-0 hidden w-[340px] shrink-0 flex-col overflow-hidden rounded-2xl bg-ink-900 md:flex"
     >
       <div className="flex h-14 shrink-0 items-center justify-between pr-2 pl-5">
         <h2 className="text-base font-bold tracking-tight">{panel === 'queue' ? 'Queue' : 'Lyrics'}</h2>
@@ -123,7 +126,9 @@ function useGlobalAccent(): void {
   const artwork = useNowTrack()?.artwork
   const palette = usePalette(pickImage(artwork, 120))
   const source = useSettings((s) => s.adaptive.accentSource)
-  const accent = paletteAccent(palette, source) ?? FALLBACK_ACCENT
+  const glass = useSettings((s) => s.theme === 'glass')
+  // Midnight Glass idles on the ice-blue accent until a cover colour is available.
+  const accent = paletteAccent(palette, source) ?? (glass ? GLASS_ACCENT : FALLBACK_ACCENT)
   // The Adaptive theme always derives its accent from the cover.
   const fixed = useSettings((s) => (s.theme === 'adaptive' ? null : accentRgb(s.accent)))
   const value = fixed ?? `${accent.r} ${accent.g} ${accent.b}`

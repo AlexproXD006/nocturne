@@ -165,7 +165,7 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
   return createPortal(
     <div
       className={cx(
-        'fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4',
+        'g-scrim fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4',
         !reduced && (closing ? 'overlay-fade-out' : 'overlay-fade')
       )}
       onMouseDown={(e) => {
@@ -177,7 +177,7 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
         aria-modal="true"
         aria-label="Share lyrics as image"
         className={cx(
-          'flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-line bg-ink-850 pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-black/70 sm:max-w-md sm:rounded-2xl sm:pb-0',
+          'g-pop g-sheet flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-line bg-ink-850 pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-black/70 sm:max-w-md sm:rounded-2xl sm:pb-0',
           !reduced && (closing ? 'modal-pop-out' : 'modal-pop')
         )}
       >

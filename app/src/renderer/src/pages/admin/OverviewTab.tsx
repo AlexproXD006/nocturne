@@ -12,7 +12,7 @@ import { Button, Card, ProgressBar, useTick } from './ui'
 
 function Tile({ icon, label, value }: { icon: ReactNode; label: string; value: number }): ReactNode {
   return (
-    <div className="fade-up rounded-2xl bg-ink-850 p-4">
+    <div className="g-card fade-up rounded-2xl bg-ink-850 p-4">
       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-fg-muted [&>svg]:h-4 [&>svg]:w-4" aria-hidden>
         {icon}
       </span>
