@@ -94,6 +94,8 @@ export interface PlayerDeps {
   native?: NativePlayer
   /** Called with every position/duration the native service reports (keeps the engine facade in sync). */
   onNativeTime?(position: number, duration: number): void
+  /** Called when the service starts/stops actually playing (drives the local interpolated clock). */
+  onNativePlaying?(playing: boolean): void
   /** "Autoplay similar songs" setting. Autoplay is off when this is missing. */
   getAutoplay?(): boolean
   /** Library songs similar to `seedId`, skipping `exclude`. Rejections are ignored (Autoplay is best effort). */
@@ -664,6 +666,8 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
           })
       nativeSig = uidSig(queue)
       const item = Q.currentItem(queue)
+      deps.onNativeTime?.(snap.position, item?.track.duration ?? 0)
+      deps.onNativePlaying?.(snap.playing)
       store.setState({
         queue,
         status: snap.playing ? 'playing' : 'paused',
@@ -677,6 +681,7 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
       const s = store.getState()
       switch (e.type) {
         case 'state':
+          deps.onNativePlaying?.(e.status === 'playing')
           if (e.status === 'playing') store.setState({ status: 'playing', error: null })
           else if (e.status === 'buffering') store.setState({ status: 'buffering' })
           else if (e.status === 'paused') store.setState({ status: 'paused' })
@@ -705,6 +710,7 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
           const i = s.queue.items.findIndex((it) => it.uid === e.uid)
           if (i < 0 || i === s.queue.index) return
           const item = s.queue.items[i]!
+          deps.onNativeTime?.(0, item.track.duration)
           store.setState({
             queue: { ...s.queue, index: i },
             position: 0,

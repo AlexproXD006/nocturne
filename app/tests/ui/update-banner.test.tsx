@@ -56,3 +56,22 @@ describe('UpdateBanner + notification tap', () => {
     expect(document.documentElement.hasAttribute('data-update-banner')).toBe(false)
   })
 })
+
+describe.each(['dark', 'oled', 'glass', 'adaptive', 'midnight'])('UpdateBanner under theme %s', (theme) => {
+  it('shows the text and the install / dismiss buttons, above the shell backdrop, and leaves no band after dismissing', async () => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.removeItem('nocturne.update.dismissed')
+    render(<UpdateBanner />)
+    expect(screen.getByText('New version 9.0.0 available')).toBeVisible()
+    expect(screen.getByRole('button', { name: /Install/ })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Dismiss update' })).toBeVisible()
+    // Must stack above the fixed full-viewport backdrop inside the (isolated) shell that follows it.
+    const cls = screen.getByTestId('update-banner').className
+    expect(cls).toContain('relative')
+    expect(cls).toContain('z-20')
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss update' }))
+    expect(screen.queryByTestId('update-banner')).toBeNull()
+    expect(document.documentElement.hasAttribute('data-update-banner')).toBe(false)
+    document.documentElement.removeAttribute('data-theme')
+  })
+})

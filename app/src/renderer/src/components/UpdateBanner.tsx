@@ -49,7 +49,7 @@ export function UpdateBanner(): ReactNode {
   }
 
   return (
-    <div className="update-banner shrink-0 px-3 pb-2 pt-2" role="status" data-testid="update-banner">
+    <div className="update-banner relative z-20 shrink-0 px-3 pb-2 pt-2" role="status" data-testid="update-banner">
       <BannerFlag />
       <div className="update-pill flex min-h-12 items-center gap-2 rounded-full border border-line bg-ink-900/90 py-1.5 pl-4 pr-1.5 text-sm shadow-lg">
         <p className="min-w-0 flex-1 text-[13px] leading-tight">

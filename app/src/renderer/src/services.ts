@@ -44,6 +44,11 @@ export function getEngine(): AudioEngine | null {
   return engineRef
 }
 
+/** Android: the engine facade whose `currentTime` is interpolated between the service's position reports. */
+export function getNativeClock(): { currentTime: number } | null {
+  return nativeEngine
+}
+
 /** Durable queue of play reports: a play is not lost when the app is killed or offline. */
 export const playQueue = createPlayQueue({
   owner: () => useSession.getState().session?.user.id ?? '',
@@ -61,6 +66,7 @@ let nativeEngine: NativeEngine | null = null
 export const usePlayer = createPlayerStore({
   native: nativePlayer ?? undefined,
   onNativeTime: (position, duration) => nativeEngine?.mirror(position, duration),
+  onNativePlaying: (playing) => nativeEngine?.setPlaying(playing),
   createEngine: (events) => {
     if (nativePlayer) return (nativeEngine = new NativeEngine(nativePlayer))
     return (engineRef = new AudioEngine(events))

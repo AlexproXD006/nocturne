@@ -288,13 +288,15 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
   }
 
   return (
-    <div className={cx('relative h-full', reduced && 'lyrics-reduced')}>
+    <div className={cx('relative flex h-full flex-col', reduced && 'lyrics-reduced')}>
+    {/* Reserved strip for the overlay controls (offset pill, share): lines never scroll under it. */}
+    <div className="h-14 shrink-0" aria-hidden data-testid="lyrics-controls-strip" />
     <div
       ref={containerRef}
       onWheel={() => (userScrollUntil.current = Date.now() + 3500)}
       onTouchMove={() => (userScrollUntil.current = Date.now() + 3500)}
-      className="hide-scrollbar relative h-full overflow-y-auto overscroll-contain"
-      style={{ maskImage: 'linear-gradient(transparent, #000 12%, #000 80%, transparent)' }}
+      className="hide-scrollbar relative min-h-0 flex-1 overflow-y-auto overscroll-contain"
+      style={{ maskImage: 'linear-gradient(transparent, #000 10%, #000 80%, transparent)', WebkitMaskImage: 'linear-gradient(transparent, #000 10%, #000 80%, transparent)' }}
     >
       <div className={cx('py-[35vh]', big ? 'px-2' : 'px-5')}>
         {lines.map((line, i) => {
@@ -334,7 +336,7 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
         <div
           role="group"
           aria-label={tr('lyr.offsetGroup')}
-          className="no-drag absolute left-3 top-3 z-20 inline-flex items-center gap-0.5 rounded-full bg-ink-800/70 px-1 py-1 text-xs text-fg-muted shadow-lg shadow-black/30 backdrop-blur"
+          className="no-drag absolute left-3 top-3 z-20 inline-flex items-center gap-0.5 rounded-full bg-ink-800/95 px-1 py-1 text-xs text-fg-muted shadow-lg shadow-black/30 backdrop-blur"
         >
           <button
             type="button"
@@ -363,7 +365,7 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
             title={tr('lyr.resetTitle')}
             disabled={offsetMs === 0}
             onClick={reset}
-            className="h-7 rounded-full px-2 font-semibold transition-colors hover:bg-white/10 hover:text-fg disabled:opacity-35 disabled:hover:bg-transparent"
+            className="h-7 rounded-full px-2 font-semibold text-fg/85 transition-colors hover:bg-white/10 hover:text-fg disabled:text-fg-muted disabled:opacity-80 disabled:hover:bg-transparent"
           >
             {tr('lyr.reset')}
           </button>
@@ -377,7 +379,7 @@ export function LyricsView({ track, size = 'md' }: { track: Track | null; size?:
           aria-label={tr('lyr.shareLabel')}
           title={tr('lyr.share')}
           onClick={startSelecting}
-          className="no-drag absolute right-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full bg-ink-800/70 text-fg-muted shadow-lg shadow-black/30 backdrop-blur transition-colors hover:bg-ink-700/80 hover:text-fg active:scale-95"
+          className="no-drag absolute right-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full bg-ink-800/95 text-fg-muted shadow-lg shadow-black/30 backdrop-blur transition-colors hover:bg-ink-700/80 hover:text-fg active:scale-95"
         >
           <Share2 className="h-5 w-5" />
         </button>

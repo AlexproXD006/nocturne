@@ -247,3 +247,20 @@ describe('session restore and adoption', () => {
     expect(saves.at(-1)).toBeNull()
   })
 })
+
+describe('native clock hooks', () => {
+  it('feeds position, play state and track changes to the local clock', async () => {
+    const f = fakeNative(null)
+    const onNativeTime = vi.fn()
+    const onNativePlaying = vi.fn()
+    const store = createPlayerStore({ native: f.n, createEngine: () => new NativeEngine(f.n), resolveStream: vi.fn(), getCrossfade: () => 0, onNativeTime, onNativePlaying })
+    await store.getState().playTracks(tracks(2), 0)
+    f.fire({ type: 'state', status: 'playing' })
+    expect(onNativePlaying).toHaveBeenLastCalledWith(true)
+    f.fire({ type: 'state', status: 'buffering' })
+    expect(onNativePlaying).toHaveBeenLastCalledWith(false)
+    onNativeTime.mockClear()
+    f.fire({ type: 'index', uid: store.getState().queue.items[1]!.uid })
+    expect(onNativeTime).toHaveBeenCalledWith(0, expect.any(Number))
+  })
+})

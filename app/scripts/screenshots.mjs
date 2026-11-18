@@ -57,7 +57,7 @@ const heightFor = (w) => HEIGHTS[w] ?? Math.round(w * 2.1)
 const platformFor = (w) => (w >= 1024 ? 'desktop' : 'android')
 // Edge-to-edge Android (StatusBar.setOverlaysWebView(true)) + gesture navigation bar.
 const insetsFor = (w) => (w < 1024 ? { top: 32, bottom: 20 } : null)
-const UPDATE_VERSION = '1.1.0'
+const UPDATE_VERSION = '9.9.9'
 
 // ---- Scenarios ---------------------------------------------------------------------------------
 // `setup` runs in the page (window.__h helpers, see screenshot-runner.cjs). Keep them self-contained.
@@ -218,9 +218,14 @@ add('toast', async (h) => {
   await h.click('Delete track')
   await h.sleep(600)
 })
-add('update-banner', async (h) => {
-  await h.waitFor(() => [...document.querySelectorAll('button')].find((b) => h.norm(b.textContent) === 'Update now'), 10000)
-}, { showUpdate: true })
+const bannerReady = async (h) => {
+  await h.waitFor(() => document.querySelector('[data-testid="update-banner"] button'), 10000)
+  await h.sleep(500)
+}
+add('update-banner', bannerReady, { showUpdate: true })
+for (const theme of ['adaptive', 'glass', 'oled']) {
+  add(`update-banner-${theme}`, bannerReady, { showUpdate: true, settings: { theme } })
+}
 add('login', async (h) => {
   await h.waitFor('css:#username')
 }, { signedOut: true })
