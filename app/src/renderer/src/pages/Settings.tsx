@@ -254,7 +254,7 @@ function UpdatesSection(): ReactNode {
 
 export function SettingsPage(): ReactNode {
   const tr = useT()
-  const { crossfade, visualizer, motion, lyrics, theme, accent, autoplay, update } = useSettings()
+  const { crossfade, visualizer, motion, lyrics, theme, accent, autoplay, lyricsInCar, update } = useSettings()
   const session = useSession((s) => s.session)
   const server = useSession((s) => s.server)
   const lastServerUrl = useSession((s) => s.lastServerUrl)
@@ -273,6 +273,7 @@ export function SettingsPage(): ReactNode {
       <h1 className="mb-6 text-3xl font-extrabold tracking-tight">{tr('set.title')}</h1>
       <div className="max-w-3xl">
         <Section title={tr('set.playback')}>
+          {!platform.nativePlayer && (
           <Row
             label={tr('set.crossfade')}
             htmlFor={fadeId}
@@ -294,9 +295,15 @@ export function SettingsPage(): ReactNode {
               <span className="min-w-16 shrink-0 text-right text-sm whitespace-nowrap text-fg-muted tabular-nums">{crossfade === 0 ? tr('set.gaplessShort') : `${crossfade} s`}</span>
             </div>
           </Row>
+          )}
           <Row label={tr('set.autoplay')} hint={tr('set.autoplayHint')}>
             <Toggle label={tr('set.autoplay')} checked={autoplay} onChange={(v) => update({ autoplay: v })} />
           </Row>
+          {platform.kind === 'android' && (
+            <Row label={tr('set.lyricsInCar')} hint={tr('set.lyricsInCarHint')}>
+              <Toggle label={tr('set.lyricsInCar')} checked={lyricsInCar} onChange={(v) => update({ lyricsInCar: v })} />
+            </Row>
+          )}
         </Section>
 
         <Section title={tr('set.language')}>

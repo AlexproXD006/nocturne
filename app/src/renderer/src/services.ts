@@ -4,6 +4,9 @@ import { createSessionStore } from './store/session'
 import { createPlayerStore } from './store/player'
 import { createConnectStore } from './store/connect'
 import { AudioEngine } from './player/engine'
+import { NativeEngine } from './player/nativeEngine'
+import { useLikes } from './store/likes'
+import type { StoredSession } from './api/client'
 import { LrclibClient } from './lyrics/lrclib'
 import { useSettings } from './store/settings'
 import { useUi } from './store/ui'
@@ -50,8 +53,17 @@ function scrobbleOff(): boolean {
   return useSession.getState().server?.capabilities?.scrobble === false
 }
 
+/** Android: the Media3 service plays (and reports plays); null elsewhere, where <audio> does. */
+const nativePlayer = platform.nativePlayer ?? null
+let nativeEngine: NativeEngine | null = null
+
 export const usePlayer = createPlayerStore({
-  createEngine: (events) => (engineRef = new AudioEngine(events)),
+  native: nativePlayer ?? undefined,
+  onNativeTime: (position, duration) => nativeEngine?.mirror(position, duration),
+  createEngine: (events) => {
+    if (nativePlayer) return (nativeEngine = new NativeEngine(nativePlayer))
+    return (engineRef = new AudioEngine(events))
+  },
   resolveStream: (trackId) => api.stream(trackId),
   reportPlayed: (trackId, seconds, meta) => {
     if (scrobbleOff()) return
@@ -78,7 +90,7 @@ export const usePlayer = createPlayerStore({
 /** Sleep timer (fullscreen player menu): fades out and pauses; see store/sleepTimer.ts. */
 export const useSleepTimer = createSleepTimer({
   player: usePlayer,
-  setOutputVolume: (v) => engineRef?.setVolume(v)
+  setOutputVolume: (v) => (nativePlayer ? nativePlayer.setVolume(v) : engineRef?.setVolume(v))
 })
 // A WebView may throttle timers in the background: re-check the wall-clock deadline when we come back.
 if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
@@ -153,5 +165,51 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
 if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') flushPlays()
+  })
+}
+
+// ---- Android native player (Media3 service, also the Android Auto backend) --------------------------
+
+if (nativePlayer) {
+  // Hand the session to native secure storage so the service can browse and stream with no WebView
+  // (Android Auto cold start, phone locked). Tokens are never logged.
+  const pushAuth = (session: StoredSession | null): void => {
+    nativePlayer.setAuth(
+      session
+        ? { serverUrl: session.serverUrl, accessToken: session.accessToken, refreshToken: session.refreshToken, expiresAt: session.expiresAt, userId: session.user.id }
+        : null
+    )
+  }
+  useSession.subscribe((s, prev) => {
+    if (s.session !== prev.session) pushAuth(s.session)
+  })
+  pushAuth(useSession.getState().session)
+
+  // The service refreshed the (rotating) refresh token while the WebView slept: adopt it.
+  const adoptNativeAuth = (n: { serverUrl: string; accessToken: string; refreshToken: string; expiresAt: number }): void => {
+    const cur = useSession.getState().session
+    if (!cur || cur.serverUrl !== n.serverUrl || n.expiresAt <= cur.expiresAt) return
+    useSession.getState().setSession({ ...cur, accessToken: n.accessToken, refreshToken: n.refreshToken, expiresAt: n.expiresAt })
+  }
+  nativePlayer.on((e) => {
+    if (e.type === 'auth') adoptNativeAuth(e.session)
+    else if (e.type === 'liked') {
+      useLikes.setState((st) => ({ overrides: { ...st.overrides, [e.trackId]: e.liked } }))
+    }
+  })
+  const syncAuthFromNative = (): void => {
+    void nativePlayer.getAuth().then((n) => n && adoptNativeAuth(n))
+  }
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') syncAuthFromNative()
+    })
+  }
+  syncAuthFromNative()
+
+  // "Show current lyric line in the car" (off by default).
+  nativePlayer.setLyricsInCar(useSettings.getState().lyricsInCar)
+  useSettings.subscribe((s, prev) => {
+    if (s.lyricsInCar !== prev.lyricsInCar) nativePlayer.setLyricsInCar(s.lyricsInCar)
   })
 }

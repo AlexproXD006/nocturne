@@ -21,7 +21,7 @@ describe('sanitizeSettings', () => {
 
   it('keeps valid values', () => {
     const valid = { crossfade: 5, visualizer: 'spectrum', motion: 'reduced', lyrics: false, volume: 0.25, muted: true, theme: 'nord', accent: 'blue', deviceName: 'Living room' }
-    expect(sanitizeSettings(valid)).toEqual({ ...valid, adaptive: DEFAULT_SETTINGS.adaptive, language: 'system', autoplay: true })
+    expect(sanitizeSettings(valid)).toEqual({ ...valid, adaptive: DEFAULT_SETTINGS.adaptive, language: 'system', autoplay: true, lyricsInCar: false })
   })
 
   it('defaults language to "system" (migration for settings saved before i18n) and rejects unknown codes', () => {

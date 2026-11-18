@@ -15,21 +15,27 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.common.util.concurrent.ListenableFuture;
+import androidx.media3.common.MediaItem;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
- * JS API ({@code registerPlugin('NocturneMedia')}):
+ * JS API ({@code registerPlugin('NocturneMedia')}), a remote control for the Media3 service
+ * ({@link NocturneMediaService}) that actually plays:
  * <ul>
- *   <li>{@code update(info)}: now-playing snapshot (seconds, see NowPlayingInfo in platform/index.ts).
- *   <li>{@code clear()}: nothing is playing any more; removes the system controls.
- *   <li>event {@code command}: {@code { kind, position? }} with kind one of play, pause, next,
- *       previous, stop, seekTo (position in seconds), like, shuffle, repeat.
+ *   <li>{@code setQueue / play / pause / seek / setVolume / setRepeat / setShuffle / setPauseAtEnd / stop /
+ *       setLiked / setLyricsInCar}: transport and queue.
+ *   <li>{@code setAuth / getAuth}: the session handed to native secure storage.
+ *   <li>{@code getSnapshot}: the native queue (adopted when Android Auto started playback).
+ *   <li>event {@code event}: state, position, index, error, queue, liked, command, auth.
  * </ul>
  *
- * <p>The plugin keeps a {@link MediaController} connected to {@link NocturneMediaService} while
- * something is loaded. That binding creates the service (from the foreground app, which keeps
- * Android 14+ happy) and keeps it alive while paused; Media3 promotes it to a foreground service
- * itself once playback starts.
+ * <p>While the WebView lives the plugin keeps a {@link MediaController} connected: that binding creates
+ * the service (from the foreground app, which keeps Android 14+ happy). The service outlives the activity.
  */
 @CapacitorPlugin(name = "NocturneMedia")
 public class NocturneMediaPlugin extends Plugin {
@@ -39,45 +45,161 @@ public class NocturneMediaPlugin extends Plugin {
 
     @Override
     public void load() {
-        MediaBridge.setCommandSink(this::emitCommand);
-    }
-
-    @PluginMethod
-    public void update(PluginCall call) {
-        final NowPlayingState state = NowPlayingState.fromJson(call.getData());
-        MediaBridge.runOnMain(() -> {
-            MediaBridge.setState(state);
-            if (state != null) ensureConnected();
+        EventHub.setSink(event -> {
+            try {
+                notifyListeners("event", new JSObject(event.toString()));
+            } catch (JSONException e) {
+                Log.w(TAG, "event not delivered");
+            }
         });
-        call.resolve();
-    }
-
-    @PluginMethod
-    public void clear(PluginCall call) {
-        MediaBridge.runOnMain(this::clearOnMain);
-        call.resolve();
     }
 
     @Override
     protected void handleOnDestroy() {
-        // The activity (and with it the WebView that produces the audio) is going away.
-        MediaBridge.setCommandSink(null);
-        MediaBridge.runOnMain(this::clearOnMain);
+        // The WebView is going away; playback continues in the service.
+        EventHub.setSink(null);
+        EventHub.runOnMain(this::releaseController);
         super.handleOnDestroy();
     }
 
-    private void emitCommand(String kind, @Nullable Double positionSeconds) {
-        JSObject data = new JSObject();
-        data.put("kind", kind);
-        if (positionSeconds != null && !positionSeconds.isNaN() && !positionSeconds.isInfinite()) {
-            data.put("position", positionSeconds.doubleValue());
+    @PluginMethod
+    public void setQueue(PluginCall call) {
+        JSONArray arr = call.getArray("items");
+        final int index = call.getInt("index", 0);
+        final Boolean play = call.hasOption("play") && !call.getData().isNull("play") ? call.getBoolean("play", true) : null;
+        final long startMs = (long) (call.getDouble("startAt", 0.0) * 1000);
+        final boolean reset = Boolean.TRUE.equals(call.getBoolean("reset", false));
+        final List<MediaItem> items = new ArrayList<>();
+        if (arr != null) {
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.optJSONObject(i);
+                if (o != null && !o.optString("uid", "").isEmpty() && !o.optString("trackId", "").isEmpty()) {
+                    items.add(NocturneMediaService.itemFromJs(o));
+                }
+            }
         }
-        notifyListeners("command", data);
+        if (!items.isEmpty()) {
+            EventHub.runOnMain(this::ensureConnected);
+            EventHub.withService(s -> s.cmdSetQueue(items, index, play, startMs, reset));
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void play(PluginCall call) {
+        EventHub.runOnMain(this::ensureConnected);
+        EventHub.withService(NocturneMediaService::cmdPlay);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void pause(PluginCall call) {
+        if (EventHub.serviceAlive()) EventHub.withService(NocturneMediaService::cmdPause);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void seek(PluginCall call) {
+        final double position = call.getDouble("position", 0.0);
+        if (EventHub.serviceAlive()) EventHub.withService(s -> s.cmdSeek(position));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setVolume(PluginCall call) {
+        final double volume = call.getDouble("volume", 1.0);
+        if (EventHub.serviceAlive()) EventHub.withService(s -> s.cmdSetVolume(volume));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setRepeat(PluginCall call) {
+        final String mode = call.getString("mode", "off");
+        if (EventHub.serviceAlive()) EventHub.withService(s -> s.cmdSetRepeat(mode));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setShuffle(PluginCall call) {
+        final boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
+        if (EventHub.serviceAlive()) EventHub.withService(s -> s.cmdSetShuffleFlag(on));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setPauseAtEnd(PluginCall call) {
+        final boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
+        if (EventHub.serviceAlive()) EventHub.withService(s -> s.cmdSetPauseAtEnd(on));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void stop(PluginCall call) {
+        if (EventHub.serviceAlive()) {
+            EventHub.withService(NocturneMediaService::cmdStop);
+            EventHub.runOnMain(this::releaseController);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setLiked(PluginCall call) {
+        final String trackId = call.getString("trackId", "");
+        final boolean liked = Boolean.TRUE.equals(call.getBoolean("liked", false));
+        if (EventHub.serviceAlive() && !trackId.isEmpty()) EventHub.withService(s -> s.cmdSetLiked(trackId, liked));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setLyricsInCar(PluginCall call) {
+        final boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        if (EventHub.serviceAlive()) EventHub.withService(s -> s.cmdSetLyricsEnabled(enabled));
+        else LyricsPref.set(getContext(), enabled);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setAuth(PluginCall call) {
+        Context ctx = getContext();
+        if (ctx != null) {
+            JSONObject o = call.getObject("session");
+            NocturneAuth.Session s = o == null ? null : NocturneAuth.Session.fromJson(o);
+            NocturneApi.get(ctx).setSession(s);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getAuth(PluginCall call) {
+        JSObject res = new JSObject();
+        Context ctx = getContext();
+        NocturneAuth.Session s = ctx == null ? null : NocturneApi.get(ctx).session();
+        try {
+            res.put("session", s == null ? JSONObject.NULL : s.toJson());
+        } catch (JSONException e) {
+            res.put("session", JSONObject.NULL);
+        }
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void getSnapshot(PluginCall call) {
+        if (!EventHub.serviceAlive()) {
+            JSObject res = new JSObject();
+            res.put("snapshot", JSONObject.NULL);
+            call.resolve(res);
+            return;
+        }
+        EventHub.withService(s -> {
+            JSObject res = new JSObject();
+            JSONObject snap = s.snapshot();
+            res.put("snapshot", snap == null ? JSONObject.NULL : snap);
+            call.resolve(res);
+        });
     }
 
     @MainThread
-    private void clearOnMain() {
-        MediaBridge.setState(null);
+    private void releaseController() {
         ListenableFuture<MediaController> f = controllerFuture;
         controllerFuture = null;
         if (f != null) {
@@ -104,7 +226,7 @@ public class NocturneMediaPlugin extends Plugin {
                 .setListener(new MediaController.Listener() {
                     @Override
                     public void onDisconnected(MediaController controller) {
-                        // Service died or was stopped: reconnect on the next update().
+                        // Service died or was stopped: reconnect on the next command.
                         if (controllerFuture == self.get()) controllerFuture = null;
                     }
                 })

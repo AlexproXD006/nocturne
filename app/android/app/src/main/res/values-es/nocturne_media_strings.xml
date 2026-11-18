@@ -9,4 +9,11 @@
     <string name="nocturne_media_repeat_off">Repetir desactivado</string>
     <string name="nocturne_media_repeat_all">Repetir todo</string>
     <string name="nocturne_media_repeat_one">Repetir una</string>
+    <string name="nocturne_media_error">No se pudo reproducir esta canción</string>
+    <string name="nocturne_auto_mixes">Hecho para ti</string>
+    <string name="nocturne_auto_playlists">Playlists</string>
+    <string name="nocturne_auto_liked">Me gusta</string>
+    <string name="nocturne_auto_recent">Recientes</string>
+    <string name="nocturne_auto_albums">Álbumes</string>
+    <string name="nocturne_auto_artists">Artistas</string>
 </resources>

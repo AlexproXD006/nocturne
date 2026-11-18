@@ -3,6 +3,9 @@ import type { StreamInfo, Track } from '../api/types'
 import { describeError } from '../api/errors'
 import * as Q from '../player/queue'
 import { newPlayId, PERSIST_EVERY_S } from '../lib/playQueue'
+import type { NativePlayer, NativePlayerEvent, NativeQueueItem, NativeSnapshot } from '../platform/nativePlayerTypes'
+import { artistNames } from '../lib/format'
+import { pickImage } from '../lib/url'
 
 /** The subset of AudioEngine the store relies on (lets tests use a fake). */
 export interface PlaybackEngine {
@@ -83,6 +86,13 @@ export interface PlayerDeps {
   /** The listen ended without counting as a play: forget its persisted entry. */
   dropListen?(playId: string): void
   getCrossfade(): number
+  /**
+   * Android: the Media3 service plays the queue (and reports plays itself). The store keeps the queue
+   * model and mirrors the service's state; crossfade is not applied on this path.
+   */
+  native?: NativePlayer
+  /** Called with every position/duration the native service reports (keeps the engine facade in sync). */
+  onNativeTime?(position: number, duration: number): void
   /** "Autoplay similar songs" setting. Autoplay is off when this is missing. */
   getAutoplay?(): boolean
   /** Library songs similar to `seedId`, skipping `exclude`. Rejections are ignored (Autoplay is best effort). */
@@ -100,6 +110,35 @@ const URL_SAFETY_MS = 60_000
 const RESTART_THRESHOLD = 3
 /** Ids sent as `exclude` to the radio endpoint (most recent queue entries). */
 const AUTOPLAY_EXCLUDE = 100
+
+/** The queue as sent to the native service. */
+export function toNativeItems(q: Q.QueueState): NativeQueueItem[] {
+  return q.items.map((it) => ({
+    uid: it.uid,
+    trackId: it.track.id,
+    title: it.track.title,
+    artist: artistNames(it.track.artists),
+    album: it.track.album?.title ?? '',
+    artworkUrl: pickImage(it.track.artwork, 512) ?? '',
+    duration: it.track.duration
+  }))
+}
+
+/** Rebuilds a Track from a native queue entry (the full JSON when native has it, else the basics). */
+export function trackFromNative(it: NativeSnapshot['items'][number]): Track {
+  const raw = it.track as Partial<Track> | undefined
+  if (raw && typeof raw === 'object' && typeof raw.id === 'string' && Array.isArray(raw.artists)) return raw as Track
+  return {
+    id: it.trackId,
+    title: it.title,
+    artists: it.artist ? it.artist.split(', ').map((name) => ({ id: '', name })) : [],
+    album: it.album ? { id: '', title: it.album } : null,
+    duration: it.duration,
+    artwork: it.artworkUrl ? [{ url: it.artworkUrl }] : []
+  }
+}
+
+const uidSig = (q: Q.QueueState): string => q.items.map((it) => it.uid).join(',')
 
 export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<PlayerState>> {
   const now = deps.now ?? Date.now
@@ -138,7 +177,7 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
    */
   function reportIfListened(): void {
     const p = played
-    if (!p.trackId || p.reported || !deps.reportPlayed) return
+    if (deps.native || !p.trackId || p.reported || !deps.reportPlayed) return
     const dur = p.dur
     if (p.seconds >= 30 || (dur > 0 && p.seconds >= dur * 0.5)) {
       p.reported = true
@@ -209,6 +248,9 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     }
   }
 
+  const native = deps.native ?? null
+  /** Signature of the queue last sent to (or received from) the native service. */
+  let nativeSig = ''
   let lastTimeSet = 0
   const engine = deps.createEngine({
     onTime(c, d) {
@@ -280,6 +322,14 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     }
     reportIfListened()
     store.setState({ status: 'loading', position: opts.startAt ?? 0, duration: item.track.duration, error: null })
+    if (native) {
+      const q = store.getState().queue
+      nativeSig = uidSig(q)
+      native.setQueue(toNativeItems(q), q.index, { play: opts.autoplay !== false, startAt: opts.startAt ?? 0, reset: true })
+      if (opts.autoplay === false) store.setState({ status: 'paused' })
+      void ensureAutoplay()
+      return
+    }
     try {
       const url = await resolveUrl(item.track.id, opts.forceUrl)
       // The user may have skipped again while we were resolving.
@@ -494,7 +544,10 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     },
 
     setSleepAfterTrack(on) {
-      if (get().sleepAfterTrack !== on) set({ sleepAfterTrack: on })
+      if (get().sleepAfterTrack !== on) {
+        set({ sleepAfterTrack: on })
+        native?.setPauseAtEnd(on)
+      }
     },
 
     clearAutoplay() {
@@ -506,9 +559,116 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
       forgetListen()
       played = newListen('', '', 0, 0)
       engine.stop()
+      nativeSig = ''
       set({ queue: { ...Q.emptyQueue, repeat: get().queue.repeat, shuffle: get().queue.shuffle }, status: 'idle', position: 0, duration: 0, error: null, sleepAfterTrack: false })
     }
   }))
+
+  if (native) wireNative(native)
+
+  /** Mirrors the Media3 service into the store and keeps the native queue in step with the store's. */
+  function wireNative(n: NativePlayer): void {
+    let flushScheduled = false
+    store.subscribe((s, prev) => {
+      if (s.queue.repeat !== prev.queue.repeat) n.setRepeat(s.queue.repeat)
+      if (s.queue.shuffle !== prev.queue.shuffle) n.setShuffle(s.queue.shuffle)
+      if (s.queue.items === prev.queue.items || flushScheduled) return
+      flushScheduled = true
+      // Deferred a microtask so an action that starts playback (startCurrent) syncs the queue itself first.
+      queueMicrotask(() => {
+        flushScheduled = false
+        const q = store.getState().queue
+        if (q.items.length === 0 || uidSig(q) === nativeSig) return
+        nativeSig = uidSig(q)
+        n.setQueue(toNativeItems(q), q.index)
+      })
+    })
+    n.setRepeat(store.getState().queue.repeat)
+    n.setShuffle(store.getState().queue.shuffle)
+
+    const adopt = (snap: NativeSnapshot): void => {
+      const uids = snap.items.map((i) => i.uid)
+      let k = 0
+      const queue = Q.createQueue(snap.items.map(trackFromNative), snap.index, {
+        repeat: snap.repeat,
+        uid: () => uids[k++] ?? Q.makeUid(),
+        context: snap.contextName ? { type: 'tracks', name: snap.contextName } : null
+      })
+      nativeSig = uidSig(queue)
+      const item = Q.currentItem(queue)
+      store.setState({
+        queue,
+        status: snap.playing ? 'playing' : 'paused',
+        position: snap.position,
+        duration: item?.track.duration ?? 0,
+        error: null
+      })
+    }
+
+    const handle = (e: NativePlayerEvent): void => {
+      const s = store.getState()
+      switch (e.type) {
+        case 'state':
+          if (e.status === 'playing') store.setState({ status: 'playing', error: null })
+          else if (e.status === 'buffering') store.setState({ status: 'buffering' })
+          else if (e.status === 'paused') store.setState({ status: 'paused' })
+          else if (e.status === 'ended') {
+            void (async () => {
+              if (await ensureAutoplay()) {
+                const nextQ = Q.advance(store.getState().queue, false)
+                if (nextQ) {
+                  store.setState({ queue: nextQ })
+                  await startCurrent()
+                  return
+                }
+              }
+              store.setState({ status: 'paused', position: 0 })
+            })()
+          }
+          return
+        case 'position': {
+          deps.onNativeTime?.(e.position, e.duration)
+          if (Math.abs(e.position - s.position) >= 0.25 || (e.duration > 0 && e.duration !== s.duration)) {
+            store.setState({ position: e.position, duration: e.duration > 0 ? e.duration : s.duration })
+          }
+          return
+        }
+        case 'index': {
+          const i = s.queue.items.findIndex((it) => it.uid === e.uid)
+          if (i < 0 || i === s.queue.index) return
+          const item = s.queue.items[i]!
+          store.setState({
+            queue: { ...s.queue, index: i },
+            position: 0,
+            duration: item.track.duration,
+            error: null,
+            // "End of track" sleep timer: the service paused right at the boundary.
+            sleepAfterTrack: false
+          })
+          void ensureAutoplay()
+          return
+        }
+        case 'error':
+          store.setState({ status: 'error', error: e.message || null })
+          if (e.message) deps.onError?.(e.message)
+          return
+        case 'queue':
+          adopt(e.snapshot)
+          return
+        case 'command':
+          if (e.kind === 'shuffle') store.getState().setShuffle(!s.queue.shuffle)
+          else store.getState().cycleRepeat()
+          return
+        default:
+      }
+    }
+    n.on(handle)
+
+    // The service may already be playing (Android Auto started it, or the WebView was recreated).
+    void n.getSnapshot().then((snap) => {
+      if (snap && store.getState().queue.items.length === 0) adopt(snap)
+    })
+  }
 
   // Best effort: a listen in progress is reported when the page/app is closed.
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
