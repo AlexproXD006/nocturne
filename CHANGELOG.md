@@ -2,6 +2,34 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.0 — 2026-11-18
+
+**Midnight Glass, iPhone, Nocturne en español y mucho más** · android, windows, linux, ios
+
+### Novedades
+
+- Nuevo diseño Midnight Glass: azul noche y paneles de cristal, con el color de la portada tiñendo el cristal. Es el tema por defecto; los demás siguen disponibles.
+- Nuevo icono de la app.
+- Versión para iPhone y iPad (.ipa para AltStore, SideStore o Sideloadly) con reproducción en segundo plano y controles en la pantalla de bloqueo; fuente de AltStore en nocturne.alexcloudweb.es/altstore.json.
+- La app, en español e inglés (Ajustes → Idioma; por defecto, el del sistema).
+- Mixes «Hecho para ti»: mixes diarios, «Redescubre» y «Lo más escuchado este mes», con opción de guardarlos como playlist.
+- Reproducción automática de canciones parecidas cuando se acaba la cola.
+- Temporizador para dormir con bajada suave del volumen.
+- ListenBrainz: registra tus escuchas en tu perfil (Ajustes → Integraciones).
+- Buscador dentro de playlists, Me gusta, mixes y álbumes.
+- Selección múltiple y acciones masivas: añade a otra playlist (nueva o existente), a la cola o a Me gusta, o quita canciones de golpe.
+- Tirador de desplazamiento rápido en listas largas.
+- Compartir y guardar como imagen el resumen de Estadísticas y la tarjeta de letras en Android, iPhone, escritorio y web.
+
+### Correcciones
+
+- Las escuchas se guardan aunque cierres la app de golpe (sin duplicados).
+- Las descargas ya no se quedan «en cola» para siempre tras reiniciar el servidor.
+- Subidas grandes sin cargar el archivo entero en memoria.
+- El aviso de nueva versión ya no queda cortado bajo la barra de estado.
+- Estadísticas en el móvil: sin desplazamiento lateral, fecha completa y pestañas en una línea.
+- Icono de Android completo en todos los lanzadores.
+
 ## 1.1.0-beta.9 — 2026-11-18
 
 **Ajustes en Estadísticas (beta)** · android, windows, linux, ios
