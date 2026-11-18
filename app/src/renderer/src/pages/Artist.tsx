@@ -11,7 +11,11 @@ import { PageSkeleton } from './Album'
 export function ArtistPage({ id }: { id: string }): ReactNode {
   const res = useResource<ArtistDetail>(`artist:${id}`, (s) => api.artist(id, s))
   const artist = res.data
-  const tint = useTint(artist?.artwork)
+  const heroImages = useMemo(
+    () => (artist?.artwork.length ? artist.artwork : artist?.image ? [{ url: artist.image, width: 1000 }] : []),
+    [artist?.artwork, artist?.image]
+  )
+  const tint = useTint(heroImages)
   const [expanded, setExpanded] = useState(false)
   const [bioOpen, setBioOpen] = useState(false)
   const context = useMemo(() => ({ type: 'artist' as const, id, name: artist?.name ?? '' }), [id, artist?.name])
@@ -32,7 +36,7 @@ export function ArtistPage({ id }: { id: string }): ReactNode {
   return (
     <Page tint={tint}>
       <HeroHeader
-        images={artist.artwork}
+        images={heroImages}
         round
         kind="Artist"
         title={artist.name}

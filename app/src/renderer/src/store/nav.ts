@@ -9,6 +9,7 @@ export type Route =
   | { name: 'playlist'; id: string }
   | { name: 'liked' }
   | { name: 'settings' }
+  | { name: 'stats' }
   | { name: 'admin'; tab?: AdminTab }
 
 export type LibraryTab = 'playlists' | 'albums' | 'artists' | 'songs'

@@ -88,7 +88,7 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
   const now = deps.now ?? Date.now
   const streams = new Map<string, { url: string; expiresAt: number }>()
   const retried = new Set<string>()
-  let played = { uid: '', trackId: '', seconds: 0, last: 0, reported: false }
+  let played = { uid: '', trackId: '', seconds: 0, last: 0, reported: false, dur: 0 }
 
   async function resolveUrl(trackId: string, force = false): Promise<string> {
     const cached = streams.get(trackId)
@@ -100,11 +100,15 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     return info.url
   }
 
+  /**
+   * Reports the play once, with the real listened seconds. Called when a track is left (skip, end,
+   * crossfade, repeat-one loop, stop, page close), never mid-track, so minutes are not undercounted.
+   * A play counts after 30 s or half the track.
+   */
   function reportIfListened(): void {
     const p = played
     if (!p.trackId || p.reported || !deps.reportPlayed) return
-    const item = Q.currentItem(store.getState().queue)
-    const dur = item?.uid === p.uid ? item.track.duration : 0
+    const dur = p.dur
     if (p.seconds >= 30 || (dur > 0 && p.seconds >= dur * 0.5)) {
       p.reported = true
       try {
@@ -118,11 +122,10 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
   function trackPlayback(c: number): void {
     const item = Q.currentItem(store.getState().queue)
     if (!item) return
-    if (played.uid !== item.uid) played = { uid: item.uid, trackId: item.track.id, seconds: 0, last: c, reported: false }
+    if (played.uid !== item.uid) played = { uid: item.uid, trackId: item.track.id, seconds: 0, last: c, reported: false, dur: item.track.duration }
     const delta = c - played.last
     if (delta > 0 && delta < 2) played.seconds += delta
     played.last = c
-    reportIfListened()
   }
 
   let preloadingKey: string | null = null
@@ -234,6 +237,7 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     store.setState({ queue: nextQ })
     if (nextQ.index === s.queue.index) {
       // repeat one
+      reportIfListened()
       engine.seek(0)
       played.reported = false
       played.seconds = 0
@@ -408,5 +412,9 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     }
   }))
 
+  // Best effort: a listen in progress is reported when the page/app is closed.
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('pagehide', () => reportIfListened())
+  }
   return store
 }

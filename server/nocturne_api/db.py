@@ -316,6 +316,18 @@ _MIGRATIONS: list[tuple[int, str]] = [
         DROP TABLE v1_lyrics;
         ALTER TABLE v1_lyrics_new RENAME TO v1_lyrics;
     """),
+    (9, """
+        -- Artist photos (Deezer) cache; found=0 rows are negative-cache entries.
+        CREATE TABLE IF NOT EXISTS v1_artist_images (
+            artist_id  TEXT PRIMARY KEY,
+            name       TEXT NOT NULL,
+            url        TEXT,
+            found      INTEGER NOT NULL DEFAULT 0,
+            fetched_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_v1_plays_user_time
+            ON v1_plays(user_id, played_at);
+    """),
 ]
 
 def migrate() -> None:

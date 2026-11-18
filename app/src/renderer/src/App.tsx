@@ -35,6 +35,7 @@ import { Login } from './pages/Login'
 import { PlaylistPage } from './pages/Playlist'
 import { SearchPage } from './pages/Search'
 import { SettingsPage } from './pages/Settings'
+import { StatsPage } from './pages/Stats'
 
 class RouteBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   override state = { error: null as Error | null }
@@ -81,6 +82,8 @@ function RouteView({ route, index }: { route: Route; index: number }): ReactNode
       return <PlaylistPage key={route.id} id={route.id} />
     case 'liked':
       return <LikedPage />
+    case 'stats':
+      return <StatsPage />
     case 'settings':
       return <SettingsPage />
     case 'admin':

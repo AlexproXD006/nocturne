@@ -6,8 +6,7 @@ from __future__ import annotations
 
 import sys
 import os
-# NOVA backend modules (database, downloader, ...) live in <server root>/backend.
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend"))
+sys.path.insert(0, "/opt/music-server/backend")
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -16,6 +15,8 @@ from typing import Optional
 from .auth import require_user
 from .mapping import track_to_wire, album_to_wire, artist_to_wire, playlist_to_wire, _parse_artists
 from .db import connect
+
+from .artist_images import get_artist_image
 
 import database as nova_db  # NOVA's database module
 
@@ -221,6 +222,7 @@ async def get_artist(artist_id: str, account: dict = Depends(require_user)):
         "id": artist_id,
         "name": name,
         "artwork": [],
+        "image": await get_artist_image(name),
         "topTracks": [track_to_wire(t, liked=t["id"] in liked) for t in top_tracks],
         "albums": artist_albums,
     }

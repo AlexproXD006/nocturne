@@ -1,6 +1,9 @@
 import { ApiError } from './errors'
 import { buildUrl } from '../lib/url'
 import type {
+  StatsHistory,
+  StatsRange,
+  StatsSummary,
   AlbumDetail,
   Album,
   Artist,
@@ -383,6 +386,16 @@ export class ApiClient {
 
   artist(id: string, signal?: AbortSignal): Promise<ArtistDetail> {
     return this.request('GET', `/v1/artists/${encodeURIComponent(id)}`, { signal })
+  }
+
+  /** Listening stats for a period; `offset` counts periods back (0 = current). */
+  statsSummary(range: StatsRange, offset = 0, limit = 10, signal?: AbortSignal): Promise<StatsSummary> {
+    return this.request('GET', '/v1/stats/summary', { signal, query: { range, offset, limit } })
+  }
+
+  /** Minutes per week/month, oldest first, ending with the current period. */
+  statsHistory(period: 'week' | 'month' = 'week', count = 26, signal?: AbortSignal): Promise<StatsHistory> {
+    return this.request('GET', '/v1/stats/history', { signal, query: { period, count } })
   }
 
   playlist(id: string, signal?: AbortSignal): Promise<PlaylistDetail> {

@@ -136,6 +136,7 @@ def artist_to_wire(name: str, track_count: Optional[int] = None) -> dict:
         "id": ensure_artist(name),
         "name": name,
         "artwork": [],
+        "image": None,
     }
     return obj
 

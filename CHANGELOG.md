@@ -2,6 +2,21 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.0.9 — 2026-11-18
+
+**Estadísticas y recaps** · web, android, windows, linux
+
+### Novedades
+
+- Nueva página Stats: minutos escuchados por semana, mes, año o desde siempre, con comparación con el periodo anterior e historial en gráfica.
+- Top canciones, artistas y álbumes con veces escuchadas y minutos.
+- Recap para compartir (semana, mes o año) con tus minutos, el top 5 de artistas con foto y tu canción más escuchada.
+- Fotos de artistas (Deezer) en las páginas de artista.
+
+### Correcciones
+
+- Las escuchas se registran con los segundos reales escuchados (antes contaban siempre unos 30 s).
+
 ## 1.0.8 — 2026-11-18
 
 **Ajuste de letras y edición de letras en Admin** · web, android, windows, linux

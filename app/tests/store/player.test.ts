@@ -871,18 +871,24 @@ describe('scrobbling', () => {
     for (let t = from; t <= to; t++) c.engine.events.onTime(t, duration)
   }
 
-  it('reports after 30 seconds of continuous playback', async () => {
+  it('reports after 30 seconds of continuous playback, when the track is left', async () => {
     const c = await playing(2)
     tick(c, 0, 29)
+    await c.s().next()
     expect(c.reportPlayed).not.toHaveBeenCalled()
-    tick(c, 30, 30)
-    expect(c.reportPlayed).toHaveBeenCalledExactlyOnceWith('t0', 30)
+    const d = await playing(2)
+    tick(d, 0, 30)
+    expect(d.reportPlayed).not.toHaveBeenCalled() // not mid-track
+    await d.s().next()
+    expect(d.reportPlayed).toHaveBeenCalledExactlyOnceWith('t0', 30)
   })
 
-  it('reports only once per play', async () => {
+  it('reports the real listened seconds, once, at the end of the track', async () => {
     const c = await playing(2)
-    tick(c, 0, 90)
-    expect(c.reportPlayed).toHaveBeenCalledTimes(1)
+    tick(c, 0, 199)
+    c.engine.events.onEnded()
+    await flush(20)
+    expect(c.reportPlayed).toHaveBeenCalledExactlyOnceWith('t0', 199)
   })
 
   it('does not count seeks / jumps as listened time', async () => {
@@ -890,9 +896,14 @@ describe('scrobbling', () => {
     tick(c, 0, 10)
     c.engine.events.onTime(100, 200) // jump
     tick(c, 101, 118)
+    c.s().stop()
     expect(c.reportPlayed).not.toHaveBeenCalled() // only ~29s of real listening
-    tick(c, 119, 121)
-    expect(c.reportPlayed).toHaveBeenCalledTimes(1)
+    const d = await playing(2)
+    tick(d, 0, 10)
+    d.engine.events.onTime(100, 200)
+    tick(d, 101, 121)
+    d.s().stop()
+    expect(d.reportPlayed).toHaveBeenCalledTimes(1)
   })
 
   it('does not count time going backwards', async () => {
@@ -900,6 +911,7 @@ describe('scrobbling', () => {
     tick(c, 0, 20)
     c.engine.events.onTime(5, 200)
     tick(c, 6, 10)
+    c.s().stop()
     expect(c.reportPlayed).not.toHaveBeenCalled()
   })
 
@@ -908,6 +920,7 @@ describe('scrobbling', () => {
     tick(c, 0, 20)
     c.s().seek(100)
     tick(c, 101, 110)
+    c.s().stop()
     expect(c.reportPlayed).toHaveBeenCalledExactlyOnceWith('t0', 30)
   })
 
@@ -915,9 +928,13 @@ describe('scrobbling', () => {
     const c = setup()
     await c.s().playTracks([track('short', { duration: 40 })])
     for (let t = 0; t <= 19; t++) c.engine.events.onTime(t, 40)
+    c.s().stop()
     expect(c.reportPlayed).not.toHaveBeenCalled()
-    c.engine.events.onTime(20, 40)
-    expect(c.reportPlayed).toHaveBeenCalledExactlyOnceWith('short', 20)
+    const d = setup()
+    await d.s().playTracks([track('short', { duration: 40 })])
+    for (let t = 0; t <= 20; t++) d.engine.events.onTime(t, 40)
+    await d.s().playTracks([track('other', { duration: 40 })])
+    expect(d.reportPlayed).toHaveBeenCalledExactlyOnceWith('short', 20)
   })
 
   it('each track is tracked separately', async () => {
@@ -925,6 +942,7 @@ describe('scrobbling', () => {
     tick(c, 0, 30)
     await c.s().next()
     tick(c, 0, 30)
+    await c.s().next()
     expect(c.reportPlayed.mock.calls.map((x) => x[0])).toEqual(['t0', 't1'])
   })
 
@@ -941,10 +959,12 @@ describe('scrobbling', () => {
     c.s().cycleRepeat()
     c.s().cycleRepeat()
     tick(c, 0, 30)
-    expect(c.reportPlayed).toHaveBeenCalledTimes(1)
     c.engine.events.onEnded()
     await flush(20)
+    expect(c.reportPlayed).toHaveBeenCalledTimes(1)
     tick(c, 0, 30)
+    c.engine.events.onEnded()
+    await flush(20)
     expect(c.reportPlayed).toHaveBeenCalledTimes(2)
   })
 
@@ -964,6 +984,7 @@ describe('scrobbling', () => {
   it('stop() right after a listened play does not report twice', async () => {
     const c = await playing(2)
     tick(c, 0, 31)
+    c.s().stop()
     c.s().stop()
     expect(c.reportPlayed).toHaveBeenCalledTimes(1)
   })

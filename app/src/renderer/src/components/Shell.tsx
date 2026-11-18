@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ChevronLeft, ChevronRight, Copy, Heart, Home, Library, LogOut, Minus, Search, Settings, ShieldCheck, Square, X } from 'lucide-react'
+import { BarChart3, ChevronLeft, ChevronRight, Copy, Heart, Home, Library, LogOut, Minus, Search, Settings, ShieldCheck, Square, X } from 'lucide-react'
 import { api, platform, useSession } from '../services'
 import { isAdmin } from '../store/session'
 import { useNav, type Route } from '../store/nav'
@@ -43,7 +43,8 @@ export function TitleBar(): ReactNode {
 const NAV: { route: Route; label: string; icon: typeof Home }[] = [
   { route: { name: 'home' }, label: 'Home', icon: Home },
   { route: { name: 'search' }, label: 'Search', icon: Search },
-  { route: { name: 'library' }, label: 'Your Library', icon: Library }
+  { route: { name: 'library' }, label: 'Your Library', icon: Library },
+  { route: { name: 'stats' }, label: 'Stats', icon: BarChart3 }
 ]
 
 const ADMIN_NAV: { route: Route; label: string; icon: typeof Home } = { route: { name: 'admin' }, label: 'Admin', icon: ShieldCheck }

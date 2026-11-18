@@ -50,6 +50,8 @@ export interface Artist {
   id: string
   name: string
   artwork: Image[]
+  /** Artist photo (Deezer), CORS-enabled; null/absent when none was found. */
+  image?: string | null
   followers?: number
 }
 
@@ -455,4 +457,68 @@ export interface SetLyricsInput {
   format: LyricsFormat
   /** TTML document (≤ 1 MiB), LRC text with timestamps or plain text (≤ 200 KB), UTF-8. */
   content: string
+}
+
+// ---- Listening stats (GET /v1/stats/*) ------------------------------------
+
+export type StatsRange = 'week' | 'month' | 'year' | 'all'
+
+export interface StatsTotals {
+  minutes: number
+  plays: number
+  distinctTracks: number
+  distinctArtists: number
+}
+
+export interface StatsDelta {
+  minutes: number
+  /** Percent change in minutes; null when the previous period had none. */
+  minutesPct: number | null
+  plays: number
+}
+
+export interface StatsTopTrack {
+  track: Track
+  plays: number
+  minutes: number
+}
+
+export interface StatsTopArtist {
+  artist: Artist
+  plays: number
+  minutes: number
+}
+
+export interface StatsTopAlbum {
+  album: Album
+  plays: number
+  minutes: number
+}
+
+export interface StatsSummary {
+  range: StatsRange
+  offset: number
+  /** First local date (YYYY-MM-DD); null for "all". */
+  start: string | null
+  /** Exclusive end date; null for "all". */
+  end: string | null
+  label: string
+  totals: StatsTotals
+  previous: StatsTotals | null
+  delta: StatsDelta | null
+  topTracks: StatsTopTrack[]
+  topArtists: StatsTopArtist[]
+  topAlbums: StatsTopAlbum[]
+}
+
+export interface StatsHistoryItem {
+  /** Local date (YYYY-MM-DD) the bucket starts on. */
+  start: string
+  minutes: number
+  plays: number
+}
+
+export interface StatsHistory {
+  period: 'week' | 'month'
+  items: StatsHistoryItem[]
 }

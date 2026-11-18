@@ -21,6 +21,7 @@ import { createConnect } from './connect.mjs'
 import { isApiPath, resolveStaticDir, serveStatic } from './static.mjs'
 import { plainFromLrc, plainFromTtml } from './ttml.mjs'
 import { userJson } from './userjson.mjs'
+import { statsHistory, statsSummary } from './stats.mjs'
 import { fold } from './util.mjs'
 
 export { parseRange }
@@ -615,6 +616,21 @@ export function createMockServer(options = {}) {
       sendJson(res, 200, { offsetMs: track.lyricsOffsetMs })
     },
 
+    /** GET /v1/stats/summary?range=week|month|year|all&offset=0&limit=10 */
+    statsSummary({ req, res, user, query }) {
+      const range = query.get('range') ?? 'week'
+      if (!['week', 'month', 'year', 'all'].includes(range)) throw new HttpError(400, '"range" must be week, month, year or all.')
+      const offset = intParam(query, 'offset', 0, 0, 1000)
+      const limit = intParam(query, 'limit', 10, 1, 50)
+      sendJson(res, 200, statsSummary(ctxFor(req, user), user.id, opt.now(), range, offset, limit))
+    },
+    /** GET /v1/stats/history?period=week|month&count=26 */
+    statsHistory({ res, user, query }) {
+      const period = query.get('period') ?? 'week'
+      if (!['week', 'month'].includes(period)) throw new HttpError(400, '"period" must be week or month.')
+      sendJson(res, 200, statsHistory(catalog, user.id, opt.now(), period, intParam(query, 'count', 26, 1, 120)))
+    },
+
     async played({ req, res, user, params }) {
       const track = catalog.trackById.get(params[0])
       if (!track) throw new HttpError(404, 'Track not found.')
@@ -754,6 +770,8 @@ export function createMockServer(options = {}) {
     [['GET'], /^\/v1\/tracks\/([^/]+)\/stream$/, handlers.stream, true],
     [['GET'], /^\/v1\/tracks\/([^/]+)\/lyrics$/, handlers.lyrics, true],
     [['PUT'], /^\/v1\/tracks\/([^/]+)\/lyrics\/offset$/, handlers.setLyricsOffset, true],
+    [['GET'], /^\/v1\/stats\/summary$/, handlers.statsSummary, true],
+    [['GET'], /^\/v1\/stats\/history$/, handlers.statsHistory, true],
     [['POST'], /^\/v1\/tracks\/([^/]+)\/played$/, handlers.played, true],
     [['GET'], /^\/media\/([^/]+)$/, handlers.media, false],
     [['GET'], /^\/art\/(album|artist|playlist|user|source|spotify)\/([^/]+)\.svg$/, handlers.art, false],

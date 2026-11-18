@@ -217,7 +217,8 @@ export function albumDetailJson(ctx, a) {
 }
 
 export function artistJson(ctx, a) {
-  return { id: a.id, name: a.name, artwork: artwork(ctx.origin, 'artist', a.id), followers: a.followers }
+  const art = artwork(ctx.origin, 'artist', a.id)
+  return { id: a.id, name: a.name, artwork: art, image: art[1].url, followers: a.followers }
 }
 
 export function artistDetailJson(ctx, a) {

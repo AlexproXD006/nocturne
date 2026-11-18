@@ -611,6 +611,18 @@ describe('endpoints', () => {
     expect(f.calls[0]!.body).toEqual({ playedSeconds: 42, at: '2026-01-02T03:04:05.000Z' })
   })
 
+  it('statsSummary and statsHistory call the stats endpoints with their query', async () => {
+    const f = fakeFetch(() => jsonResponse({}))
+    const h = harness(f)
+    await h.client.statsSummary('month', 2, 5)
+    await h.client.statsHistory('week', 12)
+    await h.client.statsSummary('all')
+    expect(f.calls[0]!.method).toBe('GET')
+    expect(f.calls[0]!.url).toBe(`${BASE}/v1/stats/summary?range=month&offset=2&limit=5`)
+    expect(f.calls[1]!.url).toBe(`${BASE}/v1/stats/history?period=week&count=12`)
+    expect(f.calls[2]!.url).toBe(`${BASE}/v1/stats/summary?range=all&offset=0&limit=10`)
+  })
+
   it('passes a request signal through to fetch', async () => {
     const f = fakeFetch(() => jsonResponse({}))
     const { client } = harness(f)

@@ -32,6 +32,7 @@ from .routes_connect import router as connect_router
 from .routes_updates import router as updates_router
 from .routes_playlists import router as playlists_router
 from .routes_spotify import router as spotify_router
+from .routes_stats import router as stats_router
 
 logger = logging.getLogger("nocturne")
 
@@ -125,6 +126,7 @@ v1_app.include_router(connect_router)
 v1_app.include_router(updates_router)
 v1_app.include_router(playlists_router)
 v1_app.include_router(spotify_router)
+v1_app.include_router(stats_router)
 
 
 # ---------------------------------------------------------------------------
