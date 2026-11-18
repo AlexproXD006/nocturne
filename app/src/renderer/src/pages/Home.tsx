@@ -54,7 +54,12 @@ const STOCK_SECTIONS: Record<string, [string, MessageKey]> = {
   albums: ['Your albums', 'home.s.albums'],
   artists: ['Artists you love', 'home.s.artists'],
   'made-for-you': ['Made for you', 'home.s.madeForYou'],
-  'new-releases': ['New releases', 'home.s.newReleases']
+  'new-releases': ['New releases', 'home.s.newReleases'],
+  'new-tracks': ['Recently Added', 'home.s.newTracks'],
+  'top-tracks': ['Most Played', 'home.s.topTracks'],
+  unplayed: ['Never Played', 'home.s.unplayed'],
+  'recently-played': ['Recently Played', 'home.s.recentlyPlayed'],
+  playlists: ['Playlists', 'home.s.playlists']
 }
 
 export function HomePage(): ReactNode {
@@ -67,7 +72,7 @@ export function HomePage(): ReactNode {
 
   const sections = (home.data?.sections ?? []).map((s) => {
     const stock = STOCK_SECTIONS[s.id]
-    return stock && s.title === stock[0] ? { ...s, title: tr(stock[1]) } : s
+    return stock && s.title.toLowerCase() === stock[0].toLowerCase() ? { ...s, title: tr(stock[1]) } : s
   })
   const quick = sections.find((s) => s.kind === 'albums' || s.kind === 'playlists')
   const quickCards = quick ? toCards(quick).slice(0, 5) : []

@@ -190,3 +190,31 @@ async def test_low_history_fallback_and_cover(client, user_token, tmp_path):
     conn.execute("UPDATE tracks SET cover_path=NULL WHERE id LIKE 'mx%'")
     conn.commit()
     conn.close()
+
+
+def _png(path, color, size=(40, 40)):
+    from PIL import Image
+    Image.new("RGB", size, color).save(path)
+    return str(path)
+
+
+def test_cover_collage_uses_distinct_covers_only(tmp_path, monkeypatch):
+    from PIL import Image
+    monkeypatch.setattr(M.config, "MUSIC_ROOT", str(tmp_path))
+    # Same album: three copies of identical art under different paths, plus one distinct cover.
+    a1 = _png(tmp_path / "a1.png", (200, 10, 10))
+    a2 = _png(tmp_path / "a2.png", (200, 10, 10))
+    a3 = _png(tmp_path / "a3.png", (200, 10, 10))
+    b = _png(tmp_path / "b.png", (10, 200, 10))
+    rows = [{"cover_path": p} for p in (a1, a2, a3, a1, b)]
+    assert M._distinct_covers(rows, Image) == [a1, b]
+    # Fewer than four distinct -> one big cover, no repeated tiles.
+    name = M._cover_collage(rows, "k1")
+    with Image.open(M.covers_dir() / name) as im:
+        assert im.getpixel((5, 5)) == im.getpixel((600, 5)) == im.getpixel((5, 600)) == (200, 10, 10)
+    # Four distinct -> a real 2x2 collage.
+    cs = [_png(tmp_path / f"c{i}.png", c) for i, c in enumerate([(250, 0, 0), (0, 250, 0), (0, 0, 250), (250, 250, 0)])]
+    name = M._cover_collage([{"cover_path": p} for p in cs + [a1]], "k2")
+    with Image.open(M.covers_dir() / name) as im:
+        px = {im.getpixel(xy)[:3] for xy in ((5, 5), (600, 5), (5, 600), (600, 600))}
+        assert len(px) == 4

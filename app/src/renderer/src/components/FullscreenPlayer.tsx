@@ -103,7 +103,7 @@ export function FullscreenPlayer(): ReactNode {
       {/* Top bar */}
       <header
         className={cx(
-          'safe-top drag relative z-10 flex items-center justify-between px-4 py-3 transition-opacity duration-500 md:px-8',
+          'safe-top fs-safe drag relative z-10 flex items-center justify-between px-4 py-3 transition-opacity duration-500 md:px-8',
           idle && 'opacity-0'
         )}
       >

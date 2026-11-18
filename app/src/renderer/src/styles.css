@@ -1059,3 +1059,18 @@ textarea {
 :root[data-theme='glass'][data-motion='reduced'] .g-side {
   animation: none;
 }
+
+/* Update banner: sits above the shell, so it owns the status-bar inset and the shell header drops its own. */
+.update-banner {
+  padding-top: env(safe-area-inset-top);
+}
+:root[data-update-banner] .safe-top:not(.fs-safe) {
+  padding-top: 0;
+}
+:root[data-theme='glass'] .update-pill {
+  background: linear-gradient(180deg, rgb(150 200 255 / 0.2), rgb(150 200 255 / 0.1)), var(--g-base-strong);
+  border: 1px solid rgb(150 200 255 / 0.35);
+  box-shadow: var(--g-hi), var(--g-sh-sm);
+  backdrop-filter: blur(var(--g-blur));
+  -webkit-backdrop-filter: blur(var(--g-blur));
+}

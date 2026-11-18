@@ -226,25 +226,52 @@ def _load(account: dict, now: datetime) -> dict:
     return {"tracks": tracks, "playlists": pls, "liked": liked, "plays": allp}
 
 
+def _cover_fingerprints(path: str, Image) -> tuple[str, str]:
+    """(bytes hash, 16x16 quantised thumbnail hash): the second catches the same art re-encoded."""
+    with open(path, "rb") as f:
+        raw = hashlib.sha1(f.read()).hexdigest()
+    with Image.open(path) as im:
+        thumb = im.convert("RGB").resize((16, 16)).tobytes()
+    return raw, hashlib.sha1(bytes(b >> 3 for b in thumb)).hexdigest()
+
+
+def _distinct_covers(track_rows: list[dict], Image, limit: int = 4) -> list[str]:
+    """Up to `limit` cover files that differ by path AND by image content (tracks of one album share art)."""
+    seen_paths: set[str] = set()
+    seen_hashes: set[str] = set()
+    out: list[str] = []
+    for t in track_rows:
+        p = t.get("cover_path")
+        if not p or p in seen_paths or not os.path.exists(p):
+            continue
+        seen_paths.add(p)
+        try:
+            h1, h2 = _cover_fingerprints(p, Image)
+        except Exception:
+            logger.warning("mix cover: unreadable %s", p)
+            continue
+        if h1 in seen_hashes or h2 in seen_hashes:
+            continue
+        seen_hashes.update((h1, h2))
+        out.append(p)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _cover_collage(track_rows: list[dict], key: str) -> Optional[str]:
-    """2x2 collage of up to four distinct covers. Returns the file name (inside covers_dir())."""
+    """2x2 collage of four DISTINCT covers; with fewer than four, a single full-size cover."""
     try:
         from PIL import Image
     except ImportError:
         return None
-    seen: list[str] = []
-    for t in track_rows:
-        p = t.get("cover_path")
-        if p and p not in seen and os.path.exists(p):
-            seen.append(p)
-        if len(seen) >= 4:
-            break
+    seen = _distinct_covers(track_rows, Image)
     size = 640
     canvas = Image.new("RGB", (size, size), (28, 28, 38))
     if seen:
-        half = size // 2
-        for i in range(4):
-            path = seen[i % len(seen)]
+        tiles = seen[:4] if len(seen) >= 4 else seen[:1]
+        half = size if len(tiles) == 1 else size // 2
+        for i, path in enumerate(tiles):
             try:
                 with Image.open(path) as im:
                     im = im.convert("RGB")
@@ -254,7 +281,8 @@ def _cover_collage(track_rows: list[dict], key: str) -> Optional[str]:
                 canvas.paste(im, ((i % 2) * half, (i // 2) * half))
             except Exception:
                 logger.warning("mix cover: unreadable %s", path)
-    digest = hashlib.sha1("|".join(seen).encode()).hexdigest()[:8]
+    seen = seen[:4] if len(seen) >= 4 else seen[:1]
+    digest = hashlib.sha1(("v2|" + "|".join(seen)).encode()).hexdigest()[:8]
     d = covers_dir()
     d.mkdir(parents=True, exist_ok=True)
     name = f"{key}-{digest}.jpg"

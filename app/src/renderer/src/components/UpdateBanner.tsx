@@ -49,28 +49,39 @@ export function UpdateBanner(): ReactNode {
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-line bg-ink-900 px-4 py-2.5 text-sm">
-      <p className="min-w-0 truncate">
-        <span className="font-semibold">Nocturne {latest.version}</span>
-        <span className="text-fg-muted"> {t('update.available')}</span>
-      </p>
-      <div className="flex shrink-0 items-center gap-2">
+    <div className="update-banner shrink-0 px-3 pb-2 pt-2" role="status" data-testid="update-banner">
+      <BannerFlag />
+      <div className="update-pill flex min-h-12 items-center gap-2 rounded-full border border-line bg-ink-900/90 py-1.5 pl-4 pr-1.5 text-sm shadow-lg">
+        <p className="min-w-0 flex-1 text-[13px] leading-tight">
+          <span className="font-semibold">{t('update.banner', { version: latest.version })}</span>
+        </p>
         <button
           type="button"
           onClick={() => void platform.openExternal(downloadUrl)}
-          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 font-semibold text-ink-950 hover:opacity-90"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 py-2 font-semibold text-ink-950 hover:opacity-90"
         >
-          <Download className="h-4 w-4" /> {t('update.now')}
+          <Download className="h-4 w-4" /> {t('update.install')}
         </button>
         <button
           type="button"
           onClick={dismiss}
           aria-label={t('update.dismiss')}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium text-fg-muted hover:text-fg"
+          title={t('update.later')}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-fg-muted hover:text-fg"
         >
-          <X className="h-4 w-4" /> {t('update.later')}
+          <X className="h-4 w-4" />
         </button>
       </div>
     </div>
   )
+}
+
+/** Marks <html> while the banner is mounted so the shell header stops re-applying the status-bar inset. */
+function BannerFlag(): null {
+  useEffect(() => {
+    const el = document.documentElement
+    el.setAttribute('data-update-banner', '')
+    return () => el.removeAttribute('data-update-banner')
+  }, [])
+  return null
 }
