@@ -2,6 +2,20 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.1-beta.1 — 2026-11-18
+
+**Android Auto (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Android Auto: Nocturne en la pantalla del coche con Hecho para ti, playlists, Me gusta, recientes, álbumes y artistas, búsqueda por voz y botones de Me gusta, aleatorio y repetir.
+- Reproducción nativa en Android: más estable en segundo plano y sin silencios entre canciones; funciona aunque la app esté cerrada.
+- Opcional: la línea actual de la letra en la pantalla del coche (Ajustes).
+
+### Correcciones
+
+- En Android el fundido entre canciones (crossfade) se desactiva con la reproducción nativa.
+
 ## 1.1.0 — 2026-11-18
 
 **Midnight Glass, iPhone, Nocturne en español y mucho más** · android, windows, linux, ios

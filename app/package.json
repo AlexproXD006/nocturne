@@ -1,7 +1,7 @@
 {
   "name": "nocturne",
   "productName": "Nocturne",
-  "version": "1.1.0",
+  "version": "1.1.1-beta.1",
   "description": "A clean, lightweight music player for your own music server. No ads, no clutter.",
   "main": "./out/main/index.js",
   "author": "Alex",
