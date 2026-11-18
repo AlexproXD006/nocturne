@@ -2,6 +2,16 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.0-beta.4 — 2026-11-18
+
+**Temporizador, reproducción automática y ListenBrainz (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Temporizador para dormir: 5 a 60 minutos, personalizado o al acabar la canción, con bajada suave del volumen.
+- Reproducción automática: cuando se acaba la cola, sigue con canciones parecidas de tu biblioteca (se puede desactivar en Ajustes).
+- ListenBrainz: registra tus escuchas en tu perfil de ListenBrainz con tu token (Ajustes → Integraciones).
+
 ## 1.1.0-beta.3 — 2026-11-18
 
 **Nocturne en español (beta)** · android, windows, linux, ios
