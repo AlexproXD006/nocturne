@@ -18,6 +18,7 @@ import mimetypes
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -118,10 +119,26 @@ async def serve_art(
     if not cover_path or not os.path.exists(cover_path):
         raise HTTPException(status_code=404, detail={"message": "Artwork not found.", "code": "not_found"})
 
-    # Detect image type from magic bytes
+    _ART_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable", "Access-Control-Allow-Origin": "*", "Vary": "Accept"}
+
+    # Resized thumbnail: served from the on-disk cache (generated once per cover + bucket + format).
+    if s and s > 0:
+        from . import thumbs
+        bucket = thumbs.snap_size(s)
+        webp = thumbs.accepts_webp(request.headers.get("accept")) and thumbs.webp_supported()
+        res = await run_in_threadpool(thumbs.ensure_thumb, cover_path, bucket, webp)
+        if res is not None:
+            tp, created = res
+            etag = thumbs.etag_for(tp)
+            hdrs = dict(_ART_HEADERS, ETag=etag, **{"X-Thumb-Cache": "miss" if created else "hit"})
+            inm = request.headers.get("if-none-match")
+            if inm and etag in [t.strip().removeprefix("W/") for t in inm.split(",")]:
+                return Response(status_code=304, headers=hdrs)
+            return FileResponse(tp, media_type="image/webp" if webp else "image/jpeg", headers=hdrs)
+
+    # Original file (no size requested, or thumbnailing unavailable).
     with open(cover_path, "rb") as f:
         header = f.read(12)
-
     if header[:3] == b"\xff\xd8\xff":
         content_type = "image/jpeg"
     elif header[:8] == b"\x89PNG\r\n\x1a\n":
@@ -130,39 +147,13 @@ async def serve_art(
         content_type = "image/webp"
     else:
         content_type = "image/jpeg"
-
-    # Try to resize if Pillow is available and size requested
-    if s and s > 0:
-        try:
-            from PIL import Image as PILImage
-            import io
-            img = PILImage.open(cover_path)
-            img.thumbnail((s, s), PILImage.LANCZOS)
-            buf = io.BytesIO()
-            fmt = "JPEG" if content_type == "image/jpeg" else "PNG"
-            img.save(buf, format=fmt, quality=85)
-            buf.seek(0)
-            return StreamingResponse(
-                buf,
-                media_type=content_type,
-                headers={
-                    "Cache-Control": "public, max-age=604800, immutable",
-                    "Access-Control-Allow-Origin": "*",
-                },
-            )
-        except ImportError:
-            pass
-        except Exception:
-            pass
-
-    return FileResponse(
-        cover_path,
-        media_type=content_type,
-        headers={
-            "Cache-Control": "public, max-age=604800, immutable",
-            "Access-Control-Allow-Origin": "*",
-        },
-    )
+    st = os.stat(cover_path)
+    etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
+    hdrs = dict(_ART_HEADERS, ETag=etag)
+    inm = request.headers.get("if-none-match")
+    if inm and etag in [t.strip().removeprefix("W/") for t in inm.split(",")]:
+        return Response(status_code=304, headers=hdrs)
+    return FileResponse(cover_path, media_type=content_type, headers=hdrs)
 
 
 _MIX_ART_RE = re.compile(r"^[A-Za-z0-9._-]{1,80}\.jpg$")

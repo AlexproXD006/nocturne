@@ -31,6 +31,13 @@ def sign_stream_url(track_id: str) -> tuple[str, str]:
     return url, expires_at
 
 
+def _stable_art_exp() -> int:
+    """Expiry rounded up to a day boundary: the same art URL is returned all day long (stable
+    browser-cache key) and is always valid for at least _ART_TTL - 1 day."""
+    day = 86400
+    return ((int(time.time()) + _ART_TTL) // day + 1) * day
+
+
 def sign_art_url(track_id: str, size: Optional[int] = None, version: Optional[str] = None) -> str:
     """Returns absolute URL for artwork, with long-lived signature.
 
@@ -39,7 +46,7 @@ def sign_art_url(track_id: str, size: Optional[int] = None, version: Optional[st
     adding ?v= does not affect verify_media_url(); it only makes the URL change
     when the cover changes, defeating the week-long `immutable` cache.
     """
-    exp = int(time.time()) + _ART_TTL
+    exp = _stable_art_exp()
     path = f"/v1/media/art/{track_id}"
     query = []
     if size:

@@ -1077,3 +1077,15 @@ textarea {
   backdrop-filter: blur(var(--g-blur));
   -webkit-backdrop-filter: blur(var(--g-blur));
 }
+
+/* Covers that load on demand (components/common.tsx Artwork): neutral tile first, soft fade-in once decoded. */
+@keyframes art-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+img[data-art][data-l] {
+  animation: art-in 220ms var(--ease-out-soft) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  img[data-art][data-l] { animation: none; }
+}

@@ -188,6 +188,13 @@ def setup_nocturne(main_app: Any, mount_web: bool = True) -> None:
     except Exception as e:
         logger.error("Nocturne: ListenBrainz worker not started: %s", type(e).__name__)
 
+    # Low-priority warm-up of the small cover thumbnails (cached on disk).
+    try:
+        from .thumbs import start_warmup
+        start_warmup()
+    except Exception as e:
+        logger.error("Nocturne: thumbnail warm-up not started: %s", type(e).__name__)
+
     # Mount /v1 sub-application
     main_app.mount("/v1", v1_app)
     logger.info("Nocturne: /v1 API mounted.")

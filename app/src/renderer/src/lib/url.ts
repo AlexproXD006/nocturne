@@ -44,3 +44,20 @@ export function pickImage(images: { url: string; width?: number }[] | undefined,
   const sorted = [...images].sort((a, b) => (a.width ?? 0) - (b.width ?? 0))
   return (sorted.find((i) => (i.width ?? 0) >= size) ?? sorted[sorted.length - 1])!.url
 }
+
+const ART_BUCKETS = [64, 96, 128, 192, 256, 384, 512, 1024]
+const ART_PATH = /\/media\/art\//
+
+/**
+ * Nocturne artwork URLs take an `s=` size (the server snaps it to the buckets above and caches the thumbnail on
+ * disk). Asks for the smallest bucket that still covers `px` device pixels instead of the 300/640 px defaults.
+ * Foreign URLs, URLs without `s=` and sizes that would be upscaled are returned untouched; the signature only
+ * covers the path, so rewriting `s` keeps the URL valid (and stable, hence browser-cacheable).
+ */
+export function thumbUrl(url: string, px: number): string {
+  if (!ART_PATH.test(url)) return url
+  const m = /([?&])s=(\d+)/.exec(url)
+  if (!m) return url
+  const want = ART_BUCKETS.find((b) => b >= px) ?? ART_BUCKETS[ART_BUCKETS.length - 1]!
+  return want < Number(m[2]) ? url.replace(m[0], `${m[1]}s=${want}`) : url
+}

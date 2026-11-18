@@ -1,7 +1,8 @@
-import { memo, useEffect, useState, type ReactNode } from 'react'
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AlertCircle, Disc3, Heart, Loader2, RotateCcw } from 'lucide-react'
 import type { Image } from '../api/types'
-import { pickImage } from '../lib/url'
+import { finish, hasObserver, track, type ArtJob } from '../lib/artLoader'
+import { pickImage, thumbUrl } from '../lib/url'
 import { api, platform } from '../services'
 import { useLikes } from '../store/likes'
 import { useUi } from '../store/ui'
@@ -33,11 +34,34 @@ export const Artwork = memo(function Artwork({
   /** Skip lazy loading (the fullscreen cover: a lazy image inside an animated layer can stay unloaded on WebViews). */
   eager?: boolean
 }): ReactNode {
-  const url = pickImage(images, size * (typeof devicePixelRatio === 'number' ? Math.min(2, devicePixelRatio) : 1))
+  const px = Math.ceil(size * (typeof devicePixelRatio === 'number' ? Math.min(3, devicePixelRatio) : 1))
+  const picked = pickImage(images, px)
+  // Small thumbnails (the server caches them on disk) instead of the 300/640 px defaults; eager covers keep theirs.
+  const url = picked && !eager ? thumbUrl(picked, px) : picked
   // Failure state is tied to the URL it happened for: a new track's cover always gets a fresh attempt.
   const [err, setErr] = useState<{ url: string; n: number }>({ url: '', n: 0 })
   const failures = err.url === url ? err.n : 0
   const shape = round ? 'rounded-full' : rounded
+  const gated = !eager && hasObserver()
+  // Viewport-driven loading: the <img> gets its src only once the shared loader grants it a slot (see lib/artLoader).
+  const [granted, setGranted] = useState<string>('')
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  const jobRef = useRef<ArtJob | null>(null)
+  useEffect(() => {
+    const el = imgRef.current
+    if (!gated || !url || !el) return
+    const t = track(
+      el,
+      () => setGranted(url),
+      () => setGranted((g) => (g === url ? '' : g))
+    )
+    jobRef.current = t.job
+    return () => {
+      t.stop()
+      jobRef.current = null
+    }
+  }, [gated, url, failures])
+  const src = gated ? (granted === url ? url : undefined) : url
   useEffect(() => {
     if (!url || failures !== 1) return
     const id = setTimeout(() => setErr((e) => (e.url === url && e.n === 1 ? { url, n: 0.5 } : e)), ARTWORK_RETRY_MS)
@@ -58,14 +82,28 @@ export const Artwork = memo(function Artwork({
   }
   return (
     <img
-      key={failures}
-      src={url}
-      alt={alt}
-      loading={eager ? 'eager' : 'lazy'}
+      key={`${url}|${failures}`}
+      ref={(el) => {
+        imgRef.current = el
+        // Already in the browser cache: show it at once instead of fading in.
+        if (el && gated && el.complete && el.naturalWidth > 0) el.dataset.c = '1'
+      }}
+      src={src}
+      alt={src ? alt : ''}
+      loading={gated ? undefined : eager ? 'eager' : 'lazy'}
       decoding="async"
+      fetchPriority={eager || src ? 'high' : 'auto'}
       draggable={false}
       referrerPolicy="no-referrer"
-      onError={() => setErr({ url, n: failures === 0.5 ? 2 : 1 })}
+      onLoad={(e) => {
+        if (gated && !e.currentTarget.dataset.c) e.currentTarget.dataset.l = '1'
+        if (jobRef.current) finish(jobRef.current)
+      }}
+      onError={() => {
+        if (jobRef.current) finish(jobRef.current)
+        setErr({ url, n: failures === 0.5 ? 2 : 1 })
+      }}
+      data-art={gated ? '' : undefined}
       className={cx('bg-ink-800 object-cover', shape, className)}
     />
   )
