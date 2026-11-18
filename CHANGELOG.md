@@ -2,6 +2,14 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.1-beta.7 — 2026-11-18
+
+**Arreglo de reproducción en Android (beta)** · android, windows, linux, ios
+
+### Correcciones
+
+- En Android ya no se saltan las canciones solas (fallo del ecualizador en la beta.6).
+
 ## 1.1.1-beta.6 — 2026-11-18
 
 **Ecualizador (beta)** · android, windows, linux, ios
