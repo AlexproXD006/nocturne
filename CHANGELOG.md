@@ -2,6 +2,14 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.0-beta.6 — 2026-11-18
+
+**Icono de Android corregido (beta)** · android, windows, linux, ios
+
+### Correcciones
+
+- El icono de la app en Android se veía recortado y ampliado; ahora se ve completo en todos los lanzadores (incluido el modo de iconos temáticos).
+
 ## 1.1.0-beta.5 — 2026-11-18
 
 **Mixes hechos para ti (beta)** · android, windows, linux, ios
