@@ -2,6 +2,16 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.0-beta.7 — 2026-11-18
+
+**Ajustes de la beta (beta)** · android, windows, linux, ios
+
+### Correcciones
+
+- El aviso de nueva versión ya no queda cortado bajo la barra de estado.
+- Las secciones del inicio salen traducidas (Añadido recientemente).
+- Las portadas de los mixes ya no repiten la misma imagen.
+
 ## 1.1.0-beta.6 — 2026-11-18
 
 **Icono de Android corregido (beta)** · android, windows, linux, ios
