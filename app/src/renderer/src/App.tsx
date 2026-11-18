@@ -33,6 +33,7 @@ import { ArtistPage } from './pages/Artist'
 import { HomePage } from './pages/Home'
 import { LibraryPage, LikedPage } from './pages/Library'
 import { Login } from './pages/Login'
+import { MixPage } from './pages/Mix'
 import { PlaylistPage } from './pages/Playlist'
 import { SearchPage } from './pages/Search'
 import { SettingsPage } from './pages/Settings'
@@ -84,6 +85,8 @@ function RouteView({ route, index }: { route: Route; index: number }): ReactNode
       return <ArtistPage key={route.id} id={route.id} />
     case 'playlist':
       return <PlaylistPage key={route.id} id={route.id} />
+    case 'mix':
+      return <MixPage key={route.id} id={route.id} />
     case 'liked':
       return <LikedPage />
     case 'stats':

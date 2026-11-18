@@ -34,6 +34,7 @@ from .routes_playlists import router as playlists_router
 from .routes_spotify import router as spotify_router
 from .routes_stats import router as stats_router
 from .routes_radio import router as radio_router
+from .routes_mixes import router as mixes_router
 from .routes_listenbrainz import router as listenbrainz_router
 
 logger = logging.getLogger("nocturne")
@@ -130,6 +131,7 @@ v1_app.include_router(playlists_router)
 v1_app.include_router(spotify_router)
 v1_app.include_router(stats_router)
 v1_app.include_router(radio_router)
+v1_app.include_router(mixes_router)
 v1_app.include_router(listenbrainz_router)
 
 

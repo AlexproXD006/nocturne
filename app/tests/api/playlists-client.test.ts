@@ -100,3 +100,15 @@ describe('playlist editing endpoints', () => {
     expect(f.calls).toHaveLength(1)
   })
 })
+
+describe('mixes endpoints', () => {
+  it('mixes / mix / refreshMixes hit /v1/mixes', async () => {
+    const f = fakeFetch(() => jsonResponse({ items: [] }))
+    await client(f).mixes()
+    await client(f).mix('daily 1')
+    await client(f).refreshMixes()
+    expect(f.calls[0]).toMatchObject({ method: 'GET', url: `${BASE}/v1/mixes` })
+    expect(f.calls[1]).toMatchObject({ method: 'GET', url: `${BASE}/v1/mixes/daily%201` })
+    expect(f.calls[2]).toMatchObject({ method: 'POST', url: `${BASE}/v1/mixes/refresh` })
+  })
+})

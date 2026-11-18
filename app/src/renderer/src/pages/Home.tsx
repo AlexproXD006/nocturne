@@ -105,7 +105,7 @@ export function HomePage(): ReactNode {
                 key={`${c.kind}:${c.item.id}`}
                 title={c.kind === 'playlist' ? c.item.name : c.kind === 'album' ? c.item.title : c.item.name}
                 images={c.item.artwork}
-                onOpen={() => go({ name: c.kind, id: c.item.id })}
+                onOpen={() => go(c.kind === 'playlist' && c.item.mix ? { name: 'mix', id: c.item.id } : { name: c.kind, id: c.item.id })}
               />
             ))}
           </div>

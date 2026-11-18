@@ -400,6 +400,21 @@ export class ApiClient {
     return this.request('GET', '/v1/stats/history', { signal, query: { period, count } })
   }
 
+  /** The user's "Hecho para ti" daily mixes (server regenerates them when older than 24 h). */
+  mixes(signal?: AbortSignal): Promise<{ items: Playlist[] }> {
+    return this.request('GET', '/v1/mixes', { signal })
+  }
+
+  /** One mix with its tracks. */
+  mix(id: string, signal?: AbortSignal): Promise<PlaylistDetail> {
+    return this.request('GET', `/v1/mixes/${encodeURIComponent(id)}`, { signal })
+  }
+
+  /** Regenerates the mixes now. */
+  refreshMixes(): Promise<{ items: Playlist[] }> {
+    return this.request('POST', '/v1/mixes/refresh')
+  }
+
   playlist(id: string, signal?: AbortSignal): Promise<PlaylistDetail> {
     return this.request('GET', `/v1/playlists/${encodeURIComponent(id)}`, { signal })
   }

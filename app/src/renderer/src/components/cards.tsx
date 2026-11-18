@@ -19,6 +19,9 @@ async function playCollection(card: CardItem): Promise<void> {
     if (card.kind === 'album') {
       const a = await api.album(card.item.id)
       await playback.playTracks(a.tracks, 0, { type: 'album', id: a.id, name: a.title })
+    } else if (card.kind === 'playlist' && card.item.mix) {
+      const p = await api.mix(card.item.id)
+      await playback.playTracks(p.tracks, 0, { type: 'tracks', id: `mix:${p.id}`, name: p.name })
     } else if (card.kind === 'playlist') {
       const p = await api.playlist(card.item.id)
       await playback.playTracks(p.tracks, 0, { type: 'playlist', id: p.id, name: p.name })
@@ -38,6 +41,7 @@ function subtitle(card: CardItem): string {
       return [card.item.year, kind ?? artistNames(card.item.artists)].filter(Boolean).join(' • ')
     }
     case 'playlist':
+      if (card.item.mix && card.item.description) return card.item.description
       return card.item.owner?.name ? t('card.by', { name: card.item.owner.name }) : card.item.trackCount ? t('common.song', { count: Number(card.item.trackCount) }) : t('nav.playlist')
     case 'artist':
       return t('card.artist')
@@ -49,7 +53,7 @@ export function MediaCard({ card }: { card: CardItem }): ReactNode {
   const go = useNav((s) => s.go)
   const title = card.kind === 'playlist' ? card.item.name : card.kind === 'album' ? card.item.title : card.item.name
   const round = card.kind === 'artist'
-  const open = (): void => go({ name: card.kind, id: card.item.id })
+  const open = (): void => go(card.kind === 'playlist' && card.item.mix ? { name: 'mix', id: card.item.id } : { name: card.kind, id: card.item.id })
   return (
     <div
       role="link"

@@ -44,6 +44,7 @@ async def server_info():
             "connect": True,
             "playlists": True,
             "radio": True,
+            "mixes": True,
             "listenbrainz": True,
             "spotifyImport": has_spotify,
             "sources": sources,
@@ -67,6 +68,22 @@ async def home(account: dict = Depends(require_user)):
     playlists, _ = _pl.list_wire(account, 0, 10)
 
     sections = []
+
+    # "Hecho para ti": daily mixes. Never let a mix failure break Home; hidden if < 10 tracks.
+    try:
+        from . import mixes as _mx
+        import asyncio, json
+        mix_rows = await asyncio.to_thread(_mx.get_mixes, account)
+        if sum(len(json.loads(r["track_ids"])) for r in mix_rows) >= _mx.MIN_TRACKS:
+            sections.append({
+                "id": "made-for-you",
+                "title": "Made for you",
+                "kind": "playlists",
+                "items": [_mx.to_wire(r) for r in mix_rows],
+            })
+    except Exception:
+        import logging
+        logging.getLogger("nocturne").exception("home: mixes failed")
 
     if new_tracks:
         sections.append({

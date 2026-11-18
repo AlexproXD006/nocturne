@@ -51,6 +51,14 @@ def sign_art_url(track_id: str, size: Optional[int] = None, version: Optional[st
     return f"{config.PUBLIC_URL}{path}?{'&'.join(query)}"
 
 
+def sign_mix_art_url(name: str) -> str:
+    """Absolute URL of a generated mix cover (file name inside .covers/mixes/)."""
+    exp = int(time.time()) + _ART_TTL
+    path = f"/v1/media/mix-art/{name}"
+    sig = _sign(config.MEDIA_SECRET, path, exp)
+    return f"{config.PUBLIC_URL}{path}?sig={sig}&exp={exp}"
+
+
 def verify_media_url(path: str, sig: str, exp_str: str) -> bool:
     """Returns True if the signature is valid and not expired."""
     try:

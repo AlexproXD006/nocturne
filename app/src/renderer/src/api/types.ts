@@ -70,6 +70,8 @@ export interface Playlist {
   trackCount?: number
   /** True when the signed-in user may rename / delete / change the tracks of this playlist. */
   editable?: boolean
+  /** True for a generated "Hecho para ti" mix (opens the read-only mix page; id is `daily-1`, `rediscover`, ...). */
+  mix?: boolean
 }
 
 /**

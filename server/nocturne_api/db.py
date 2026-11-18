@@ -364,6 +364,20 @@ _MIGRATIONS: list[tuple[int, str]] = [
         CREATE UNIQUE INDEX IF NOT EXISTS idx_v1_lbq_play
             ON v1_listenbrainz_queue(user_id, play_id) WHERE play_id IS NOT NULL;
     """),
+    # 12: cached daily mixes ("Hecho para ti", nocturne_api/mixes.py)
+    (12, """
+        CREATE TABLE IF NOT EXISTS v1_mixes (
+            user_id      TEXT NOT NULL,
+            mix_id       TEXT NOT NULL,
+            position     INTEGER NOT NULL DEFAULT 0,
+            title        TEXT NOT NULL,
+            subtitle     TEXT NOT NULL DEFAULT '',
+            track_ids    TEXT NOT NULL DEFAULT '[]',
+            cover        TEXT,
+            generated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, mix_id)
+        );
+    """),
 ]
 
 def migrate() -> None:
