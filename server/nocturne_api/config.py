@@ -65,6 +65,15 @@ DB_PATH: str = _optional("NOCTURNE_DB_PATH", str(Path(_music_dir) / "nocturne.db
 # ── Directories ────────────────────────────────────────────────────────────────
 DATA_DIR: str = _optional("NOCTURNE_DATA_DIR", str(Path(_music_dir) / ".nocturne_data"))
 WEB_DIR: str = _optional("NOCTURNE_WEB_DIR", "/opt/nocturne/web")
+# Static product landing page served at "/" (the web player lives under /app).
+# Canonical public web origin; browsers hitting a legacy host on a page route
+# (landing, /app, /descargar) get a 301 to it. /v1 and file downloads never redirect.
+# NOCTURNE_LEGACY_HOSTS: comma-separated hostnames (empty = no host redirects).
+CANONICAL_WEB_URL: str = _optional("NOCTURNE_CANONICAL_WEB_URL", "https://nocturne.alexcloudweb.es").rstrip("/")
+LEGACY_HOSTS: list[str] = [
+    h.strip().lower() for h in _optional("NOCTURNE_LEGACY_HOSTS", "").split(",") if h.strip()
+]
+LANDING_DIR: str = _optional("NOCTURNE_LANDING_DIR", "/opt/nocturne/landing")
 # Release downloads (APK / Windows zip / descargar.html) and the in-app update
 # feed latest.json. Kept outside WEB_DIR so they survive web-release cutovers.
 DOWNLOADS_DIR: str = _optional("NOCTURNE_DOWNLOADS_DIR", "/opt/nocturne/downloads")

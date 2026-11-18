@@ -163,14 +163,15 @@ def setup_nocturne(main_app: Any, mount_web: bool = True) -> None:
     main_app.mount("/v1", v1_app)
     logger.info("Nocturne: /v1 API mounted.")
 
-    # Mount the SPA at / (Phase 4 onwards)
+    # Landing at / (+ /l/ assets), web player SPA under /app (Phase 4 onwards)
     if mount_web:
+        from .web import mount_spa, mount_downloads, mount_landing
+        # Explicit routes first: downloads, then landing; SPA mount (/app) last.
+        mount_downloads(main_app)
+        mount_landing(main_app)
         if os.path.isdir(config.WEB_DIR):
-            from .web import mount_spa, mount_downloads
-            # Downloads must be registered before the SPA catch-all mount.
-            mount_downloads(main_app)
             mount_spa(main_app)
-            logger.info("Nocturne: SPA mounted from %s", config.WEB_DIR)
+            logger.info("Nocturne: SPA mounted at /app from %s", config.WEB_DIR)
         else:
             logger.warning(
                 "Nocturne: WEB_DIR=%s not found, SPA not mounted.", config.WEB_DIR
