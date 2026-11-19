@@ -2,6 +2,18 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.1-beta.11 — 2026-11-19
+
+**Volumen del PC con los botones del móvil (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Mientras controlas el PC desde el móvil, los botones de volumen del móvil suben y bajan el volumen del PC, y la notificación muestra y controla lo que suena en el PC.
+
+### Correcciones
+
+- El fondo animado ya no puede fallar al reaccionar a la música (radio negativo).
+
 ## 1.1.1-beta.10 — 2026-11-19
 
 **Widgets estables e informes de fallos (beta)** · android, windows, linux, ios
