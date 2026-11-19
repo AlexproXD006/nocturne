@@ -3,6 +3,7 @@ import { platform } from './platform'
 import { createSessionStore } from './store/session'
 import { createPlayerStore } from './store/player'
 import { createConnectStore } from './store/connect'
+import { bindRemoteControl } from './platform/remoteControl'
 import { AudioEngine } from './player/engine'
 import { NativeEngine } from './player/nativeEngine'
 import { useLikes } from './store/likes'
@@ -253,6 +254,9 @@ if (nativePlayer) {
   useSettings.subscribe((s, prev) => {
     if (s.theme !== prev.theme || s.accent !== prev.accent) pushTheme()
   })
+
+  // Controlling another Connect device: hardware volume keys + notification mirror it (see remoteControl.ts).
+  bindRemoteControl(nativePlayer, useConnect, playback)
 
   // "Show current lyric line in the car" (off by default).
   nativePlayer.setLyricsInCar(useSettings.getState().lyricsInCar)

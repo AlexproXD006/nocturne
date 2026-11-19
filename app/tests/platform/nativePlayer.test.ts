@@ -19,6 +19,7 @@ function fakePlugin() {
     setLyricsInCar: vi.fn(async () => undefined),
     setEq: vi.fn(async () => undefined),
     setAppTheme: vi.fn(async () => undefined),
+    setRemoteControl: vi.fn(async () => undefined),
     getSnapshot: vi.fn(async () => ({ snapshot: null })),
     addListener: vi.fn(async (_e: string, fn: (e: unknown) => void) => {
       handler = fn
@@ -106,5 +107,21 @@ describe('createNativePlayer', () => {
     n.play()
     await expect(n.getAuth()).resolves.toBeNull()
     await expect(n.getSnapshot()).resolves.toBeNull()
+  })
+})
+
+describe('remote control bridge (plugin)', () => {
+  it('forwards setRemoteControl and parses remote events', async () => {
+    const { plugin, fire } = fakePlugin()
+    const player = createNativePlayer(Promise.resolve({ plugin }))
+    player.setRemoteControl({ active: false })
+    await vi.waitFor(() => expect(plugin.setRemoteControl).toHaveBeenCalledWith({ active: false }))
+    expect(parseEvent({ type: 'remoteVolume', volume: 0.35 })).toEqual({ type: 'remoteVolume', volume: 0.35 })
+    expect(parseEvent({ type: 'remoteVolume', volume: 9 })).toEqual({ type: 'remoteVolume', volume: 1 })
+    expect(parseEvent({ type: 'remoteVolume', volume: 'x' })).toBeNull()
+    expect(parseEvent({ type: 'remoteMuted', muted: true })).toEqual({ type: 'remoteMuted', muted: true })
+    expect(parseEvent({ type: 'remoteTransport', action: 'seek', position: 12 })).toEqual({ type: 'remoteTransport', action: 'seek', position: 12 })
+    expect(parseEvent({ type: 'remoteTransport', action: 'explode' })).toBeNull()
+    void fire
   })
 })

@@ -145,8 +145,11 @@ function drawAurora(ctx: CanvasRenderingContext2D, w: number, h: number, s: VisS
     const speed = 0.08 + i * 0.03
     const cx = w * (0.5 + 0.32 * Math.sin(t * speed + phase) * Math.cos(t * speed * 0.6 + i))
     const cy = h * (0.5 + 0.3 * Math.cos(t * speed * 0.9 + phase * 1.3))
-    const level = i === 0 ? bands.bass : i === 1 ? bands.mid : i === 2 ? bands.treble : bands.energy
-    const r = base * (0.32 + (calm ? 0.1 : 0.42) * level + (i === 0 && !calm ? 0.12 * s.pulse : 0))
+    const raw = i === 0 ? bands.bass : i === 1 ? bands.mid : i === 2 ? bands.treble : bands.energy
+    // Analyser levels can go negative/NaN (EQ graph, silence); canvas throws on negative radii.
+    const level = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0
+    const pulse = Number.isFinite(s.pulse) ? Math.max(0, s.pulse) : 0
+    const r = Math.max(1, base * (0.32 + (calm ? 0.1 : 0.42) * level + (i === 0 && !calm ? 0.12 * pulse : 0)))
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
     const color = palette[i % palette.length]!
     g.addColorStop(0, rgba(color, calm ? 0.35 : 0.42 + 0.3 * level))
@@ -162,7 +165,7 @@ function drawSpectrum(ctx: CanvasRenderingContext2D, w: number, h: number, s: Vi
   const { bands, palette, freq, t } = s
   // Soft glow background
   const { cx, cy } = ring
-  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.7)
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(1, Math.max(w, h) * 0.7))
   g.addColorStop(0, rgba(palette[0]!, 0.22 + bands.energy * 0.25))
   g.addColorStop(1, 'rgba(0,0,0,0)')
   ctx.fillStyle = g
@@ -205,7 +208,7 @@ function drawSpectrum(ctx: CanvasRenderingContext2D, w: number, h: number, s: Vi
     p.y += p.vy * dt
     ctx.fillStyle = rgba(palette[1]!, p.life * 0.8)
     ctx.beginPath()
-    ctx.arc(p.x, p.y, p.size * (w / 1000 + 0.6), 0, Math.PI * 2)
+    ctx.arc(p.x, p.y, Math.max(0.1, p.size * (w / 1000 + 0.6)) || 0.1, 0, Math.PI * 2)
     ctx.fill()
   }
 }

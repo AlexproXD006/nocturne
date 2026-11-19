@@ -98,6 +98,8 @@ public final class NocturneMediaService extends MediaLibraryService {
 
     @Nullable private ExoPlayer player;
     @Nullable private MediaLibrarySession session;
+    /** What the session sees: local ExoPlayer, or the mirrored Connect device while this phone controls one. */
+    @Nullable private RemoteControlPlayer remotePlayer;
     @Nullable private NocturneApi api;
     @Nullable private Library library;
     @Nullable private PlayReporter reporter;
@@ -199,7 +201,27 @@ public final class NocturneMediaService extends MediaLibraryService {
             Bundle extras = new Bundle();
             extras.putBoolean(MediaConstants.EXTRAS_KEY_SLOT_RESERVATION_SEEK_TO_PREV, true);
             extras.putBoolean(MediaConstants.EXTRAS_KEY_SLOT_RESERVATION_SEEK_TO_NEXT, true);
-            MediaLibrarySession.Builder builder = new MediaLibrarySession.Builder(this, p, new Callback())
+            remotePlayer = new RemoteControlPlayer(p, new RemoteControlPlayer.Sink() {
+                @Override
+                public void volume(double v) {
+                    emitRemote(new JSONObject(), "remoteVolume", "volume", v);
+                }
+
+                @Override
+                public void muted(boolean m) {
+                    emitRemote(new JSONObject(), "remoteMuted", "muted", m);
+                }
+
+                @Override
+                public void transport(String action, long positionMs) {
+                    try {
+                        EventHub.emit(new JSONObject().put("type", "remoteTransport").put("action", action).put("position", positionMs / 1000.0));
+                    } catch (JSONException ignored) {
+                        /* never */
+                    }
+                }
+            });
+            MediaLibrarySession.Builder builder = new MediaLibrarySession.Builder(this, remotePlayer, new Callback())
                 .setId("nocturne")
                 .setSessionExtras(extras)
                 .setMediaButtonPreferences(buttons());
@@ -337,6 +359,41 @@ public final class NocturneMediaService extends MediaLibraryService {
         if (p == null || p.getMediaItemCount() == 0) return;
         p.seekTo(Math.max(0, (long) (seconds * 1000)));
         emitPosition();
+    }
+
+    private static void emitRemote(JSONObject e, String type, String key, Object value) {
+        try {
+            EventHub.emit(e.put("type", type).put(key, value));
+        } catch (JSONException ignored) {
+            /* never */
+        }
+    }
+
+    /**
+     * Starts / updates / stops mirroring the Connect device this phone controls ({@code null} or
+     * {@code active:false} = local again). See {@link RemoteControlPlayer}.
+     */
+    void cmdSetRemoteControl(@Nullable JSONObject o) {
+        RemoteControlPlayer rp = remotePlayer;
+        if (rp == null) return;
+        if (o == null || !o.optBoolean("active", false)) {
+            rp.clearRemote();
+            return;
+        }
+        JSONObject t = o.optJSONObject("track");
+        String name = o.optString("deviceName", "");
+        rp.setRemote(new RemoteControlPlayer.Remote(
+            name.isEmpty() ? "Nocturne" : name,
+            o.optDouble("volume", 1.0),
+            o.optBoolean("muted", false),
+            o.optString("status", "idle"),
+            (long) (Math.max(0, o.optDouble("position", 0.0)) * 1000),
+            (long) (Math.max(0, o.optDouble("duration", 0.0)) * 1000),
+            t == null || t.optString("id", "").isEmpty() ? null : t.optString("id"),
+            t == null ? "" : t.optString("title", ""),
+            t == null ? "" : t.optString("artist", ""),
+            t == null ? "" : t.optString("album", ""),
+            t == null ? "" : t.optString("artworkUrl", "")));
     }
 
     void cmdSetVolume(double volume) {

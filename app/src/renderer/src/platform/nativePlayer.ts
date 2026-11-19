@@ -2,6 +2,8 @@ import type { PluginListenerHandle } from '@capacitor/core'
 import type {
   NativePlayer,
   NativeEq,
+  NativeRemoteControl,
+  RemoteTransportAction,
   NativePlayerEvent,
   NativeQueueItem,
   NativeRepeat,
@@ -30,6 +32,7 @@ export interface NocturneNativePlugin {
   setLyricsInCar(args: { enabled: boolean }): Promise<void>
   setEq(args: NativeEq): Promise<void>
   setAppTheme(args: { theme: string; accent: string }): Promise<void>
+  setRemoteControl(args: NativeRemoteControl): Promise<void>
   getSnapshot(): Promise<{ snapshot: NativeSnapshot | null }>
   addListener(event: 'event', listener: (e: unknown) => void): Promise<PluginListenerHandle>
 }
@@ -37,6 +40,7 @@ export interface NocturneNativePlugin {
 const num = (v: unknown, d = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : d)
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
+const TRANSPORT = new Set<RemoteTransportAction>(['play', 'pause', 'next', 'previous', 'seek'])
 const STATES = new Set(['idle', 'buffering', 'playing', 'paused', 'ended'])
 
 export function parseSession(raw: unknown): NativeSession | null {
@@ -106,6 +110,14 @@ export function parseEvent(raw: unknown): NativePlayerEvent | null {
       const session = parseSession(r.session)
       return session ? { type: 'auth', session } : null
     }
+    case 'remoteVolume':
+      return typeof r.volume === 'number' && Number.isFinite(r.volume) ? { type: 'remoteVolume', volume: Math.min(1, Math.max(0, r.volume)) } : null
+    case 'remoteMuted':
+      return { type: 'remoteMuted', muted: r.muted === true }
+    case 'remoteTransport':
+      return typeof r.action === 'string' && TRANSPORT.has(r.action as RemoteTransportAction)
+        ? { type: 'remoteTransport', action: r.action as RemoteTransportAction, position: Math.max(0, num(r.position)) }
+        : null
     default:
       return null
   }
@@ -165,6 +177,7 @@ export function createNativePlayer(box: Promise<{ plugin: NocturneNativePlugin }
     setLyricsInCar: (enabled) => call((p) => p.setLyricsInCar({ enabled })),
     setAppTheme: (theme) => call((p) => p.setAppTheme({ theme: theme.theme, accent: theme.accent ?? '' })),
     setEq: (eq) => call((p) => p.setEq({ enabled: eq.enabled, preamp: eq.preamp, gains: eq.gains })),
+    setRemoteControl: (state) => call((p) => p.setRemoteControl(state)),
     async getSnapshot() {
       try {
         const { plugin } = await box

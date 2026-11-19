@@ -32,11 +32,12 @@ import org.json.JSONObject;
  * <ul>
  *   <li>{@code setQueue / play / pause / seek / setVolume / setRepeat / setShuffle / setPauseAtEnd / stop /
  *       setLiked / setLyricsInCar}: transport and queue.
+ *   <li>{@code setRemoteControl}: mirror the controlled Connect device so hardware volume keys drive it.
  *   <li>{@code setAppTheme}: the app's theme and accent, kept natively for the home-screen widgets.
  *   <li>{@code setEq}: equalizer state (enabled, preamp, 10 gains), persisted natively and applied by the service.
  *   <li>{@code setAuth / getAuth}: the session handed to native secure storage.
  *   <li>{@code getSnapshot}: the native queue (adopted when Android Auto started playback).
- *   <li>event {@code event}: state, position, index, error, queue, liked, command, auth.
+ *   <li>event {@code event}: state, position, index, error, queue, liked, command, auth, remoteVolume, remoteMuted, remoteTransport.
  * </ul>
  *
  * <p>While the WebView lives the plugin keeps a {@link MediaController} connected: that binding creates
@@ -63,6 +64,8 @@ public class NocturneMediaPlugin extends Plugin {
     protected void handleOnDestroy() {
         // The WebView is going away; playback continues in the service.
         EventHub.setSink(null);
+        // Nobody left to receive the volume keys' events: do not stay in remote mode.
+        if (EventHub.serviceAlive()) EventHub.withService(s -> s.cmdSetRemoteControl(null));
         EventHub.runOnMain(this::releaseController);
         super.handleOnDestroy();
     }
@@ -114,6 +117,20 @@ public class NocturneMediaPlugin extends Plugin {
     public void setVolume(PluginCall call) {
         final double volume = call.getDouble("volume", 1.0);
         if (EventHub.serviceAlive()) EventHub.withService(s -> s.cmdSetVolume(volume));
+        call.resolve();
+    }
+
+    /** Mirrors the controlled Connect device (volume keys, notification); {@code active:false} goes back to local. */
+    @PluginMethod
+    public void setRemoteControl(PluginCall call) {
+        final boolean active = Boolean.TRUE.equals(call.getBoolean("active", false));
+        if (active) {
+            final JSONObject data = call.getData();
+            EventHub.runOnMain(this::ensureConnected);
+            EventHub.withService(s -> s.cmdSetRemoteControl(data));
+        } else if (EventHub.serviceAlive()) {
+            EventHub.withService(s -> s.cmdSetRemoteControl(null));
+        }
         call.resolve();
     }
 
