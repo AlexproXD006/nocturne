@@ -116,7 +116,13 @@ public final class WidgetUpdater {
     /** The latest state (what the service pushed, else the saved session). */
     WidgetState state() {
         WidgetState s = last;
-        return s != null ? s : WidgetBridge.savedState(app);
+        if (s != null) return s;
+        try {
+            return WidgetBridge.savedState(app);
+        } catch (Throwable t) {
+            Log.w(TAG, "saved session unreadable: " + t.getClass().getSimpleName());
+            return WidgetState.EMPTY;
+        }
     }
 
     @Nullable
@@ -169,7 +175,15 @@ public final class WidgetUpdater {
                 Bundle options = mgr.getAppWidgetOptions(id);
                 mgr.updateAppWidget(id, WidgetRenderer.render(app, kind, st, cfg, sc, cover, options));
             } catch (Throwable t) {
-                Log.w(TAG, "widget " + id + " not updated: " + t.getClass().getSimpleName());
+                Log.w(TAG, "widget " + id + " not updated: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+                try {
+                    // Last resort: the empty state ("Nothing playing - tap to open Nocturne").
+                    WidgetConfig cfg = WidgetConfig.load(kv, id);
+                    WidgetColors.Scheme sc = WidgetColors.resolve(cfg, appTheme, null, system);
+                    mgr.updateAppWidget(id, WidgetRenderer.render(app, kind, WidgetState.EMPTY, cfg, sc, null, null));
+                } catch (Throwable t2) {
+                    Log.w(TAG, "widget " + id + " empty state failed: " + t2.getClass().getSimpleName());
+                }
             }
         }
     }

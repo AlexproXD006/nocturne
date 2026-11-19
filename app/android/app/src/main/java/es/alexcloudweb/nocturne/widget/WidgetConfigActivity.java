@@ -119,12 +119,12 @@ public final class WidgetConfigActivity extends Activity {
         for (String id : WidgetThemes.presetIds()) ids.add(id);
         themeIds = ids.toArray(new String[0]);
         for (String id : themeIds) themeLabels.add(getString(themeLabelRes(id)));
-        themeSpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, themeLabels));
+        styleSpinner(themeSpinner, themeLabels);
 
         List<String> radiusLabels = new ArrayList<>();
         int[] radiusRes = {R.string.widget_radius_0, R.string.widget_radius_1, R.string.widget_radius_2, R.string.widget_radius_3, R.string.widget_radius_4};
         for (int r : radiusRes) radiusLabels.add(getString(r));
-        radius.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, radiusLabels));
+        styleSpinner(radius, radiusLabels);
 
         LinearLayout swatches = findViewById(R.id.cfg_swatches);
         for (final String sw : SWATCHES) {
@@ -216,6 +216,43 @@ public final class WidgetConfigActivity extends Activity {
         findViewById(R.id.cfg_save).setOnClickListener(v -> save());
     }
 
+    /** Adapter with explicit light-on-dark rows (the theme-provided ones can end up dark-on-dark on One UI). */
+    private void styleSpinner(Spinner sp, List<String> labels) {
+        ArrayAdapter<String> a = new ArrayAdapter<>(this, R.layout.cfg_spinner_item, android.R.id.text1, labels);
+        a.setDropDownViewResource(R.layout.cfg_spinner_dropdown_item);
+        sp.setAdapter(a);
+        sp.setPopupBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xFF161C2B));
+    }
+
+    /** Text shown in the preview when the widget layout cannot be inflated. */
+    static String previewError(Throwable t, boolean debug) {
+        if (!debug) return "";
+        String m = t.getMessage();
+        return t.getClass().getSimpleName() + (m == null || m.isEmpty() ? "" : ": " + m);
+    }
+
+    private void showPreviewFallback(Throwable t) {
+        boolean debug = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        Log.w(TAG, "preview failed: " + previewError(t, true));
+        preview.removeAllViews();
+        FrameLayout.LayoutParams match = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        android.widget.ImageView img = new android.widget.ImageView(this);
+        img.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        img.setImageResource(kind == WidgetRenderer.Kind.SMALL ? R.drawable.widget_preview_small
+            : kind == WidgetRenderer.Kind.LARGE ? R.drawable.widget_preview_large : R.drawable.widget_preview_medium);
+        preview.addView(img, match);
+        if (debug) {
+            TextView tv = new TextView(this);
+            tv.setText(previewError(t, true));
+            tv.setTextColor(0xFFFF7A5C);
+            tv.setTextSize(11);
+            tv.setBackgroundColor(0xCC000000);
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.gravity = android.view.Gravity.BOTTOM;
+            preview.addView(tv, lp);
+        }
+    }
+
     private void applyToViews() {
         binding = true;
         modes.check(cfg.mode.equals(WidgetConfig.MODE_MATERIAL) && Build.VERSION.SDK_INT >= 31 ? R.id.cfg_mode_material
@@ -291,11 +328,14 @@ public final class WidgetConfigActivity extends Activity {
                             preview.removeAllViews();
                             preview.addView(v, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                         } catch (Throwable t) {
-                            Log.w(TAG, "preview failed: " + t.getClass().getSimpleName());
+                            showPreviewFallback(t);
                         }
                     });
                 } catch (Throwable t) {
-                    Log.w(TAG, "preview render failed: " + t.getClass().getSimpleName());
+                    final Throwable err = t;
+                    runOnUiThread(() -> {
+                        if (!isFinishing()) showPreviewFallback(err);
+                    });
                 }
             });
         } catch (RuntimeException ignored) {
