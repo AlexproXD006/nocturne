@@ -8,6 +8,7 @@ import { useNav } from './store/nav'
 import { useUi } from './store/ui'
 import { parseWidgetLink } from './lib/widgetLink'
 import { targetPlatform, useUpdates } from './store/updates'
+import { installJsErrorHooks } from './platform/diagnostics'
 import { createUpdateNotifications } from './store/updateNotifications'
 
 async function setupAndroid(): Promise<void> {
@@ -62,6 +63,7 @@ async function setupIos(): Promise<void> {
   }
 }
 
+if (platform.diagnostics) installJsErrorHooks(platform.diagnostics)
 if (platform.kind === 'android') void setupAndroid()
 else if (platform.kind === 'ios') void setupIos()
 

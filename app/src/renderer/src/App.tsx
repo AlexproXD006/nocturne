@@ -25,6 +25,7 @@ import { SpotifyImportsHost } from './components/Spotify'
 import { usePlaylistUi } from './store/playlists'
 import { QueuePanel } from './components/QueuePanel'
 import { UpdateBanner } from './components/UpdateBanner'
+import { CrashReportPrompt } from './components/CrashReportPrompt'
 import { AdaptiveBackdrop } from './components/AdaptiveBackdrop'
 import { Logo, MobileNav, Sidebar, TitleBar, Toasts } from './components/Shell'
 import { AdminPage } from './pages/admin/AdminPage'
@@ -224,6 +225,7 @@ export function App(): ReactNode {
       {status === 'signedIn' && (
         <div className="flex h-full flex-col">
           <UpdateBanner />
+          <CrashReportPrompt />
           <div className="min-h-0 flex-1">
             <SignedInShell />
           </div>

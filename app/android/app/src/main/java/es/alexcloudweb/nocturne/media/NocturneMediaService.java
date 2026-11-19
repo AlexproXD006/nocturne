@@ -7,7 +7,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
@@ -217,7 +217,7 @@ public final class NocturneMediaService extends MediaLibraryService {
                 @Override
                 public void onForegroundServiceStartNotAllowedException() {
                     // Android 12+ refused to promote us (app in background without an exemption).
-                    Log.w(TAG, "foreground service start not allowed; media notification deferred");
+                    AppLog.w(TAG, "foreground service start not allowed; media notification deferred");
                 }
             });
             buttonsKey = buttonsKey();
@@ -227,7 +227,7 @@ public final class NocturneMediaService extends MediaLibraryService {
             EventHub.attach(this);
             scheduleWidgets();
         } catch (Throwable t) {
-            Log.e(TAG, "media service setup failed", t);
+            AppLog.e(TAG, "media service setup failed", t);
         }
     }
 
@@ -254,7 +254,7 @@ public final class NocturneMediaService extends MediaLibraryService {
             try {
                 pauseAllPlayersAndStopSelf();
             } catch (Throwable t) {
-                Log.w(TAG, "stop after task removal failed", t);
+                AppLog.w(TAG, "stop after task removal failed", t);
                 stopSelf();
             }
         }
@@ -278,7 +278,7 @@ public final class NocturneMediaService extends MediaLibraryService {
             if (s != null) s.release();
             if (p != null) p.release();
         } catch (Throwable t) {
-            Log.e(TAG, "release failed", t);
+            AppLog.e(TAG, "release failed", t);
         }
         io.shutdown();
         super.onDestroy();
@@ -377,7 +377,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         try {
             pauseAllPlayersAndStopSelf();
         } catch (Throwable t) {
-            Log.w(TAG, "stop failed", t);
+            AppLog.w(TAG, "stop failed", t);
         }
     }
 
@@ -500,7 +500,7 @@ public final class NocturneMediaService extends MediaLibraryService {
             String curJson = json.get(cur.mediaId);
             if (curJson != null && new JSONObject(curJson).optBoolean("liked", false)) likedIds.add(trackIdOf(cur)); // the widget heart may have changed it
         } catch (Throwable t) {
-            Log.w(TAG, "session restore failed", t);
+            AppLog.w(TAG, "session restore failed", t);
         }
     }
 
@@ -598,7 +598,7 @@ public final class NocturneMediaService extends MediaLibraryService {
             }
             retriedUid = null;
             Throwable cause = error.getCause();
-            Log.w("NocturneMedia", "playback error " + error.getErrorCodeName() + " (" + error.errorCode + "): " + error.getMessage()
+            AppLog.w("NocturneMedia", "playback error " + error.getErrorCodeName() + " (" + error.errorCode + "): " + error.getMessage()
                 + (cause != null ? " / cause: " + cause.getClass().getSimpleName() + ": " + cause.getMessage() : ""));
             errorStreak++;
             try {
@@ -762,7 +762,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         try {
             w.pushFull(widgetState(paused));
         } catch (Throwable t) {
-            Log.w(TAG, "widget push failed", t);
+            AppLog.w(TAG, "widget push failed", t);
         }
     }
 
@@ -910,7 +910,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         try {
             s.setMediaButtonPreferences(buttons());
         } catch (Throwable t) {
-            Log.e(TAG, "setMediaButtonPreferences failed", t);
+            AppLog.e(TAG, "setMediaButtonPreferences failed", t);
         }
     }
 
@@ -963,7 +963,7 @@ public final class NocturneMediaService extends MediaLibraryService {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
             return PendingIntent.getActivity(ctx, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         } catch (Throwable t) {
-            Log.w(TAG, "session activity intent unavailable", t);
+            AppLog.w(TAG, "session activity intent unavailable", t);
             return null;
         }
     }
@@ -1024,7 +1024,7 @@ public final class NocturneMediaService extends MediaLibraryService {
     }
 
     private static <T> LibraryResult<T> failure(Throwable t) {
-        Log.w(TAG, "library request failed: " + t.getClass().getSimpleName());
+        AppLog.w(TAG, "library request failed: " + t.getClass().getSimpleName());
         if (t instanceof NocturneApi.AuthException) return LibraryResult.ofError(SessionError.ERROR_SESSION_AUTHENTICATION_EXPIRED);
         return LibraryResult.ofError(SessionError.ERROR_UNKNOWN);
     }
@@ -1225,7 +1225,7 @@ public final class NocturneMediaService extends MediaLibraryService {
                     searchResults.put(query, nodes);
                     s.notifySearchResultChanged(browser, query, nodes.size(), params);
                 } catch (Throwable t) {
-                    Log.w(TAG, "search failed: " + t.getClass().getSimpleName());
+                    AppLog.w(TAG, "search failed: " + t.getClass().getSimpleName());
                 }
             });
             return Futures.immediateFuture(LibraryResult.ofVoid());
@@ -1347,7 +1347,7 @@ public final class NocturneMediaService extends MediaLibraryService {
             try {
                 a.request(now ? "PUT" : "DELETE", "/v1/library/tracks/" + NocturneApi.pathId(id), null);
             } catch (Throwable t) {
-                Log.w(TAG, "like failed: " + t.getClass().getSimpleName());
+                AppLog.w(TAG, "like failed: " + t.getClass().getSimpleName());
                 main.post(() -> {
                     cmdSetLiked(id, !now);
                     try {

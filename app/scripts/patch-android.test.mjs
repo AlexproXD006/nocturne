@@ -16,6 +16,8 @@ import {
   ensureAppPluginsRegistered,
   ensurePluginRegistered,
   UPDATES_PLUGIN_IMPORT,
+  DIAG_PLUGIN_IMPORT,
+  DIAG_PLUGIN_REGISTER,
   UPDATES_PLUGIN_REGISTER,
   WORK_VERSION,
   PALETTE_VERSION,
@@ -210,7 +212,7 @@ test('widget provider xml: sizes, resize, previews, description, configure and r
     assert.match(xml, new RegExp(`android:description="@string/widget_${w.size}_description"`))
     assert.match(xml, new RegExp(`android:initialLayout="@layout/widget_${w.size}"`))
     assert.match(xml, /android:configure="es\.alexcloudweb\.nocturne\.widget\.WidgetConfigActivity"/)
-    assert.match(xml, /android:widgetFeatures="reconfigurable"/)
+    assert.match(xml, /android:widgetFeatures="reconfigurable\|configuration_optional"/)
     assert.match(xml, /android:updatePeriodMillis="0"/)
     assert.match(xml, /android:widgetCategory="home_screen"/)
   }
@@ -399,7 +401,7 @@ test('MainActivity: NocturneUpdates plugin registered after NocturneMedia, befor
     assert.equal(patchMainActivity(out), out)
   }
   // Patching the previous generation of the template yields exactly the current template.
-  const previous = mainActivityJava().replace(`${UPDATES_PLUGIN_IMPORT}\n`, '').replace(`        ${UPDATES_PLUGIN_REGISTER}\n`, '')
+  const previous = mainActivityJava().replace(`${UPDATES_PLUGIN_IMPORT}\n`, '').replace(`        ${UPDATES_PLUGIN_REGISTER}\n`, '').replace(`${DIAG_PLUGIN_IMPORT}\n`, '').replace(`        ${DIAG_PLUGIN_REGISTER}\n`, '')
   assert.doesNotMatch(previous, /NocturneUpdatesPlugin/)
   assert.equal(patchMainActivity(previous), mainActivityJava())
   // No onCreate(super): untouched. No imports at all: the import goes after the package line.
@@ -465,4 +467,10 @@ test('patchProject applies to a project copy and is idempotent', async (t) => {
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+test('patchManifest points the application at NocturneApplication (crash reporter) and is idempotent', () => {
+  const once = patchManifest(MANIFEST)
+  assert.match(once, /<application\b[^>]*android:name="\.NocturneApplication"/)
+  assert.equal(patchManifest(once), once)
 })

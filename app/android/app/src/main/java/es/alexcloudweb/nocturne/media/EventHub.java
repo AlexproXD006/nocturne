@@ -2,7 +2,7 @@ package es.alexcloudweb.nocturne.media;
 
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import androidx.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +37,7 @@ final class EventHub {
             try {
                 r.run();
             } catch (Throwable t) {
-                Log.e(TAG, "media task failed", t);
+                AppLog.e(TAG, "media task failed", t);
             }
         };
         if (Looper.myLooper() == Looper.getMainLooper()) safe.run();
@@ -58,7 +58,7 @@ final class EventHub {
         try {
             s.emit(event);
         } catch (Throwable t) {
-            Log.e(TAG, "event dispatch failed", t);
+            AppLog.e(TAG, "event dispatch failed", t);
         }
     }
 
@@ -83,7 +83,7 @@ final class EventHub {
                 try {
                     c.accept(s);
                 } catch (Throwable t) {
-                    Log.e(TAG, "queued media task failed", t);
+                    AppLog.e(TAG, "queued media task failed", t);
                 }
             }
         });

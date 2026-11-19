@@ -3,7 +3,7 @@ package es.alexcloudweb.nocturne.media;
 import android.content.ComponentName;
 import android.content.Context;
 import android.os.Looper;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import androidx.annotation.MainThread;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -54,7 +54,7 @@ public class NocturneMediaPlugin extends Plugin {
             try {
                 notifyListeners("event", new JSObject(event.toString()));
             } catch (JSONException e) {
-                Log.w(TAG, "event not delivered");
+                AppLog.w(TAG, "event not delivered");
             }
         });
     }
@@ -233,7 +233,7 @@ public class NocturneMediaPlugin extends Plugin {
             try {
                 MediaController.releaseFuture(f);
             } catch (Throwable t) {
-                Log.w(TAG, "controller release failed", t);
+                AppLog.w(TAG, "controller release failed", t);
             }
         }
     }
@@ -264,12 +264,12 @@ public class NocturneMediaPlugin extends Plugin {
                 try {
                     f.get();
                 } catch (Throwable t) {
-                    Log.w(TAG, "media session connection failed", t);
+                    AppLog.w(TAG, "media session connection failed", t);
                     if (controllerFuture == f) controllerFuture = null;
                 }
             }, ContextCompat.getMainExecutor(app));
         } catch (Throwable t) {
-            Log.e(TAG, "could not connect to media service", t);
+            AppLog.e(TAG, "could not connect to media service", t);
             controllerFuture = null;
         }
     }

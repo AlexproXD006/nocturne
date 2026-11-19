@@ -1,7 +1,7 @@
 package es.alexcloudweb.nocturne.media;
 
 import android.content.Context;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import androidx.annotation.Nullable;
 import es.alexcloudweb.nocturne.widget.WidgetState;
 import es.alexcloudweb.nocturne.widget.WidgetUpdater;
@@ -64,7 +64,7 @@ public final class WidgetBridge {
         try {
             api.request(now ? "PUT" : "DELETE", "/v1/library/tracks/" + NocturneApi.pathId(cur.trackId), null);
         } catch (Throwable t) {
-            Log.w(TAG, "like failed: " + t.getClass().getSimpleName());
+            AppLog.w(TAG, "like failed: " + t.getClass().getSimpleName());
             applyLiked(ctx, cur.trackId, !now);
             u.pushFull(savedState(ctx));
         }

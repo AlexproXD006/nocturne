@@ -15,7 +15,7 @@ export type Route =
   | { name: 'admin'; tab?: AdminTab }
 
 export type LibraryTab = 'playlists' | 'albums' | 'artists' | 'songs'
-export type AdminTab = 'overview' | 'add' | 'jobs' | 'library' | 'lyrics' | 'users' | 'backups'
+export type AdminTab = 'overview' | 'add' | 'jobs' | 'library' | 'lyrics' | 'users' | 'backups' | 'diagnostics'
 
 interface NavState {
   stack: Route[]

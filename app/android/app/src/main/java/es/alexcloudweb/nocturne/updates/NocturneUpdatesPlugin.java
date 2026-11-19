@@ -2,7 +2,7 @@ package es.alexcloudweb.nocturne.updates;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import androidx.annotation.Nullable;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -32,7 +32,7 @@ public class NocturneUpdatesPlugin extends Plugin {
             Activity a = getActivity();
             if (a != null) deliverTap(a.getIntent());
         } catch (Throwable t) {
-            Log.w(TAG, "launch intent check failed", t);
+            AppLog.w(TAG, "launch intent check failed", t);
         }
     }
 
@@ -42,7 +42,7 @@ public class NocturneUpdatesPlugin extends Plugin {
         try {
             deliverTap(intent);
         } catch (Throwable t) {
-            Log.w(TAG, "new intent check failed", t);
+            AppLog.w(TAG, "new intent check failed", t);
         }
     }
 
@@ -70,7 +70,7 @@ public class NocturneUpdatesPlugin extends Plugin {
             UpdateCheckWorker.schedule(getContext());
             call.resolve();
         } catch (Throwable t) {
-            Log.w(TAG, "configure failed", t);
+            AppLog.w(TAG, "configure failed", t);
             call.reject("configure failed");
         }
     }
@@ -82,7 +82,7 @@ public class NocturneUpdatesPlugin extends Plugin {
             UpdatePrefs.clearTarget(getContext());
             UpdateNotifier.cancel(getContext());
         } catch (Throwable t) {
-            Log.w(TAG, "clear failed", t);
+            AppLog.w(TAG, "clear failed", t);
         }
         call.resolve();
     }
@@ -93,7 +93,7 @@ public class NocturneUpdatesPlugin extends Plugin {
         try {
             posted = UpdateNotifier.notifyOnce(getContext(), call.getString("version"));
         } catch (Throwable t) {
-            Log.w(TAG, "notify failed", t);
+            AppLog.w(TAG, "notify failed", t);
         }
         JSObject res = new JSObject();
         res.put("posted", posted);

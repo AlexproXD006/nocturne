@@ -37,6 +37,7 @@ from .routes_radio import router as radio_router
 from .routes_mixes import router as mixes_router
 from .routes_eq import router as eq_router
 from .routes_listenbrainz import router as listenbrainz_router
+from .diagnostics import router as diagnostics_router
 
 logger = logging.getLogger("nocturne")
 
@@ -135,6 +136,7 @@ v1_app.include_router(radio_router)
 v1_app.include_router(mixes_router)
 v1_app.include_router(eq_router)
 v1_app.include_router(listenbrainz_router)
+v1_app.include_router(diagnostics_router)
 
 
 # ---------------------------------------------------------------------------

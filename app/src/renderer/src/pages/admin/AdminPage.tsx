@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Archive, Database, FileText, LayoutDashboard, ListChecks, Plus, Users } from 'lucide-react'
+import { Archive, Bug, Database, FileText, LayoutDashboard, ListChecks, Plus, Users } from 'lucide-react'
 import { useSession } from '../../services'
 import { isAdmin } from '../../store/session'
 import { useNav, type AdminTab } from '../../store/nav'
@@ -8,6 +8,7 @@ import { Tabs, panelDomId, tabDomId, type TabDef } from '../../components/Tabs'
 import { Page } from '../Page'
 import { AddMusicTab } from './AddMusicTab'
 import { BackupsTab } from './BackupsTab'
+import { DiagnosticsTab } from './DiagnosticsTab'
 import { JobsTab } from './JobsTab'
 import { LibraryTab } from './LibraryTab'
 import { LyricsTab } from './LyricsTab'
@@ -23,7 +24,8 @@ const TABS: (Omit<TabDef<AdminTab>, 'label'> & { label: MessageKey })[] = [
   { id: 'library', label: 'adm.tab.library', icon: <Database /> },
   { id: 'lyrics', label: 'adm.tab.lyrics', icon: <FileText /> },
   { id: 'users', label: 'adm.tab.users', icon: <Users /> },
-  { id: 'backups', label: 'adm.tab.backups', icon: <Archive /> }
+  { id: 'backups', label: 'adm.tab.backups', icon: <Archive /> },
+  { id: 'diagnostics', label: 'adm.tab.diagnostics', icon: <Bug /> }
 ]
 const PREFIX = 'admin'
 
@@ -85,6 +87,7 @@ export function AdminPage(): ReactNode {
         {tab === 'lyrics' && <LyricsTab />}
         {tab === 'users' && <UsersTab />}
         {tab === 'backups' && <BackupsTab />}
+        {tab === 'diagnostics' && <DiagnosticsTab />}
       </div>
     </Page>
   )

@@ -3,9 +3,11 @@ import type { NocturneBridge, WindowState } from '../../../shared/ipc'
 import { createNativePlayer, type NocturneNativePlugin } from './nativePlayer'
 import type { NativePlayer } from './nativePlayerTypes'
 import { capacitorSaveOrShare, desktopSaveOrShare, webSaveOrShare, type SaveOrShareImage } from './saveImage'
+import { createNativeDiagnostics, type DiagnosticsPlugin, type NativeDiagnostics } from './diagnostics'
 import { createNativeUpdates, type NativeUpdates, type NocturneUpdatesPlugin } from './nocturneUpdates'
 
 export type { NativeUpdates } from './nocturneUpdates'
+export type { NativeDiagnostics, CrashReport } from './diagnostics'
 export type { ImageIntent, ImageResult, SaveOrShareImage } from './saveImage'
 export type { NativePlayer, NativePlayerEvent, NativeQueueItem, NativeSnapshot, NativeSession } from './nativePlayerTypes'
 
@@ -74,6 +76,8 @@ export interface Platform {
   nativePlayer?: NativePlayer | null
   /** Android only: background update check (WorkManager) + "update available" notification. */
   nativeUpdates?: NativeUpdates | null
+  /** Android only: crash reports stored by the native uncaught-exception handler + the scrubbed log ring. */
+  diagnostics?: NativeDiagnostics | null
   /**
    * Desktop only: show a native "update available" notification; clicking it focuses the window
    * and opens `url`. Resolves false when notifications are unsupported or the call fails.
@@ -167,6 +171,10 @@ function androidPlatform(): Platform {
     plugin: registerPlugin<NocturneUpdatesPlugin>('NocturneUpdates')
   }))
 
+  const diagBox = import('@capacitor/core').then(({ registerPlugin }) => ({
+    plugin: registerPlugin<DiagnosticsPlugin>('NocturneDiag')
+  }))
+
   return {
     kind: 'android',
     secure: {
@@ -191,6 +199,7 @@ function androidPlatform(): Platform {
     nativeNowPlaying: null,
     nativePlayer: createNativePlayer(mediaBox),
     nativeUpdates: createNativeUpdates(updatesBox),
+    diagnostics: createNativeDiagnostics(diagBox),
     notifyUpdate: null,
     saveOrShareImage: capacitorSaveOrShare()
   }

@@ -2,7 +2,7 @@ package es.alexcloudweb.nocturne.media;
 
 import android.content.Context;
 import android.net.Uri;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import androidx.annotation.Nullable;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -130,7 +130,7 @@ final class NocturneApi {
             try {
                 l.onSessionRefreshed(next);
             } catch (Throwable t) {
-                Log.w(TAG, "session listener failed", t);
+                AppLog.w(TAG, "session listener failed", t);
             }
         }
         return next;

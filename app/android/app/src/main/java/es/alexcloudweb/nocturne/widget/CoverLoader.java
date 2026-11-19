@@ -9,7 +9,7 @@ import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import androidx.annotation.Nullable;
 import androidx.palette.graphics.Palette;
 import java.io.ByteArrayOutputStream;
@@ -84,7 +84,7 @@ final class CoverLoader {
             out[1] = vib;
             out[2] = p.getMutedColor(0);
         } catch (Throwable t) {
-            Log.w(TAG, "palette failed", t);
+            AppLog.w(TAG, "palette failed", t);
         }
         if (trackId.equals(memTrack)) memPalette = out;
         return out;
@@ -107,7 +107,7 @@ final class CoverLoader {
             o.inJustDecodeBounds = false;
             return BitmapFactory.decodeByteArray(data, 0, data.length, o);
         } catch (IOException | RuntimeException e) {
-            Log.w(TAG, "cover download failed: " + e.getClass().getSimpleName());
+            AppLog.w(TAG, "cover download failed: " + e.getClass().getSimpleName());
             return null;
         } finally {
             if (c != null) c.disconnect();
@@ -139,7 +139,7 @@ final class CoverLoader {
         try (FileOutputStream os = new FileOutputStream(file)) {
             bmp.compress(Bitmap.CompressFormat.JPEG, 88, os);
         } catch (IOException | RuntimeException e) {
-            Log.w(TAG, "cover cache write failed");
+            AppLog.w(TAG, "cover cache write failed");
         }
     }
 

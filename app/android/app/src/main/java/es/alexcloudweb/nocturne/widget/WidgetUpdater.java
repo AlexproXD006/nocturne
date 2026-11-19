@@ -7,7 +7,7 @@ import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import android.widget.RemoteViews;
 import androidx.annotation.Nullable;
 import es.alexcloudweb.nocturne.media.WidgetBridge;
@@ -40,6 +40,21 @@ public final class WidgetUpdater {
     private volatile int[] largeIds = new int[0];
     private volatile boolean idsLoaded;
 
+    /** Every task on the widget thread: an exception here must never reach the default handler and kill the process. */
+    private void run(Runnable r) {
+        try {
+            exec.execute(() -> {
+                try {
+                    r.run();
+                } catch (Throwable t) {
+                    AppLog.w(TAG, "widget task failed: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+                }
+            });
+        } catch (RuntimeException rejected) {
+            AppLog.w(TAG, "widget task rejected");
+        }
+    }
+
     private WidgetUpdater(Context app) {
         this.app = app;
     }
@@ -52,14 +67,14 @@ public final class WidgetUpdater {
     public void pushFull(WidgetState st) {
         last = st;
         throttle.reset();
-        exec.execute(() -> renderAll(st));
+        run(() -> renderAll(st));
     }
 
     /** Playback tick: progress + lyric of the large widget only, while playing, at most about once a second. */
     public void pushTick(WidgetState st, int lyricIdx) {
         last = st;
         if (!throttle.shouldPush(System.currentTimeMillis(), st.playing, hasLarge(), st.positionMs, lyricIdx)) return;
-        exec.execute(() -> {
+        run(() -> {
             try {
                 int[] ids = largeIds;
                 if (ids.length == 0) return;
@@ -70,14 +85,14 @@ public final class WidgetUpdater {
                     else mgr.updateAppWidget(id, rv);
                 }
             } catch (Throwable t) {
-                Log.w(TAG, "tick failed: " + t.getClass().getSimpleName());
+                AppLog.w(TAG, "tick failed: " + t.getClass().getSimpleName());
             }
         });
     }
 
     /** Whether a large (lyrics) widget is on a home screen. Cached; refreshed by every update. */
     public boolean hasLarge() {
-        if (!idsLoaded) exec.execute(this::loadIds);
+        if (!idsLoaded) run(this::loadIds);
         return largeIds.length > 0;
     }
 
@@ -87,19 +102,25 @@ public final class WidgetUpdater {
 
     /** (Re)draws the given widgets of one kind now, with the freshest state we have. */
     void refresh(WidgetRenderer.Kind kind, int[] ids, @Nullable Runnable done) {
-        exec.execute(() -> {
+        run(() -> {
             try {
                 loadIds();
                 renderKind(kind, ids, state());
             } finally {
-                if (done != null) done.run();
+                if (done != null) {
+                    try {
+                        done.run();
+                    } catch (Throwable ignored) {
+                        /* PendingResult already finished */
+                    }
+                }
             }
         });
     }
 
     /** Redraws every widget (theme from the app changed, widget added/removed/reconfigured). */
     public void refreshAll() {
-        exec.execute(() -> {
+        run(() -> {
             loadIds();
             renderAll(state());
         });
@@ -107,7 +128,7 @@ public final class WidgetUpdater {
 
     /** A widget was added or removed: re-count them and let the service load lyrics if needed. */
     void widgetsChanged() {
-        exec.execute(() -> {
+        run(() -> {
             loadIds();
             WidgetBridge.widgetsChanged();
         });
@@ -120,7 +141,7 @@ public final class WidgetUpdater {
         try {
             return WidgetBridge.savedState(app);
         } catch (Throwable t) {
-            Log.w(TAG, "saved session unreadable: " + t.getClass().getSimpleName());
+            AppLog.w(TAG, "saved session unreadable: " + t.getClass().getSimpleName());
             return WidgetState.EMPTY;
         }
     }
@@ -137,7 +158,7 @@ public final class WidgetUpdater {
             largeIds = AppWidgetManager.getInstance(app).getAppWidgetIds(new ComponentName(app, LargeWidgetProvider.class));
             idsLoaded = true;
         } catch (Throwable t) {
-            Log.w(TAG, "widget ids unavailable");
+            AppLog.w(TAG, "widget ids unavailable");
         }
     }
 
@@ -145,7 +166,11 @@ public final class WidgetUpdater {
         loadIds();
         AppWidgetManager mgr = AppWidgetManager.getInstance(app);
         for (WidgetRenderer.Kind k : WidgetRenderer.Kind.values()) {
-            renderKind(k, mgr.getAppWidgetIds(new ComponentName(app, providerOf(k))), st);
+            try {
+                renderKind(k, mgr.getAppWidgetIds(new ComponentName(app, providerOf(k))), st);
+            } catch (Throwable t) {
+                AppLog.w(TAG, "render " + k + " failed: " + t.getClass().getSimpleName());
+            }
         }
     }
 
@@ -163,8 +188,16 @@ public final class WidgetUpdater {
     private void renderKind(WidgetRenderer.Kind kind, int[] ids, WidgetState st) {
         if (ids == null || ids.length == 0) return;
         AppWidgetManager mgr = AppWidgetManager.getInstance(app);
-        Bitmap cover = st.hasQueue ? CoverLoader.load(app, st.trackId, st.artUrl) : null;
-        int[] palette = cover != null ? CoverLoader.palette(st.trackId, cover) : null;
+        Bitmap cover = null;
+        int[] palette = null;
+        try {
+            cover = st.hasQueue ? CoverLoader.load(app, st.trackId, st.artUrl) : null;
+            palette = cover != null ? CoverLoader.palette(st.trackId, cover) : null;
+        } catch (Throwable t) { // includes OutOfMemoryError: a widget without a cover beats a dead process
+            AppLog.w(TAG, "cover unavailable: " + t.getClass().getSimpleName());
+            cover = null;
+            palette = null;
+        }
         KeyValueStore kv = KeyValueStore.prefs(app);
         AppThemeStore.State appTheme = AppThemeStore.load(kv);
         int[] system = systemColors(app);
@@ -175,14 +208,14 @@ public final class WidgetUpdater {
                 Bundle options = mgr.getAppWidgetOptions(id);
                 mgr.updateAppWidget(id, WidgetRenderer.render(app, kind, st, cfg, sc, cover, options));
             } catch (Throwable t) {
-                Log.w(TAG, "widget " + id + " not updated: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+                AppLog.w(TAG, "widget " + id + " not updated: " + t.getClass().getSimpleName() + ": " + t.getMessage());
                 try {
                     // Last resort: the empty state ("Nothing playing - tap to open Nocturne").
                     WidgetConfig cfg = WidgetConfig.load(kv, id);
                     WidgetColors.Scheme sc = WidgetColors.resolve(cfg, appTheme, null, system);
                     mgr.updateAppWidget(id, WidgetRenderer.render(app, kind, WidgetState.EMPTY, cfg, sc, null, null));
                 } catch (Throwable t2) {
-                    Log.w(TAG, "widget " + id + " empty state failed: " + t2.getClass().getSimpleName());
+                    AppLog.w(TAG, "widget " + id + " empty state failed: " + t2.getClass().getSimpleName());
                 }
             }
         }

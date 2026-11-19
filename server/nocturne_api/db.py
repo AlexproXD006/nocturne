@@ -399,6 +399,22 @@ _MIGRATIONS: list[tuple[int, str]] = [
         );
         CREATE INDEX IF NOT EXISTS idx_v1_eq_presets_user ON v1_eq_presets(user_id, created_at);
     """),
+    # 14: crash / diagnostic reports sent by the apps (nocturne_api/diagnostics.py)
+    (14, """
+        CREATE TABLE IF NOT EXISTS v1_diagnostics (
+            id          TEXT PRIMARY KEY,
+            user_id     TEXT NOT NULL,
+            created_at  TEXT NOT NULL,
+            source      TEXT NOT NULL,
+            kind        TEXT NOT NULL,
+            app_version TEXT NOT NULL DEFAULT '',
+            os          TEXT NOT NULL DEFAULT '',
+            device      TEXT NOT NULL DEFAULT '',
+            occurred_at TEXT,
+            body        TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_v1_diagnostics_created ON v1_diagnostics(created_at);
+    """),
 ]
 
 def migrate() -> None:

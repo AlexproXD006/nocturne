@@ -9,7 +9,7 @@ import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -116,7 +116,7 @@ public final class UpdateNotifier {
             UpdatePrefs.setLastNotified(ctx, version);
             return true;
         } catch (Throwable t) {
-            Log.w(TAG, "update notification failed", t);
+            AppLog.w(TAG, "update notification failed", t);
             return false;
         }
     }
@@ -126,7 +126,7 @@ public final class UpdateNotifier {
         try {
             NotificationManagerCompat.from(ctx).cancel(NOTIFICATION_ID);
         } catch (Throwable t) {
-            Log.w(TAG, "cancel failed", t);
+            AppLog.w(TAG, "cancel failed", t);
         }
     }
 }

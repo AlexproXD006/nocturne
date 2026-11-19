@@ -67,7 +67,11 @@ public class WidgetResourcesTest {
                 String v = a.getNodeValue();
                 if (v.startsWith("?")) problems.add(f.getName() + ": " + a.getNodeName() + "=" + v + " uses a theme attribute");
                 if (a.getNodeName().startsWith("app:")) problems.add(f.getName() + ": " + a.getNodeName() + " (app: attribute)");
-                if (a.getNodeName().equals("style")) problems.add(f.getName() + ": style attribute");
+                if (a.getNodeName().equals("style") && !v.startsWith("@android:style/")) problems.add(f.getName() + ": style attribute " + v);
+                if (tag.equals("ProgressBar") && !(a.getNodeName().equals("style") && v.contains("Horizontal")) && a.getNodeName().equals("android:id")
+                        && !((Element) n).getAttribute("style").contains("Horizontal")) {
+                    problems.add(f.getName() + ": ProgressBar without a Horizontal style (renders as a spinner)");
+                }
                 if (a.getNodeName().equals("android:foreground")) problems.add(f.getName() + ": android:foreground");
             }
         }
@@ -132,5 +136,22 @@ public class WidgetResourcesTest {
     public void previewErrorOnlyInDebug() {
         assertEquals("", WidgetConfigActivity.previewError(new RuntimeException("x"), false));
         assertEquals("RuntimeException: boom", WidgetConfigActivity.previewError(new RuntimeException("boom"), true));
+    }
+
+    /** beta.9 crash: ArrayAdapter(ctx, layout, android.R.id.text1, ...) on a layout whose root TextView has no id throws an NPE. */
+    @Test
+    public void spinnerItemLayoutsAreTextViewRoots() throws Exception {
+        for (String name : new String[] {"cfg_spinner_item.xml", "cfg_spinner_dropdown_item.xml"}) {
+            File f = new File(res(), "layout/" + name);
+            Document d = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(f);
+            assertEquals(name, "TextView", d.getDocumentElement().getNodeName());
+        }
+    }
+
+    @Test
+    public void configActivityDoesNotPassATextViewIdToItsAdapters() throws Exception {
+        File src = new File(res(), "../java/es/alexcloudweb/nocturne/widget/WidgetConfigActivity.java");
+        String code = new String(java.nio.file.Files.readAllBytes(src.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+        assertFalse(code.contains("cfg_spinner_item, android.R.id.text1"));
     }
 }

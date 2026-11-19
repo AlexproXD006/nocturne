@@ -3,7 +3,7 @@ package es.alexcloudweb.nocturne.widget;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import es.alexcloudweb.nocturne.media.WidgetBridge;
 
 /** Widget buttons that are not media keys (the heart). Not exported: only our PendingIntents reach it. */
@@ -19,7 +19,7 @@ public final class WidgetActionReceiver extends BroadcastReceiver {
             try {
                 WidgetBridge.toggleLike(app);
             } catch (Throwable t) {
-                Log.w("NocturneWidget", "like failed: " + t.getClass().getSimpleName());
+                AppLog.w("NocturneWidget", "like failed: " + t.getClass().getSimpleName());
             } finally {
                 pending.finish();
             }

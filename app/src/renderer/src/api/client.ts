@@ -27,6 +27,7 @@ import type {
   AdminTrack,
   AdminUser,
   Backup,
+  DiagnosticReport,
   ConnectCommandKind,
   ConnectPlaybackState,
   ConnectSession,
@@ -743,6 +744,18 @@ export class ApiClient {
 
   adminDeleteUser(id: string): Promise<void> {
     return this.request('DELETE', `/v1/admin/users/${encodeURIComponent(id)}`)
+  }
+
+  sendDiagnostic(report: Record<string, unknown>): Promise<{ id: string }> {
+    return this.request('POST', '/v1/diagnostics/crash', { body: report })
+  }
+
+  adminDiagnostics(signal?: AbortSignal): Promise<{ reports: DiagnosticReport[] }> {
+    return this.request('GET', '/v1/admin/diagnostics', { signal })
+  }
+
+  adminDeleteDiagnostic(id?: string): Promise<void> {
+    return this.request('DELETE', id ? `/v1/admin/diagnostics/${encodeURIComponent(id)}` : '/v1/admin/diagnostics')
   }
 
   adminBackups(signal?: AbortSignal): Promise<{ backups: Backup[] }> {

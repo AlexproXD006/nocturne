@@ -1,7 +1,7 @@
 package es.alexcloudweb.nocturne.updates;
 
 import android.content.Context;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.work.Constraints;
@@ -60,7 +60,7 @@ public class UpdateCheckWorker extends Worker {
             String version = fetchLatestVersion(server + "/v1/updates/" + channel);
             if (version != null) UpdateNotifier.notifyOnce(ctx, version);
         } catch (Throwable t) {
-            Log.w(TAG, "background update check failed", t);
+            AppLog.w(TAG, "background update check failed", t);
         }
         return Result.success();
     }

@@ -11,7 +11,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
+import es.alexcloudweb.nocturne.diag.CrashStore;
+import es.alexcloudweb.nocturne.diag.Diag;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
@@ -63,28 +65,60 @@ public final class WidgetConfigActivity extends Activity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setResult(RESULT_CANCELED);
-        appWidgetId = getIntent().getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+        appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID;
+        try {
+            Intent in = getIntent();
+            if (in != null) appWidgetId = in.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+        } catch (Throwable t) {
+            AppLog.w(TAG, "config intent unreadable", t);
+        }
         if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+            setResult(RESULT_CANCELED);
             finish();
             return;
         }
-        AppWidgetProviderInfo info = AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId);
-        String cls = info == null ? "" : info.provider.getClassName();
-        if (cls.endsWith("SmallWidgetProvider")) kind = WidgetRenderer.Kind.SMALL;
-        else if (cls.endsWith("LargeWidgetProvider")) kind = WidgetRenderer.Kind.LARGE;
-        else kind = WidgetRenderer.Kind.MEDIUM;
+        // Cancelled until saved, but carrying the id so the launcher can clean up its half-bound widget.
+        setResult(RESULT_CANCELED, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId));
+        try {
+            AppWidgetProviderInfo info = AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId);
+            String cls = info == null || info.provider == null ? "" : info.provider.getClassName();
+            if (cls.endsWith("SmallWidgetProvider")) kind = WidgetRenderer.Kind.SMALL;
+            else if (cls.endsWith("LargeWidgetProvider")) kind = WidgetRenderer.Kind.LARGE;
+            else kind = WidgetRenderer.Kind.MEDIUM;
 
-        setContentView(R.layout.activity_widget_config);
-        cfg = WidgetConfig.load(KeyValueStore.prefs(this), appWidgetId);
-        bindViews();
-        applyToViews();
-        scheduleRender();
+            setContentView(R.layout.activity_widget_config);
+            cfg = WidgetConfig.load(KeyValueStore.prefs(this), appWidgetId);
+            bindViews();
+            applyToViews();
+            scheduleRender();
+        } catch (Throwable t) {
+            // Never take the launcher flow down: place the widget with its default look instead.
+            AppLog.e(TAG, "config screen failed, placing the widget with defaults", t);
+            Diag.record("native", "WidgetConfigActivity.onCreate (handled)\n" + CrashStore.stackOf(t));
+            placeWithDefaults();
+        }
+    }
+
+    private void placeWithDefaults() {
+        try {
+            if (!WidgetConfig.exists(KeyValueStore.prefs(this), appWidgetId)) {
+                WidgetConfig.save(KeyValueStore.prefs(this), appWidgetId, WidgetConfig.defaults());
+            }
+            WidgetUpdater.get(this).refresh(kind, new int[] {appWidgetId}, null);
+        } catch (Throwable t2) {
+            AppLog.w(TAG, "default placement failed", t2);
+        }
+        setResult(RESULT_OK, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId));
+        finish();
     }
 
     @Override
     protected void onDestroy() {
-        exec.shutdownNow();
+        try {
+            exec.shutdownNow();
+        } catch (Throwable ignored) {
+            /* ignore */
+        }
         super.onDestroy();
     }
 
@@ -216,9 +250,13 @@ public final class WidgetConfigActivity extends Activity {
         findViewById(R.id.cfg_save).setOnClickListener(v -> save());
     }
 
-    /** Adapter with explicit light-on-dark rows (the theme-provided ones can end up dark-on-dark on One UI). */
+    /**
+     * Rows are TextView roots, so the adapter must NOT be given a text-view id: with {@code android.R.id.text1}
+     * ArrayAdapter looks up a child that does not exist and throws an NPE while binding (the crash that closed
+     * the config screen the moment a widget was dropped).
+     * Adapter with explicit light-on-dark rows (the theme-provided ones can end up dark-on-dark on One UI). */
     private void styleSpinner(Spinner sp, List<String> labels) {
-        ArrayAdapter<String> a = new ArrayAdapter<>(this, R.layout.cfg_spinner_item, android.R.id.text1, labels);
+        ArrayAdapter<String> a = new ArrayAdapter<>(this, R.layout.cfg_spinner_item, labels);
         a.setDropDownViewResource(R.layout.cfg_spinner_dropdown_item);
         sp.setAdapter(a);
         sp.setPopupBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xFF161C2B));
@@ -233,7 +271,7 @@ public final class WidgetConfigActivity extends Activity {
 
     private void showPreviewFallback(Throwable t) {
         boolean debug = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
-        Log.w(TAG, "preview failed: " + previewError(t, true));
+        AppLog.w(TAG, "preview failed: " + previewError(t, true));
         preview.removeAllViews();
         FrameLayout.LayoutParams match = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         android.widget.ImageView img = new android.widget.ImageView(this);
@@ -358,9 +396,13 @@ public final class WidgetConfigActivity extends Activity {
     }
 
     private void save() {
-        WidgetConfig.save(KeyValueStore.prefs(this), appWidgetId, cfg);
-        WidgetUpdater.get(this).refresh(kind, new int[] {appWidgetId}, null);
-        WidgetUpdater.get(this).widgetsChanged();
+        try {
+            WidgetConfig.save(KeyValueStore.prefs(this), appWidgetId, cfg);
+            WidgetUpdater.get(this).refresh(kind, new int[] {appWidgetId}, null);
+            WidgetUpdater.get(this).widgetsChanged();
+        } catch (Throwable t) {
+            AppLog.w(TAG, "save failed", t);
+        }
         Intent result = new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
         setResult(RESULT_OK, result);
         finish();

@@ -5,6 +5,7 @@ import { isAdmin } from '../store/session'
 import { useNav } from '../store/nav'
 import { ACCENTS, THEMES, accentRgb, useSettings, type AccentId, type AccentPresetId, type MotionPref, type ThemeId, type VisualizerStyle } from '../store/settings'
 import { useUpdates } from '../store/updates'
+import { sendDiagnosticLog } from '../lib/sendDiagnostics'
 import { ExternalLink, cx } from '../components/common'
 import { Logo } from '../components/Shell'
 import { LanguageSelect } from '../components/LanguageSelect'
@@ -15,6 +16,28 @@ import { isPrerelease } from '../lib/version'
 import { Row, Segmented, Toggle } from './SettingsControls'
 import { AdaptiveSettingsPanel } from './AdaptiveSettings'
 import { useT, type MessageKey } from '../i18n'
+
+function DiagnosticsSection(): ReactNode {
+  const tr = useT()
+  const [busy, setBusy] = useState(false)
+  return (
+    <Section title={tr('set.diag')}>
+      <Row label={tr('set.diagRow')} hint={tr('set.diagHint')}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true)
+            void sendDiagnosticLog(tr('set.diagSent'), tr('set.diagFailed')).finally(() => setBusy(false))
+          }}
+          className="no-drag inline-flex h-10 items-center gap-2 rounded-full bg-white/[0.08] px-5 text-sm font-semibold transition hover:bg-white/[0.14] disabled:opacity-40"
+        >
+          {tr('set.diagSend')}
+        </button>
+      </Row>
+    </Section>
+  )
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }): ReactNode {
   return (
@@ -446,6 +469,8 @@ export function SettingsPage(): ReactNode {
         </Section>
 
         {!platform.hostedOrigin && <UpdatesSection />}
+
+        {platform.diagnostics && <DiagnosticsSection />}
 
         <Section title={tr('set.about')}>
           <div className="flex items-center gap-4">

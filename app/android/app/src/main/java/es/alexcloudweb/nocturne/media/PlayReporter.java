@@ -2,7 +2,7 @@ package es.alexcloudweb.nocturne.media;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -49,7 +49,7 @@ final class PlayReporter {
                 write(trim(list));
             }
         } catch (Throwable t) {
-            Log.w(TAG, "could not store play", t);
+            AppLog.w(TAG, "could not store play", t);
         }
         flush();
     }
@@ -83,7 +83,7 @@ final class PlayReporter {
                     }
                 }
             } catch (Throwable t) {
-                Log.w(TAG, "flush failed", t);
+                AppLog.w(TAG, "flush failed", t);
             }
         });
     }

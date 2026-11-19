@@ -455,6 +455,20 @@ export interface UpdateUserInput {
   disabled?: boolean
 }
 
+export interface DiagnosticReport {
+  id: string
+  userId: string
+  username: string | null
+  createdAt: string
+  occurredAt: string | null
+  source: 'crash' | 'manual'
+  kind: string
+  version: string
+  os: string
+  device: string
+  body: string
+}
+
 export interface Backup {
   id: string
   createdAt: string

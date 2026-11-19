@@ -5,7 +5,7 @@ import android.content.SharedPreferences;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
-import android.util.Log;
+import es.alexcloudweb.nocturne.diag.AppLog;
 import androidx.annotation.Nullable;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
@@ -84,7 +84,7 @@ final class NocturneAuth {
             byte[] plain = c.doFinal(all, 12, all.length - 12);
             return Session.fromJson(new JSONObject(new String(plain, StandardCharsets.UTF_8)));
         } catch (Throwable t) {
-            Log.w(TAG, "stored session unreadable: " + t.getClass().getSimpleName());
+            AppLog.w(TAG, "stored session unreadable: " + t.getClass().getSimpleName());
             return null;
         }
     }
@@ -105,7 +105,7 @@ final class NocturneAuth {
             System.arraycopy(enc, 0, all, iv.length, enc.length);
             sp.edit().putString(FIELD, Base64.encodeToString(all, Base64.NO_WRAP)).apply();
         } catch (Throwable t) {
-            Log.w(TAG, "could not store session: " + t.getClass().getSimpleName());
+            AppLog.w(TAG, "could not store session: " + t.getClass().getSimpleName());
         }
     }
 
