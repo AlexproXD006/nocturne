@@ -1,6 +1,7 @@
 // Unit tests for the pure helpers in patch-android.mjs. Run with: npm run test:scripts
 import assert from 'node:assert/strict'
 import { cp, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,6 +18,12 @@ import {
   UPDATES_PLUGIN_IMPORT,
   UPDATES_PLUGIN_REGISTER,
   WORK_VERSION,
+  PALETTE_VERSION,
+  WIDGETS,
+  WIDGETS_MARKER,
+  WIDGET_CONFIG_CLASS,
+  ensureWidgets,
+  widgetProviderXml,
   AUTO_MARKER,
   automotiveAppDesc,
   ensureMediaService,
@@ -155,6 +162,78 @@ test('manifest: idempotent', () => {
   assert.equal(patchManifest(once), once)
 })
 
+test('manifest: declares the three widget providers with their provider meta-data', () => {
+  const out = patchManifest(MANIFEST)
+  assert.equal(out.split(WIDGETS_MARKER).length - 1, 2) // opening + closing marker
+  for (const w of WIDGETS) {
+    assert.match(out, new RegExp(`<receiver\\s+android:name="\\.widget\\.${w.cls}"\\s+android:exported="true"\\s+android:label="@string/${w.label}">`))
+    assert.match(out, new RegExp(`android:name="android\\.appwidget\\.provider"\\s+android:resource="@xml/${w.xml}"`))
+  }
+  assert.equal(out.split('android.appwidget.action.APPWIDGET_UPDATE').length - 1, 3)
+  assert.ok(out.indexOf('SmallWidgetProvider') > out.indexOf('<application'))
+  assert.ok(out.indexOf('LargeWidgetProvider') < out.indexOf('</application>'))
+})
+
+test('manifest: widget configure activity is exported with APPWIDGET_CONFIGURE and its own theme', () => {
+  const out = patchManifest(MANIFEST)
+  assert.match(out, /<activity\s+android:name="\.widget\.WidgetConfigActivity"\s+android:exported="true"\s+android:theme="@style\/Theme\.Nocturne\.WidgetConfig">/)
+  assert.match(out, /<action android:name="android\.appwidget\.action\.APPWIDGET_CONFIGURE" \/>/)
+  assert.equal(WIDGET_CONFIG_CLASS, '.widget.WidgetConfigActivity')
+})
+
+test('manifest: the widget heart receiver is not exported', () => {
+  const out = patchManifest(MANIFEST)
+  assert.match(out, /<receiver\s+android:name="\.widget\.WidgetActionReceiver"\s+android:exported="false" \/>/)
+})
+
+test('manifest: widget block is declared once, idempotent, and upgraded in place', () => {
+  const once = patchManifest(MANIFEST)
+  assert.equal(patchManifest(once), once)
+  const stale = once.replace(/<receiver\s+android:name="\.widget\.LargeWidgetProvider"[\s\S]*?<\/receiver>\n/, '')
+  assert.ok(!stale.includes('LargeWidgetProvider'))
+  assert.equal(ensureWidgets(stale), once)
+  assert.equal(ensureWidgets('<manifest></manifest>'), '<manifest></manifest>')
+  // the media service and Android Auto blocks are untouched by it
+  assert.equal(once.split(MEDIA_SERVICE_MARKER).length - 1, 1)
+})
+
+test('widget provider xml: sizes, resize, previews, description, configure and reconfigure', () => {
+  const cells = { small: [2, 1], medium: [4, 2], large: [4, 4] }
+  for (const w of WIDGETS) {
+    const xml = widgetProviderXml(w.size)
+    assert.match(xml, /<appwidget-provider /)
+    assert.match(xml, new RegExp(`android:targetCellWidth="${cells[w.size][0]}"`))
+    assert.match(xml, new RegExp(`android:targetCellHeight="${cells[w.size][1]}"`))
+    assert.match(xml, /android:resizeMode="horizontal\|vertical"/)
+    assert.match(xml, new RegExp(`android:previewLayout="@layout/widget_preview_${w.size}"`))
+    assert.match(xml, new RegExp(`android:previewImage="@drawable/widget_preview_${w.size}"`))
+    assert.match(xml, new RegExp(`android:description="@string/widget_${w.size}_description"`))
+    assert.match(xml, new RegExp(`android:initialLayout="@layout/widget_${w.size}"`))
+    assert.match(xml, /android:configure="es\.alexcloudweb\.nocturne\.widget\.WidgetConfigActivity"/)
+    assert.match(xml, /android:widgetFeatures="reconfigurable"/)
+    assert.match(xml, /android:updatePeriodMillis="0"/)
+    assert.match(xml, /android:widgetCategory="home_screen"/)
+  }
+  assert.throws(() => widgetProviderXml('huge'))
+})
+
+test('widget resources referenced by the provider xml exist and are localised en + es', () => {
+  const res = join(process.cwd(), 'android/app/src/main/res')
+  if (!existsSync(res)) return
+  for (const w of WIDGETS) {
+    assert.ok(existsSync(join(res, `layout/widget_${w.size}.xml`)), `layout ${w.size}`)
+    assert.ok(existsSync(join(res, `layout/widget_preview_${w.size}.xml`)), `preview layout ${w.size}`)
+    assert.ok(existsSync(join(res, `drawable/widget_preview_${w.size}.xml`)), `preview image ${w.size}`)
+  }
+  for (const lang of ['values', 'values-es']) {
+    const strings = readFileSync(join(res, lang, 'nocturne_widget_strings.xml'), 'utf8')
+    for (const w of WIDGETS) {
+      assert.ok(strings.includes(`name="${w.label}"`), `${lang} ${w.label}`)
+      assert.ok(strings.includes(`name="widget_${w.size}_description"`), `${lang} ${w.size} description`)
+    }
+  }
+})
+
 test('manifest: adds configChanges when absent and overrides cleartext=true', () => {
   const m = MANIFEST.replace(/\s*android:configChanges="[^"]*"/, '').replace('android:allowBackup="true"', 'android:usesCleartextTraffic="true"')
   const out = patchManifest(m)
@@ -223,6 +302,16 @@ test('gradle: WorkManager dependency added once, after Media3, version kept curr
   const legacy = out.replace(/[ \t]*\/\/ nocturne:work-begin[\s\S]*?\/\/ nocturne:work-end\n/, '')
   assert.doesNotMatch(legacy, /work-runtime/)
   assert.equal(patchBuildGradle(legacy), out)
+})
+
+test('gradle: Palette dependency added once, after WorkManager, version kept current', () => {
+  const out = patchBuildGradle(GRADLE, { versionName: '1.2.3', versionCode: 5 })
+  assert.equal(out.split('androidx.palette:palette:').length - 1, 1)
+  assert.match(out, new RegExp(`implementation "androidx\\.palette:palette:${PALETTE_VERSION.replace(/\./g, '\\.')}"`))
+  assert.ok(out.indexOf('nocturne:palette-begin') > out.indexOf('nocturne:work-end'))
+  assert.equal(patchBuildGradle(out, { versionName: '1.2.3', versionCode: 5 }), out)
+  const old = out.replace(`palette:${PALETTE_VERSION}`, 'palette:0.9.0')
+  assert.match(patchBuildGradle(old), new RegExp(`palette:${PALETTE_VERSION.replace(/\./g, '\\.')}`))
 })
 
 test('gradle: adds minifyEnabled false when missing', () => {
@@ -365,6 +454,9 @@ test('patchProject applies to a project copy and is idempotent', async (t) => {
     assert.match(gradle, /androidx\.media3:media3-session/)
     assert.match(gradle, /androidx\.media3:media3-exoplayer/)
     assert.ok(existsSync(join(dir, 'app/src/main/res/xml/automotive_app_desc.xml')))
+    for (const w of WIDGETS) assert.ok(existsSync(join(dir, `app/src/main/res/xml/${w.xml}.xml`)), w.xml)
+    assert.match(manifest, /APPWIDGET_CONFIGURE/)
+    assert.match(gradle, /androidx\.palette:palette:/)
     assert.match(gradle, /androidx\.work:work-runtime:/)
     const activity = await readFile(join(dir, 'app/src/main/java/es/alexcloudweb/nocturne/MainActivity.java'), 'utf8')
     assert.ok(activity.includes(UPDATES_PLUGIN_REGISTER))

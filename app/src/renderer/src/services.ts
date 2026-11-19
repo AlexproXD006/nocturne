@@ -18,6 +18,7 @@ import { createPlayQueue } from './lib/playQueue'
 import { createSleepTimer } from './store/sleepTimer'
 import { createListenBrainzStore } from './store/listenbrainz'
 import { currentItem } from './player/queue'
+import { appThemePayload, sameAppTheme, type AppThemePayload } from './lib/widgetTheme'
 import { loadSavedSession, storeSavedSession } from './lib/playerSession'
 
 export { platform }
@@ -238,6 +239,20 @@ if (nativePlayer) {
     })
   }
   syncAuthFromNative()
+
+  // Theme + accent for the home-screen widgets' "Like the app" colours (stored natively, works with the app closed).
+  let sentTheme: AppThemePayload | null = null
+  const pushTheme = (): void => {
+    const { theme, accent } = useSettings.getState()
+    const next = appThemePayload(theme, accent)
+    if (sameAppTheme(sentTheme, next)) return
+    sentTheme = next
+    nativePlayer.setAppTheme(next)
+  }
+  pushTheme()
+  useSettings.subscribe((s, prev) => {
+    if (s.theme !== prev.theme || s.accent !== prev.accent) pushTheme()
+  })
 
   // "Show current lyric line in the car" (off by default).
   nativePlayer.setLyricsInCar(useSettings.getState().lyricsInCar)

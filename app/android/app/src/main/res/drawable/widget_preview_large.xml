@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- previewImage of the large widget (pickers before Android 12). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><shape android:shape="rectangle"><solid android:color="#FF0D1424" /><corners android:radius="18dp" /></shape></item>
+    <item android:left="14dp" android:top="14dp" android:width="110dp" android:height="110dp"><shape android:shape="rectangle"><solid android:color="#FF8FB4FF" /><corners android:radius="12dp" /></shape></item>
+    <item android:left="138dp" android:top="22dp" android:width="110dp" android:height="12dp"><shape android:shape="rectangle"><solid android:color="#FFEEF2FA" /><corners android:radius="6dp" /></shape></item>
+    <item android:left="138dp" android:top="44dp" android:width="76dp" android:height="9dp"><shape android:shape="rectangle"><solid android:color="#99EEF2FA" /><corners android:radius="4dp" /></shape></item>
+    <item android:left="138dp" android:top="76dp" android:width="116dp" android:height="4dp"><shape android:shape="rectangle"><solid android:color="#668FB4FF" /><corners android:radius="2dp" /></shape></item>
+    <item android:left="160dp" android:top="92dp" android:width="22dp" android:height="22dp"><shape android:shape="oval"><solid android:color="#FFEEF2FA" /></shape></item>
+    <item android:left="16dp" android:top="140dp" android:width="230dp" android:height="14dp"><shape android:shape="rectangle"><solid android:color="#FF8FB4FF" /><corners android:radius="7dp" /></shape></item>
+    <item android:left="16dp" android:top="170dp" android:width="200dp" android:height="8dp"><shape android:shape="rectangle"><solid android:color="#66EEF2FA" /><corners android:radius="4dp" /></shape></item>
+    <item android:left="16dp" android:top="186dp" android:width="170dp" android:height="8dp"><shape android:shape="rectangle"><solid android:color="#66EEF2FA" /><corners android:radius="4dp" /></shape></item>
+    <item android:left="16dp" android:top="202dp" android:width="190dp" android:height="8dp"><shape android:shape="rectangle"><solid android:color="#66EEF2FA" /><corners android:radius="4dp" /></shape></item>
+</layer-list>

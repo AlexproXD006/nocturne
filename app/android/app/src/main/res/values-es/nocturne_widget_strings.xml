@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widgets de la pantalla de inicio (es.alexcloudweb.nocturne.widget). -->
+<resources>
+    <string name="widget_small_label">Nocturne mini</string>
+    <string name="widget_medium_label">Nocturne reproductor</string>
+    <string name="widget_large_label">Nocturne en reproducción</string>
+    <string name="widget_small_description">Portada, play/pausa y siguiente. Compacto.</string>
+    <string name="widget_medium_description">Portada, título, progreso, controles y me gusta.</string>
+    <string name="widget_large_description">Portada grande, controles, letra sincronizada y las próximas canciones.</string>
+    <string name="widget_nothing_playing">Nada sonando</string>
+    <string name="widget_tap_to_open">Toca para abrir Nocturne</string>
+    <string name="widget_up_next">A continuación</string>
+    <string name="widget_cd_play">Reproducir</string>
+    <string name="widget_cd_pause">Pausar</string>
+    <string name="widget_cd_next">Siguiente</string>
+    <string name="widget_cd_prev">Anterior</string>
+    <string name="widget_cd_like">Me gusta</string>
+    <string name="widget_cd_unlike">Quitar me gusta</string>
+    <string name="widget_cd_cover">Abrir el reproductor</string>
+    <string name="widget_demo_title">Título de la canción</string>
+    <string name="widget_demo_artist">Artista</string>
+    <string name="widget_demo_lyric">Aquí aparece la línea actual de la letra</string>
+    <string name="widget_demo_next1">Siguiente canción · Artista</string>
+    <string name="widget_demo_next2">Otra canción · Artista</string>
+    <string name="widget_demo_next3">Una más · Artista</string>
+
+    <string name="widget_config_title">Aspecto del widget</string>
+    <string name="widget_config_preview">Vista previa</string>
+    <string name="widget_config_colors">Colores</string>
+    <string name="widget_mode_adaptive">Adaptativo (según la portada)</string>
+    <string name="widget_mode_material">Material You (colores del sistema)</string>
+    <string name="widget_mode_theme">Temas de Nocturne</string>
+    <string name="widget_mode_custom">Personalizado</string>
+    <string name="widget_config_theme">Tema</string>
+    <string name="widget_theme_app">Como la app</string>
+    <string name="widget_theme_cover_accent">Midnight Glass + acento de la portada</string>
+    <string name="widget_theme_glass">Midnight Glass</string>
+    <string name="widget_theme_dark">Oscuro</string>
+    <string name="widget_theme_oled">OLED</string>
+    <string name="widget_theme_dim">Atenuado</string>
+    <string name="widget_theme_midnight">Medianoche</string>
+    <string name="widget_theme_dracula">Dracula</string>
+    <string name="widget_theme_nord">Nord</string>
+    <string name="widget_theme_tokyonight">Tokyo Night</string>
+    <string name="widget_theme_catppuccin">Catppuccin</string>
+    <string name="widget_theme_rosepine">Rosé Pine</string>
+    <string name="widget_theme_gruvbox">Gruvbox</string>
+    <string name="widget_config_hex">Color hexadecimal</string>
+    <string name="widget_config_hex_invalid">Usa un color como #1d2b4a</string>
+    <string name="widget_config_swatch">Color %1$s</string>
+    <string name="widget_config_transparency">Transparencia del fondo: %1$d%%</string>
+    <string name="widget_config_radius">Radio de las esquinas</string>
+    <string name="widget_radius_0">Cuadrado</string>
+    <string name="widget_radius_1">Pequeño</string>
+    <string name="widget_radius_2">Medio</string>
+    <string name="widget_radius_3">Grande</string>
+    <string name="widget_radius_4">Redondo</string>
+    <string name="widget_config_save">Guardar</string>
+    <string name="widget_config_cancel">Cancelar</string>
+    <string name="widget_config_contrast_note">Los colores del texto se ajustan para que se lea bien sobre el fondo.</string>
+</resources>

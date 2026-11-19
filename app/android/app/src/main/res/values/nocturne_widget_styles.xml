@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget configuration screen: dark, matching Midnight Glass. -->
+    <style name="Theme.Nocturne.WidgetConfig" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#070a12</item>
+        <item name="android:colorBackground">#070a12</item>
+        <item name="android:colorAccent">#8fb4ff</item>
+        <item name="android:textColorPrimary">#eef2fa</item>
+        <item name="android:textColorSecondary">#a9b4c9</item>
+        <item name="android:statusBarColor">#070a12</item>
+        <item name="android:navigationBarColor">#070a12</item>
+    </style>
+</resources>

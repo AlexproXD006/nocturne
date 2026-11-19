@@ -18,6 +18,7 @@ function fakePlugin() {
     getAuth: vi.fn(async () => ({ session: { serverUrl: 'https://s', accessToken: 'a', refreshToken: 'r', expiresAt: 5, userId: 'u' } })),
     setLyricsInCar: vi.fn(async () => undefined),
     setEq: vi.fn(async () => undefined),
+    setAppTheme: vi.fn(async () => undefined),
     getSnapshot: vi.fn(async () => ({ snapshot: null })),
     addListener: vi.fn(async (_e: string, fn: (e: unknown) => void) => {
       handler = fn
@@ -34,6 +35,27 @@ describe('equalizer bridge', () => {
     const gains = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     player.setEq({ enabled: true, preamp: -3, gains })
     await vi.waitFor(() => expect(plugin.setEq).toHaveBeenCalledWith({ enabled: true, preamp: -3, gains }))
+  })
+})
+
+describe('app theme bridge (home-screen widgets)', () => {
+  it('forwards the theme and a fixed accent', async () => {
+    const { plugin } = fakePlugin()
+    const player = createNativePlayer(Promise.resolve({ plugin }))
+    player.setAppTheme({ theme: 'nord', accent: '#88c0d0' })
+    await vi.waitFor(() => expect(plugin.setAppTheme).toHaveBeenCalledWith({ theme: 'nord', accent: '#88c0d0' }))
+  })
+
+  it('sends an empty accent when the accent follows the cover', async () => {
+    const { plugin } = fakePlugin()
+    const player = createNativePlayer(Promise.resolve({ plugin }))
+    player.setAppTheme({ theme: 'adaptive', accent: null })
+    await vi.waitFor(() => expect(plugin.setAppTheme).toHaveBeenCalledWith({ theme: 'adaptive', accent: '' }))
+  })
+
+  it('never throws when the plugin is unavailable', () => {
+    const player = createNativePlayer(Promise.reject(new Error('no plugin')))
+    expect(() => player.setAppTheme({ theme: 'glass', accent: null })).not.toThrow()
   })
 })
 

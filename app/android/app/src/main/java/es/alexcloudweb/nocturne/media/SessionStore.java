@@ -121,6 +121,36 @@ final class SessionStore {
         }
     }
 
+    /**
+     * The stored session with {@code liked} set on the saved Track JSON of every entry for {@code trackId}
+     * (the widget heart works with the app closed); null when nothing changed or the input is unusable.
+     */
+    @Nullable
+    static String withLiked(@Nullable String json, String trackId, boolean liked) {
+        if (json == null || json.isEmpty() || trackId == null || trackId.isEmpty()) return null;
+        try {
+            JSONObject o = new JSONObject(json);
+            JSONArray arr = o.optJSONArray("items");
+            if (arr == null) return null;
+            boolean changed = false;
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject it = arr.optJSONObject(i);
+                if (it == null || !trackId.equals(it.optString("trackId", ""))) continue;
+                JSONObject track = it.optJSONObject("track");
+                if (track == null || track.optBoolean("liked", false) == liked) continue;
+                track.put("liked", liked);
+                changed = true;
+            }
+            return changed ? o.toString() : null;
+        } catch (JSONException e) {
+            return null;
+        }
+    }
+
+    static void saveRaw(Context ctx, String json) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, json).apply();
+    }
+
     static void save(Context ctx, JSONObject snapshot) {
         try {
             ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, trim(snapshot).toString()).apply();

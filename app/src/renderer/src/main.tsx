@@ -2,9 +2,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 import { App } from './App'
-import { platform, useSession } from './services'
+import { platform, usePlayer, useSession } from './services'
+import { currentItem } from './player/queue'
 import { useNav } from './store/nav'
 import { useUi } from './store/ui'
+import { parseWidgetLink } from './lib/widgetLink'
 import { targetPlatform, useUpdates } from './store/updates'
 import { createUpdateNotifications } from './store/updateNotifications'
 
@@ -28,6 +30,24 @@ async function setupAndroid(): Promise<void> {
       else if (nav.canBack) nav.back()
       else void CapApp.minimizeApp()
     })
+    // Home-screen widget taps: the cover opens the fullscreen player.
+    // On a cold start the queue is adopted from native a moment later: wait for a song (max 10 s) first.
+    const handleLink = (url: string | null | undefined): void => {
+      if (parseWidgetLink(url) !== 'player') return
+      if (currentItem(usePlayer.getState().queue)) {
+        useUi.getState().setFullscreen(true)
+        return
+      }
+      const stop = usePlayer.subscribe((st) => {
+        if (!currentItem(st.queue)) return
+        stop()
+        clearTimeout(timer)
+        useUi.getState().setFullscreen(true)
+      })
+      const timer = setTimeout(stop, 10_000)
+    }
+    await CapApp.addListener('appUrlOpen', (e) => handleLink(e.url))
+    handleLink((await CapApp.getLaunchUrl())?.url)
   } catch {
     /* app plugin unavailable */
   }

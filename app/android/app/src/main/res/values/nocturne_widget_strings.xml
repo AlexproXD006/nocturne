@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widgets (es.alexcloudweb.nocturne.widget). Spanish in values-es. -->
+<resources>
+    <string name="widget_small_label">Nocturne mini</string>
+    <string name="widget_medium_label">Nocturne player</string>
+    <string name="widget_large_label">Nocturne now playing</string>
+    <string name="widget_small_description">Cover, play/pause and next. Compact.</string>
+    <string name="widget_medium_description">Cover, title, progress, controls and like.</string>
+    <string name="widget_large_description">Big cover, controls, synced lyrics and the next songs.</string>
+    <string name="widget_nothing_playing">Nothing playing</string>
+    <string name="widget_tap_to_open">Tap to open Nocturne</string>
+    <string name="widget_up_next">Up next</string>
+    <string name="widget_cd_play">Play</string>
+    <string name="widget_cd_pause">Pause</string>
+    <string name="widget_cd_next">Next</string>
+    <string name="widget_cd_prev">Previous</string>
+    <string name="widget_cd_like">Like</string>
+    <string name="widget_cd_unlike">Remove like</string>
+    <string name="widget_cd_cover">Open the player</string>
+    <string name="widget_demo_title">Song title</string>
+    <string name="widget_demo_artist">Artist</string>
+    <string name="widget_demo_lyric">The current lyric line appears here</string>
+    <string name="widget_demo_next1">Next song · Artist</string>
+    <string name="widget_demo_next2">Another song · Artist</string>
+    <string name="widget_demo_next3">One more song · Artist</string>
+
+    <string name="widget_config_title">Widget appearance</string>
+    <string name="widget_config_preview">Preview</string>
+    <string name="widget_config_colors">Colors</string>
+    <string name="widget_mode_adaptive">Adaptive (from the cover)</string>
+    <string name="widget_mode_material">Material You (system colors)</string>
+    <string name="widget_mode_theme">Nocturne themes</string>
+    <string name="widget_mode_custom">Custom</string>
+    <string name="widget_config_theme">Theme</string>
+    <string name="widget_theme_app">Like the app</string>
+    <string name="widget_theme_cover_accent">Midnight Glass + cover accent</string>
+    <string name="widget_theme_glass">Midnight Glass</string>
+    <string name="widget_theme_dark">Dark</string>
+    <string name="widget_theme_oled">OLED</string>
+    <string name="widget_theme_dim">Dim</string>
+    <string name="widget_theme_midnight">Midnight</string>
+    <string name="widget_theme_dracula">Dracula</string>
+    <string name="widget_theme_nord">Nord</string>
+    <string name="widget_theme_tokyonight">Tokyo Night</string>
+    <string name="widget_theme_catppuccin">Catppuccin</string>
+    <string name="widget_theme_rosepine">Rosé Pine</string>
+    <string name="widget_theme_gruvbox">Gruvbox</string>
+    <string name="widget_config_hex">Hex color</string>
+    <string name="widget_config_hex_invalid">Use a color like #1d2b4a</string>
+    <string name="widget_config_swatch">Color %1$s</string>
+    <string name="widget_config_transparency">Background transparency: %1$d%%</string>
+    <string name="widget_config_radius">Corner radius</string>
+    <string name="widget_radius_0">Square</string>
+    <string name="widget_radius_1">Small</string>
+    <string name="widget_radius_2">Medium</string>
+    <string name="widget_radius_3">Large</string>
+    <string name="widget_radius_4">Round</string>
+    <string name="widget_config_save">Save</string>
+    <string name="widget_config_cancel">Cancel</string>
+    <string name="widget_config_contrast_note">Text colors are adjusted to stay readable on the background.</string>
+</resources>

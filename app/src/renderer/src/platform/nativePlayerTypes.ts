@@ -87,6 +87,8 @@ export interface NativePlayer {
   setLyricsInCar(enabled: boolean): void
   /** Equalizer state for the ExoPlayer audio processor; the service also persists it and applies it with the app closed. */
   setEq(state: NativeEq): void
+  /** Tells native the app's theme + accent ("#rrggbb", null = follows the cover) so home-screen widgets can follow it. */
+  setAppTheme(theme: { theme: string; accent: string | null }): void
   getSnapshot(): Promise<NativeSnapshot | null>
   on(listener: (e: NativePlayerEvent) => void): () => void
 }

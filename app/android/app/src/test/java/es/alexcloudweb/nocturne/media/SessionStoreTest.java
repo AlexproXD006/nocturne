@@ -86,4 +86,22 @@ public class SessionStoreTest {
         assertEquals(0, head.getInt("index"));
         assertEquals("u0", head.getJSONArray("items").getJSONObject(0).getString("uid"));
     }
+
+    @Test
+    public void withLikedFlipsTheSavedTrackJsonOfThatSongOnly() throws Exception {
+        JSONObject snap = snap(2, 0);
+        snap.getJSONArray("items").getJSONObject(0).put("track", new JSONObject().put("id", "t0").put("liked", false));
+        snap.getJSONArray("items").getJSONObject(1).put("track", new JSONObject().put("id", "t1").put("liked", false));
+        String next = SessionStore.withLiked(snap.toString(), "t0", true);
+        assertNotNull(next);
+        JSONArray items = new JSONObject(next).getJSONArray("items");
+        assertTrue(items.getJSONObject(0).getJSONObject("track").getBoolean("liked"));
+        assertFalse(items.getJSONObject(1).getJSONObject("track").getBoolean("liked"));
+        // already in that state, unknown song, missing track JSON, junk: nothing to save
+        assertNull(SessionStore.withLiked(next, "t0", true));
+        assertNull(SessionStore.withLiked(next, "zzz", true));
+        assertNull(SessionStore.withLiked(snap(1, 0).toString(), "t0", true));
+        assertNull(SessionStore.withLiked("{bad", "t0", true));
+        assertNull(SessionStore.withLiked(null, "t0", true));
+    }
 }

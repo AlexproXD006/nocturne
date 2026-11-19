@@ -29,6 +29,7 @@ export interface NocturneNativePlugin {
   getAuth(): Promise<{ session: NativeSession | null }>
   setLyricsInCar(args: { enabled: boolean }): Promise<void>
   setEq(args: NativeEq): Promise<void>
+  setAppTheme(args: { theme: string; accent: string }): Promise<void>
   getSnapshot(): Promise<{ snapshot: NativeSnapshot | null }>
   addListener(event: 'event', listener: (e: unknown) => void): Promise<PluginListenerHandle>
 }
@@ -162,6 +163,7 @@ export function createNativePlayer(box: Promise<{ plugin: NocturneNativePlugin }
       }
     },
     setLyricsInCar: (enabled) => call((p) => p.setLyricsInCar({ enabled })),
+    setAppTheme: (theme) => call((p) => p.setAppTheme({ theme: theme.theme, accent: theme.accent ?? '' })),
     setEq: (eq) => call((p) => p.setEq({ enabled: eq.enabled, preamp: eq.preamp, gains: eq.gains })),
     async getSnapshot() {
       try {

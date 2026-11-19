@@ -45,6 +45,8 @@ import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import es.alexcloudweb.nocturne.MainActivity;
 import es.alexcloudweb.nocturne.R;
+import es.alexcloudweb.nocturne.widget.WidgetState;
+import es.alexcloudweb.nocturne.widget.WidgetUpdater;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -121,6 +123,11 @@ public final class NocturneMediaService extends MediaLibraryService {
     private String lrcTrackId = "";
     private int lastLyricIdx = -2;
     private long lastLyricAt;
+
+    // Home-screen widgets (see the widget package): state pushes and the large widget's lyric line.
+    @Nullable private WidgetUpdater widgets;
+    private String widgetLine = "";
+    private final Runnable widgetPush = () -> pushWidgets(false);
 
     private final Runnable ticker = new Runnable() {
         @Override
@@ -216,7 +223,9 @@ public final class NocturneMediaService extends MediaLibraryService {
             buttonsKey = buttonsKey();
             lyricsEnabled = LyricsPref.get(this);
             reporter.flush();
+            widgets = WidgetUpdater.get(this);
             EventHub.attach(this);
+            scheduleWidgets();
         } catch (Throwable t) {
             Log.e(TAG, "media service setup failed", t);
         }
@@ -254,6 +263,8 @@ public final class NocturneMediaService extends MediaLibraryService {
     @Override
     public void onDestroy() {
         persistSession();
+        main.removeCallbacks(widgetPush);
+        pushWidgets(true); // the widgets keep showing the last song, paused (play restores the session)
         EventHub.detach(this);
         EventHub.dropPending();
         main.removeCallbacksAndMessages(null);
@@ -304,6 +315,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         refreshButtons();
         startTicker();
         persistSession();
+        scheduleWidgets();
     }
 
     void cmdPlay() {
@@ -359,6 +371,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         currentUid = null;
         lastStatus = "";
         SessionStore.clear(this);
+        pushWidgets(true);
         emitState();
         refreshButtons();
         try {
@@ -372,6 +385,18 @@ public final class NocturneMediaService extends MediaLibraryService {
         if (liked) likedIds.add(trackId);
         else likedIds.remove(trackId);
         refreshButtons();
+        scheduleWidgets();
+    }
+
+    /** Heart button of a home-screen widget. */
+    void cmdWidgetLike() {
+        toggleLike();
+    }
+
+    /** Widgets were added or removed: a new large widget needs the lyrics, and everything a fresh push. */
+    void onWidgetsChanged() {
+        if (lrc == null && wantLyrics()) loadLyricsForCurrent();
+        scheduleWidgets();
     }
 
     /** Applies (and persists) the equalizer state; safe at any time, also while audio is playing. */
@@ -392,7 +417,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         lrcTrackId = "";
         lastLyricIdx = -2;
         if (!enabled) setLyricLine("");
-        else loadLyricsForCurrent();
+        loadLyricsForCurrent(); // no-op unless the car or a large widget still wants lyrics
     }
 
     /** The queue as native sees it (the WebView adopts it when the car started playback). */
@@ -472,6 +497,8 @@ public final class NocturneMediaService extends MediaLibraryService {
             currentUid = cur.mediaId;
             long dur = cur.mediaMetadata.durationMs == null ? 0 : cur.mediaMetadata.durationMs;
             listen.start(trackIdOf(cur), dur, System.currentTimeMillis());
+            String curJson = json.get(cur.mediaId);
+            if (curJson != null && new JSONObject(curJson).optBoolean("liked", false)) likedIds.add(trackIdOf(cur)); // the widget heart may have changed it
         } catch (Throwable t) {
             Log.w(TAG, "session restore failed", t);
         }
@@ -487,12 +514,14 @@ public final class NocturneMediaService extends MediaLibraryService {
             if (state == Player.STATE_READY) retriedUid = null;
             emitState();
             startTicker();
+            scheduleWidgets();
         }
 
         @Override
         public void onIsPlayingChanged(boolean isPlaying) {
             emitState();
             startTicker();
+            scheduleWidgets();
         }
 
         @Override
@@ -500,6 +529,7 @@ public final class NocturneMediaService extends MediaLibraryService {
             persistSession();
             emitState();
             startTicker();
+            scheduleWidgets();
         }
 
         @Override
@@ -518,8 +548,10 @@ public final class NocturneMediaService extends MediaLibraryService {
             listen.start(trackIdOf(item), dur, System.currentTimeMillis());
             if (p != null) listen.tick(Math.max(0, p.getCurrentPosition()), false);
             lastLyricIdx = -2;
+            widgetLine = "";
             loadLyricsForCurrent();
             refreshButtons();
+            scheduleWidgets();
             try {
                 EventHub.emit(new JSONObject().put("type", "index").put("uid", item.mediaId));
             } catch (JSONException ignored) {
@@ -529,7 +561,10 @@ public final class NocturneMediaService extends MediaLibraryService {
 
         @Override
         public void onTimelineChanged(@NonNull Timeline timeline, int reason) {
-            if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) persistSession();
+            if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) {
+                persistSession();
+                scheduleWidgets();
+            }
             if (externalQueuePending && reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) {
                 externalQueuePending = false;
                 main.post(NocturneMediaService.this::emitQueue);
@@ -646,15 +681,22 @@ public final class NocturneMediaService extends MediaLibraryService {
         if (p.isPlaying() && pos > 3000) errorStreak = 0;
         emitPosition();
         if (System.currentTimeMillis() - lastPersistAt >= PERSIST_MS) persistSession();
-        if (lyricsEnabled && lrc != null && lrcTrackId.equals(currentTrackId())) {
+        boolean widgetLyrics = widgets != null && widgets.hasLarge();
+        int widgetIdx = -2;
+        if ((lyricsEnabled || widgetLyrics) && lrc != null && lrcTrackId.equals(currentTrackId())) {
             int idx = lrc.lineAt(pos);
             long now = System.currentTimeMillis();
-            if (idx != lastLyricIdx && now - lastLyricAt >= 900) {
+            if (widgetLyrics) {
+                widgetIdx = idx;
+                widgetLine = idx < 0 ? "" : lrc.line(idx);
+            }
+            if (lyricsEnabled && idx != lastLyricIdx && now - lastLyricAt >= 900) {
                 lastLyricIdx = idx;
                 lastLyricAt = now;
                 setLyricLine(idx < 0 ? "" : lrc.line(idx));
             }
         }
+        if (widgets != null && widgetLyrics) widgets.pushTick(widgetState(false), widgetIdx);
     }
 
     private void finishListen() {
@@ -678,7 +720,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         lrcTrackId = "";
         final String id = currentTrackId();
         final NocturneApi a = api;
-        if (!lyricsEnabled || id == null || a == null || !a.hasSession()) return;
+        if (!wantLyrics() || id == null || a == null || !a.hasSession()) return;
         io.execute(() -> {
             try {
                 JSONObject o = a.getJson("/v1/tracks/" + NocturneApi.pathId(id) + "/lyrics");
@@ -686,16 +728,72 @@ public final class NocturneMediaService extends MediaLibraryService {
                 if (synced.isEmpty()) return;
                 final LrcParser parsed = LrcParser.parse(synced, o.optLong("offsetMs", 0));
                 main.post(() -> {
-                    if (lyricsEnabled && id.equals(currentTrackId()) && !parsed.isEmpty()) {
+                    if (wantLyrics() && id.equals(currentTrackId()) && !parsed.isEmpty()) {
                         lrc = parsed;
                         lrcTrackId = id;
                         lastLyricIdx = -2;
+                        scheduleWidgets();
                     }
                 });
             } catch (Throwable ignored) {
                 /* no lyrics: the subtitle stays empty */
             }
         });
+    }
+
+    /** The car's lyric line or a large home-screen widget wants synced lyrics for the current song. */
+    private boolean wantLyrics() {
+        return lyricsEnabled || (widgets != null && widgets.hasLarge());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Home-screen widgets
+    // ---------------------------------------------------------------------------------------------
+
+    /** Coalesces bursts of player events into one widget update. */
+    private void scheduleWidgets() {
+        main.removeCallbacks(widgetPush);
+        main.postDelayed(widgetPush, 150);
+    }
+
+    private void pushWidgets(boolean paused) {
+        WidgetUpdater w = widgets;
+        if (w == null) return;
+        try {
+            w.pushFull(widgetState(paused));
+        } catch (Throwable t) {
+            Log.w(TAG, "widget push failed", t);
+        }
+    }
+
+    /** The now-playing state for the widgets (main thread). */
+    private WidgetState widgetState(boolean forcePaused) {
+        ExoPlayer p = player;
+        if (p == null || p.getMediaItemCount() == 0) return WidgetState.EMPTY;
+        MediaItem cur = p.getCurrentMediaItem();
+        if (cur == null) return WidgetState.EMPTY;
+        int st = p.getPlaybackState();
+        boolean playing = !forcePaused && p.getPlayWhenReady() && (st == Player.STATE_READY || st == Player.STATE_BUFFERING);
+        long dur = p.getDuration();
+        if (dur == C.TIME_UNSET || dur <= 0) dur = cur.mediaMetadata.durationMs == null ? 0 : cur.mediaMetadata.durationMs;
+        String id = trackIdOf(cur);
+        WidgetState.Builder b = new WidgetState.Builder()
+            .queue(true)
+            .track(
+                id,
+                cur.mediaMetadata.title == null ? "" : cur.mediaMetadata.title.toString(),
+                cur.mediaMetadata.artist == null ? "" : cur.mediaMetadata.artist.toString(),
+                cur.mediaMetadata.artworkUri == null ? "" : cur.mediaMetadata.artworkUri.toString())
+            .playing(playing)
+            .liked(likedIds.contains(id))
+            .position(Math.max(0, p.getCurrentPosition()), dur)
+            .lyric(lrc != null && lrcTrackId.equals(id) ? widgetLine : "");
+        int at = p.getCurrentMediaItemIndex();
+        for (int i = at + 1; i < p.getMediaItemCount() && i <= at + 3; i++) {
+            MediaItem it = p.getMediaItemAt(i);
+            b.next(it.mediaMetadata.title == null ? "" : it.mediaMetadata.title.toString(), it.mediaMetadata.artist == null ? "" : it.mediaMetadata.artist.toString());
+        }
+        return b.build();
     }
 
     /** Puts the current lyric line in the session metadata subtitle (not an official Android Auto feature). */

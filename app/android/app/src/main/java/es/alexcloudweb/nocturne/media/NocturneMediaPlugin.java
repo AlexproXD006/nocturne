@@ -15,6 +15,9 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.common.util.concurrent.ListenableFuture;
+import es.alexcloudweb.nocturne.widget.AppThemeStore;
+import es.alexcloudweb.nocturne.widget.KeyValueStore;
+import es.alexcloudweb.nocturne.widget.WidgetUpdater;
 import androidx.media3.common.MediaItem;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +32,7 @@ import org.json.JSONObject;
  * <ul>
  *   <li>{@code setQueue / play / pause / seek / setVolume / setRepeat / setShuffle / setPauseAtEnd / stop /
  *       setLiked / setLyricsInCar}: transport and queue.
+ *   <li>{@code setAppTheme}: the app's theme and accent, kept natively for the home-screen widgets.
  *   <li>{@code setEq}: equalizer state (enabled, preamp, 10 gains), persisted natively and applied by the service.
  *   <li>{@code setAuth / getAuth}: the session handed to native secure storage.
  *   <li>{@code getSnapshot}: the native queue (adopted when Android Auto started playback).
@@ -156,6 +160,17 @@ public class NocturneMediaPlugin extends Plugin {
         final boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
         if (EventHub.serviceAlive()) EventHub.withService(s -> s.cmdSetLyricsEnabled(enabled));
         else LyricsPref.set(getContext(), enabled);
+        call.resolve();
+    }
+
+    /** The app's current theme + accent, for the widgets' "Like the app" colours. Stored natively, no service needed. */
+    @PluginMethod
+    public void setAppTheme(PluginCall call) {
+        Context ctx = getContext();
+        if (ctx != null) {
+            AppThemeStore.save(KeyValueStore.prefs(ctx), AppThemeStore.sanitize(call.getString("theme", ""), call.getString("accent", "")));
+            WidgetUpdater.get(ctx).refreshAll();
+        }
         call.resolve();
     }
 

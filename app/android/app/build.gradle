@@ -64,6 +64,10 @@ dependencies {
     // AndroidX WorkManager: periodic "new version available" check that runs with the app closed.
     implementation "androidx.work:work-runtime:2.11.2"
     // nocturne:work-end
+    // nocturne:palette-begin
+    // AndroidX Palette: adaptive widget colours from the current cover.
+    implementation "androidx.palette:palette:1.0.0"
+    // nocturne:palette-end
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
