@@ -2,6 +2,14 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.1-beta.9 — 2026-11-19
+
+**Arreglo de widgets (beta)** · android, windows, linux, ios
+
+### Correcciones
+
+- Los widgets de Android ya se pueden añadir (antes salía «No se ha podido añadir el widget»); la vista previa de la configuración se muestra y los selectores se leen bien.
+
 ## 1.1.1-beta.8 — 2026-11-19
 
 **Widgets para Android (beta)** · android, windows, linux, ios
