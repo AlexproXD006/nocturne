@@ -2,6 +2,14 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.1-beta.8 — 2026-11-19
+
+**Widgets para Android (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Widgets de pantalla de inicio para Android: mini (2×1), reproductor (4×2) y en reproducción (4×4) con la letra sincronizada y la cola. Colores adaptativos según la portada, Material You, los temas de Nocturne (como la app) o personalizados, con transparencia y esquinas ajustables.
+
 ## 1.1.1-beta.7 — 2026-11-18
 
 **Arreglo de reproducción en Android (beta)** · android, windows, linux, ios
