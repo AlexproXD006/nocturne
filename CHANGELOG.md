@@ -2,6 +2,30 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.1 — 2026-11-19
+
+**Android Auto, ecualizador y widgets** · android, windows, linux, ios
+
+### Novedades
+
+- Android Auto: Nocturne en la pantalla del coche con Hecho para ti, playlists, Me gusta, recientes, álbumes y artistas, búsqueda por voz y controles.
+- Reproducción nativa en Android: más estable en segundo plano, sin silencios entre canciones y funciona con la app cerrada.
+- Ecualizador de 10 bandas con 18 modos y modos personalizados que se sincronizan con tu cuenta (también en Android Auto y con la app cerrada).
+- Widgets para Android (mini, reproductor y en reproducción con letra y cola) con colores adaptativos, Material You, temas de Nocturne o personalizados.
+- Los botones de volumen del móvil controlan el volumen del PC mientras lo controlas desde Nocturne, y la notificación muestra lo que suena allí.
+- La app recuerda la canción, la cola y el punto donde ibas al cerrarla (también tras reiniciar el móvil).
+- Portadas más rápidas: se cargan primero las que estás viendo y el servidor guarda las miniaturas.
+- Informes de fallos: si la app se cierra de golpe puedes enviar el informe; también «Enviar informe de diagnóstico» en Ajustes.
+- Opcional: la línea actual de la letra en la pantalla del coche.
+
+### Correcciones
+
+- Las letras y la barra de progreso se mueven con suavidad en Android.
+- La portada del reproductor ya no se queda vacía al cambiar de canción y el fondo no parpadea.
+- «Siguiente» vuelve a aparecer en la notificación y la pantalla de bloqueo.
+- El aviso de nueva versión se ve en todos los temas.
+- El fondo animado ya no falla al reaccionar a la música.
+
 ## 1.1.1-beta.11 — 2026-11-19
 
 **Volumen del PC con los botones del móvil (beta)** · android, windows, linux, ios
