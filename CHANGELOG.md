@@ -2,6 +2,21 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.1-beta.10 — 2026-11-19
+
+**Widgets estables e informes de fallos (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Informes de fallos: si la app se cierra de golpe, al volver a abrirla puedes enviar el informe.
+- Ajustes: «Enviar informe de diagnóstico».
+- Administración: pestaña Diagnóstico con los informes recibidos.
+
+### Correcciones
+
+- Añadir un widget ya no cierra la app (fallo en la pantalla de configuración); la configuración es opcional y el widget se coloca siempre.
+- La barra de progreso de los widgets vuelve a ser una barra.
+
 ## 1.1.1-beta.9 — 2026-11-19
 
 **Arreglo de widgets (beta)** · android, windows, linux, ios
