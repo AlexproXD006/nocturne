@@ -1,7 +1,8 @@
 """
 Download manager for the music server.
 
-Uses spotdl to download tracks from Spotify / YouTube.
+Downloads tracks from YouTube (yt-dlp) and Spotify links (metadata from the server's own
+Spotify app, audio matched on YouTube by nocturne_api.spotify_download; spotdl is NOT used).
 Progress is broadcast to registered async callbacks so that the WebSocket
 endpoint can push live updates to connected clients.
 """
@@ -10,7 +11,6 @@ import asyncio
 import hashlib
 import logging
 import os
-import subprocess
 import sys
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -246,14 +246,6 @@ def _resolve_cover_path(file_path: str) -> str | None:
     return _extract_embedded_cover(file_path)
 
 
-def _spotdl_download_settings() -> dict[str, object]:
-    """Prefer a high-fidelity output format and avoid lossy re-encoding."""
-    return {
-        "format": DEFAULT_AUDIO_FORMAT,
-        "bitrate": "disable",
-    }
-
-
 def scan_and_upsert(directory: str) -> list[dict]:
     """
     Walk *directory*, read tags for every audio file found and upsert into DB.
@@ -317,6 +309,7 @@ def _notify_threadsafe(manager: "DownloadManager", loop: "asyncio.AbstractEventL
 
 class DownloadManager:
     def __init__(self) -> None:
+        self._tasks: set = set()
         self.download_queue: dict[str, dict] = {}
         self.active_downloads: set[str]      = set()
         self.progress_callbacks: list[Callable[..., Coroutine]] = []
@@ -370,7 +363,7 @@ class DownloadManager:
 
     async def search_spotify(self, query: str) -> list[dict]:
         """
-        Search for tracks using spotdl.
+        Search for tracks with spotipy and the server's Spotify credentials.
         Returns a list of candidate dicts with keys: title, artist, album, url.
         """
         loop = asyncio.get_running_loop()
@@ -380,7 +373,7 @@ class DownloadManager:
     def _search_sync(self, query: str) -> list[dict]:
         candidates: list[dict] = []
         
-        # Try spotipy first (more reliable than spotdl)
+        # spotipy with the server's own credentials (never spotdl's shared default client)
         try:
             import spotipy
             from spotipy.oauth2 import SpotifyClientCredentials
@@ -412,61 +405,17 @@ class DownloadManager:
         except Exception as e:
             logger.warning("spotipy search failed: %s", e)
         
-        # Fallback: try spotdl
-        try:
-            from spotdl import Spotdl  # type: ignore
-            from spotdl.types.song import Song  # type: ignore
-
-            client_id = os.getenv("SPOTIPY_CLIENT_ID", "")
-            client_secret = os.getenv("SPOTIPY_CLIENT_SECRET", "")
-
-            if client_id and client_secret:
-                spotdl_client = Spotdl(
-                    client_id=client_id,
-                    client_secret=client_secret,
-                    downloader_settings=_spotdl_download_settings(),
-                )
-                songs = spotdl_client.search([query])
-            else:
-                songs = Song.from_search_term(query)
-                if not isinstance(songs, list):
-                    songs = [songs]
-
-            for song in songs[:10]:
-                candidates.append({
-                    "title":  getattr(song, "name",   None) or str(song),
-                    "artist": getattr(song, "artist", None),
-                    "album":  getattr(song, "album_name", None),
-                    "url":    getattr(song, "url",    None),
-                })
-        except Exception as api_exc:
-            logger.warning("spotdl API search failed (%s), falling back to CLI", api_exc)
-            # Fallback: subprocess spotdl search
-            try:
-                proc = subprocess.run(
-                    [sys.executable, "-m", "spotdl", "search", query, "--output", "/dev/null"],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-                for line in proc.stdout.splitlines():
-                    line = line.strip()
-                    if line:
-                        candidates.append({"title": line, "artist": None, "album": None, "url": None})
-            except Exception as cli_exc:
-                logger.error("CLI search also failed: %s", cli_exc)
-
         return candidates
 
     # ── YouTube search ────────────────────────────────────────────────────
 
-    async def search_youtube(self, query: str) -> list[dict]:
-        """Search YouTube using yt-dlp and return up to 8 results."""
+    async def search_youtube(self, query: str, limit: int = 8) -> list[dict]:
+        """Search YouTube using yt-dlp and return up to `limit` results."""
         loop = asyncio.get_running_loop()
-        results = await loop.run_in_executor(self._executor, self._search_youtube_sync, query)
+        results = await loop.run_in_executor(self._executor, self._search_youtube_sync, query, limit)
         return results
 
-    def _search_youtube_sync(self, query: str) -> list[dict]:
+    def _search_youtube_sync(self, query: str, limit: int = 8) -> list[dict]:
         """Blocking YouTube search using yt-dlp."""
         candidates: list[dict] = []
         try:
@@ -480,7 +429,7 @@ class DownloadManager:
                 "js_runtimes": YTDLP_JS_RUNTIMES,
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(f"ytsearch8:{query}", download=False)
+                info = ydl.extract_info(f"ytsearch{int(limit)}:{query}", download=False)
                 entries = info.get("entries", []) if info else []
                 for entry in entries:
                     if not entry:
@@ -693,7 +642,7 @@ class DownloadManager:
         artist: str = "",
         cover_url: str = "",
     ) -> str:
-        """Enqueue a download and return the job_id."""
+        """Enqueue a Spotify download (URL / URI / id) and return the job_id."""
         job_id = str(uuid.uuid4())
         job = {
             "id":        job_id,
@@ -711,93 +660,45 @@ class DownloadManager:
 
         loop = asyncio.get_running_loop()
         self._main_loop = loop
-        fut = loop.run_in_executor(
-            self._executor,
-            self._run_download_sync,
-            job_id,
-            url_or_query,
-        )
-        fut.add_done_callback(self._worker_done(job_id))
+        task = asyncio.ensure_future(self._run_spotify_job(job_id, url_or_query))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
         return job_id
 
-    def _run_download_sync(self, job_id: str, url_or_query: str) -> None:
-        """Blocking download function executed in a thread pool."""
+    async def _run_spotify_job(self, job_id: str, url_or_query: str) -> None:
+        """Spotify link -> library through the import pipeline (no spotdl). Runs on the main
+        loop (the pipeline is async and talks to this manager); errors become job.error."""
         job = self.download_queue[job_id]
         self.active_downloads.add(job_id)
-        main_loop = self._main_loop
 
-        def _update(status: str, progress: int, error: str | None = None) -> None:
-            job["status"]   = status
+        async def _update(status: str, progress: int, error: str | None = None) -> None:
+            job["status"] = status
             job["progress"] = progress
             if error is not None:
                 job["error"] = error
-            _notify_threadsafe(self, main_loop, job)
+            await self._notify(job)
 
         try:
-            _update("downloading", 5)
-            files_before = self._snapshot_files()
+            from nocturne_api import spotify_download as sd
+            await _update("downloading", 5)
 
-            # ── Download via spotdl CLI ─────────────────────────────────
-            _update("downloading", 20)
-            cmd = [
-                sys.executable, "-m", "spotdl",
-                url_or_query,
-                "--output", MUSIC_DIR,
-                "--format", DEFAULT_AUDIO_FORMAT,
-                "--bitrate", "disable",
-            ]
-            if YTDLP_JS_RUNTIME:
-                # spotdl downloads through yt-dlp too: same JS-challenge requirement.
-                cmd += ["--yt-dlp-args", f"--js-runtimes {YTDLP_JS_RUNTIME}"]
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-            if proc.returncode != 0:
-                raise RuntimeError(proc.stderr.strip() or "spotdl exited non-zero")
-            _update("downloading", 80)
+            def _title(t: str) -> None:
+                if not job.get("title"):
+                    job["title"] = t
 
-            # ── Scan for new files and add to DB ─────────────────────────
-            files_after = self._snapshot_files()
-            new_files   = {f for f in files_after - files_before if _is_final_audio(f)}
+            def _progress(pct: int, _msg=None) -> None:
+                job["progress"] = max(job.get("progress", 0), min(95, pct))
 
-            for file_path in new_files:
-                tags       = _read_tags(file_path)
-                cover_path = _resolve_cover_path(file_path)
-                track = {
-                    "id":         _stable_id(file_path),
-                    "title":      tags["title"] or job.get("title"),
-                    "artist":     tags["artist"] or job.get("artist"),
-                    "album":      tags["album"],
-                    "duration":   tags["duration"],
-                    "file_path":  file_path,
-                    "cover_path": cover_path,
-                    "added_at":   datetime.now(timezone.utc).isoformat(),
-                }
-                db.upsert_track(track)
-
-                # Auto mood analysis
-                try:
-                    ma.analyze_track_mood(track["id"])
-                except Exception:
-                    pass
-
-                # Search and save lyrics
-                lyrics = search_lyrics(track.get("artist", ""), track.get("title", ""))
-                if lyrics:
-                    lrc_path = save_lyrics_file(file_path, track.get("artist", ""), track.get("title", ""), lyrics)
-                    if lrc_path:
-                        logger.info(f"Lyrics saved for {track.get('title', '')}")
-
-                logger.info("Downloaded & imported: %s", file_path)
-
-                if not job["title"] and track["title"]:
-                    job["title"]  = track["title"]
-                if not job["artist"] and track["artist"]:
-                    job["artist"] = track["artist"]
-
-            _update("done", 100)
-
+            res = await sd.download_ref(url_or_query, self, on_title=_title, on_progress=_progress)
+            job["track_ids"] = res["track_ids"]
+            job["track_id"] = res["track_ids"][0]
+            if res["failures"]:
+                job["message"] = "; ".join(f"{f['title']}: {f['reason']}" for f in res["failures"][:5])[:500]
+            await _update("done", 100)
         except Exception as exc:
-            logger.error("Download job %s failed: %s", job_id, exc)
-            _update("error", 0, str(exc))
+            reason = str(exc) if exc.__class__.__name__ == "DownloadFailed" else f"Error: {type(exc).__name__}: {exc}"
+            logger.error("Download job %s failed: %s", job_id, reason)
+            await _update("error", 0, reason)
         finally:
             self.active_downloads.discard(job_id)
 

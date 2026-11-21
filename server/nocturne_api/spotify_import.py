@@ -62,7 +62,9 @@ logger = logging.getLogger("nocturne.spotify_import")
 
 ACTIVE = ("queued", "reading", "matching", "downloading")
 TERMINAL = ("done", "failed", "cancelled")
-DURATION_TOLERANCE = 15            # seconds, YouTube result / downloaded file vs Spotify
+DURATION_TOLERANCE = 2             # seconds, downloaded FILE vs Spotify (verified after download)
+SAME_SONG_TOLERANCE = 15          # seconds, same recording under two Spotify ids
+MAX_DURATION_DELTA = 3            # seconds, YouTube result vs Spotify: never accept more
 YT_MIN_CONFIDENCE = 0.75
 DOWNLOAD_TIMEOUT = 30 * 60         # per track
 POLL_INTERVAL = 2.0
@@ -293,12 +295,35 @@ def accept_library_match(score: float, breakdown: dict) -> bool:
     return score >= ca.APPLY_THRESHOLD and not breakdown.get("version_mismatch")
 
 
-def pick_youtube(cand: ca.Candidate, results: list[dict]) -> Optional[dict]:
-    """Best YouTube search result for a Spotify track, or None if none is safe."""
-    best, best_key = None, None
+_VIDEO_RE = re.compile(r"official\s+(music\s+)?video|video\s*clip|videoclip|video\s+oficial|visuali[sz]er", re.I)
+_AUDIO_RE = re.compile(r"\b(official\s+audio|audio\s+oficial|audio)\b", re.I)
+
+
+def _yt_class(r: dict, cand: Optional[ca.Candidate] = None) -> int:
+    """2 = '<Artist> - Topic' auto-generated upload (the distributor master, same audio as
+    Spotify), 1 = 'Official Audio' style title, 0 = anything else, -1 = music video."""
+    chan = ca._compact(r.get("channel") or "")
+    if chan.endswith("topic"):
+        return 2
+    title = r.get("title") or ""
+    # "Provided to YouTube" auto-generated upload: the title is exactly the song title and the
+    # channel is the artist's (flat search results do not always show the " - Topic" suffix).
+    if cand is not None and cand.artists and ca.norm(title) == ca.norm(cand.title) and any(
+            ca._compact(a) and ca._compact(a) == chan for a in cand.artists):
+        return 2
+    if _VIDEO_RE.search(title):
+        return -1
+    return 1 if _AUDIO_RE.search(title) else 0
+
+
+def rank_youtube(cand: ca.Candidate, results: list[dict]) -> list[dict]:
+    """Acceptable YouTube results for a Spotify track, best first. Duration must be within
+    MAX_DURATION_DELTA s of Spotify's (never a different edit); Topic / Official Audio
+    uploads win over videos; live/remix/slowed/... are rejected unless Spotify's title has it."""
+    ranked: list[tuple] = []
     for r in results or []:
         dur = r.get("duration") or None
-        if cand.duration_s and dur and abs(int(dur) - cand.duration_s) > DURATION_TOLERANCE:
+        if cand.duration_s and dur and abs(int(dur) - cand.duration_s) > MAX_DURATION_DELTA:
             continue
         guesses = ca.clean_query(r.get("title") or "", r.get("channel") or "")
         raw = f"{r.get('title') or ''} {r.get('channel') or ''}"
@@ -316,14 +341,23 @@ def pick_youtube(cand: ca.Candidate, results: list[dict]) -> Optional[dict]:
         if top_s < YT_MIN_CONFIDENCE:
             continue
         delta = abs(int(dur) - cand.duration_s) if (dur and cand.duration_s) else 99
-        # prefer the artist's own channel / "Artist - Topic" / VEVO over re-uploads
+        cls = _yt_class(r, cand)
         chan = ca._compact(r.get("channel") or "")
-        official = int(bool(chan) and (chan.endswith("topic") or "vevo" in chan or any(
+        own = int(bool(chan) and (chan.endswith("topic") or "vevo" in chan or any(
             ca._compact(a) and ca._compact(a) in chan for a in cand.artists)))
-        key = (round(top_s, 2), official, -delta)
-        if best_key is None or key > best_key:
-            best, best_key = r, key
-    return best
+        ranked.append([cls, int(delta <= 1), own, round(top_s, 2), -delta, r])
+    if any(x[0] >= 1 for x in ranked):
+        for x in ranked:                      # a master exists: videos go last
+            if x[0] == -1:
+                x[0] = -2
+    ranked.sort(key=lambda x: tuple(x[:5]), reverse=True)
+    return [x[5] for x in ranked]
+
+
+def pick_youtube(cand: ca.Candidate, results: list[dict]) -> Optional[dict]:
+    """Best YouTube search result for a Spotify track, or None if none is safe."""
+    ranked = rank_youtube(cand, results)
+    return ranked[0] if ranked else None
 
 
 def _artists_str(cand: ca.Candidate) -> str:
@@ -397,7 +431,7 @@ def same_song(a: ca.Candidate, b: ca.Candidate, key_a: Optional[tuple] = None,
     """Same recording under two Spotify ids (single vs album, re-release...)."""
     if (key_a or _dedupe_key(a)) != (key_b or _dedupe_key(b)):
         return False
-    return not (a.duration_s and b.duration_s and abs(a.duration_s - b.duration_s) > DURATION_TOLERANCE)
+    return not (a.duration_s and b.duration_s and abs(a.duration_s - b.duration_s) > SAME_SONG_TOLERANCE)
 
 
 def find_same_song(sid: str, cands: dict, keys: dict, pool_by_key: dict) -> Optional[str]:
@@ -522,6 +556,8 @@ def _retry_lyrics(row: dict, meta: dict, force: bool) -> dict:
         existing = la.get_auto(row["id"])
         if existing is not None and (existing["status"] != la.STATUS_NOT_FOUND or not force):
             return {}
+        if meta.get("duration_ms"):
+            row = {**row, "duration": int(round(meta["duration_ms"] / 1000))}   # Spotify's, not the file's
         res = la.lookup(row, [{"title": meta.get("name"), "artists": meta.get("artists") or [],
                                "album": meta.get("album"), "label": "spotify"}])
         if res.storable and (existing is None or res.status != la.STATUS_NOT_FOUND):
@@ -868,38 +904,177 @@ async def _wait_throttle() -> None:
         await asyncio.sleep(min(left, 5.0))
 
 
+NOT_FOUND_REASON = "No se encontró la versión de Spotify en YouTube"
+MAX_YT_ATTEMPTS = 4
+SEARCH_LIMIT = 15
+
+
+def youtube_queries(cand: ca.Candidate) -> list[str]:
+    artist = _artists_str(cand)
+    first = cand.artists[0] if cand.artists else ""
+    if not artist:
+        return [f'"{cand.title}" audio', cand.title]
+    return [f'{first} - {cand.title} topic', f'"{cand.title}" "{first}" audio',
+            f"Provided to YouTube by {cand.title} {first}", f"{artist} - {cand.title}"]
+
+
+async def find_youtube_candidates(dm, cand: ca.Candidate) -> list[dict]:
+    """Ranked YouTube results (Topic / Official Audio first). Searches stop as soon as a
+    Topic or audio upload with a matching duration shows up."""
+    seen: dict[str, dict] = {}
+    ranked: list[dict] = []
+    for q in youtube_queries(cand):
+        for r in await dm.search_youtube(q, SEARCH_LIMIT) or []:
+            seen.setdefault(r.get("id") or r.get("url") or str(len(seen)), r)
+        ranked = rank_youtube(cand, list(seen.values()))
+        if ranked and _yt_class(ranked[0], cand) >= 1:
+            break
+    return ranked
+
+
+def _discard_new_file(row: Optional[dict], known_before: set[str]) -> None:
+    """Delete a file this very download just created (never anything that existed before)."""
+    if not row or row["id"] in known_before:
+        return
+    try:
+        fp = row.get("file_path")
+        if fp and os.path.isfile(fp):
+            os.remove(fp)
+        nova_db.delete_track(row["id"])
+        logger.info("discarded wrong-duration download %s", row["id"])
+    except Exception as exc:
+        logger.warning("could not discard %s: %s", row.get("id"), type(exc).__name__)
+
+
+async def download_candidate(dm, cand: ca.Candidate, known_before: set[str], claimed: set[str],
+                             lock: Optional[asyncio.Lock] = None,
+                             cancelled=lambda: False) -> tuple[Optional[dict], Optional[str]]:
+    """Find the Spotify master on YouTube, download it, verify the file's duration against
+    Spotify (+-DURATION_TOLERANCE s) and return (library row, None) or (None, reason).
+    A download of the wrong length is deleted and the next candidate is tried."""
+    ranked = await find_youtube_candidates(dm, cand)
+    if not ranked:
+        return None, NOT_FOUND_REASON
+    reason = NOT_FOUND_REASON
+    for choice in ranked[:MAX_YT_ATTEMPTS]:
+        if cancelled():
+            return None, "Cancelada"
+        job_id = await dm.download_youtube(choice["url"], cand.title, _artists_str(cand))
+        deadline = time.monotonic() + DOWNLOAD_TIMEOUT
+        job: dict = {}
+        while True:
+            job = dm.get_job(job_id) or {}
+            if job.get("status") in ("done", "error", "cancelled"):
+                break
+            if time.monotonic() > deadline:
+                return None, "La descarga tardó demasiado"
+            if cancelled():
+                return None, "Cancelada"
+            await asyncio.sleep(POLL_INTERVAL)
+        if job.get("status") != "done":
+            err = (job.get("error") or job.get("status") or "error").strip().splitlines()[-1][:200]
+            reason = f"Falló la descarga: {err}"
+            if _is_throttled(reason):
+                return None, reason
+            continue
+        async def _find():
+            return await asyncio.to_thread(
+                _find_downloaded, job.get("title") or choice.get("title") or "", known_before, claimed,
+                cand.duration_s, cand.title, track_id=job.get("track_id"), file_path=job.get("file_path"))
+        if lock is not None:
+            async with lock:
+                found, why = await _find()
+        else:
+            found, why = await _find()
+        if found:
+            return found, None
+        reason = why or reason
+        if why and why.startswith("Duración descargada"):
+            rows = await asyncio.to_thread(_all_tracks)
+            _discard_new_file(next((x for x in rows if x["id"] == job.get("track_id")), None), known_before)
+            continue
+        return None, reason
+    return None, reason if reason != NOT_FOUND_REASON else NOT_FOUND_REASON
+
+
 async def _download_one(run: _Run, dm, sid: str, cand: ca.Candidate,
                         known_before: set[str], claimed: set[str]) -> Optional[str]:
     """Returns None on success, else a failure reason."""
-    query = f"{_artists_str(cand)} - {cand.title}" if cand.artists else cand.title
-    results = await dm.search_youtube(query)
-    choice = pick_youtube(cand, results)
-    if not choice:
-        return "No se encontró en YouTube una versión que coincida (título, artista y duración)"
-    if _cancelled(run.id):
-        return "Cancelada"
-    job_id = await dm.download_youtube(choice["url"], cand.title, _artists_str(cand))
-    deadline = time.monotonic() + DOWNLOAD_TIMEOUT
-    job: dict = {}
-    while True:
-        job = dm.get_job(job_id) or {}
-        if job.get("status") in ("done", "error", "cancelled"):
-            break
-        if time.monotonic() > deadline:
-            return "La descarga tardó demasiado"
-        if _cancelled(run.id):
-            return "Cancelada"
-        await asyncio.sleep(POLL_INTERVAL)
-    if job.get("status") != "done":
-        err = (job.get("error") or job.get("status") or "error").strip().splitlines()[-1][:200]
-        return f"Falló la descarga: {err}"
+    found, reason = await download_candidate(dm, cand, known_before, claimed, run.lock,
+                                             lambda: _cancelled(run.id))
+    if not found:
+        return reason
     async with run.lock:
-        found, why = await asyncio.to_thread(
-            _find_downloaded, job.get("title") or choice.get("title") or "", known_before, claimed,
-            cand.duration_s, cand.title, track_id=job.get("track_id"), file_path=job.get("file_path"))
-        if not found:
-            return why
         claimed.add(found["id"])
         run.resolve(sid, found["id"])
     _map_put(sid, found["id"], "youtube")
     return None
+
+
+# ---------------------------------------------------------------------------
+# Single-track download (admin "search Spotify -> download")
+# ---------------------------------------------------------------------------
+
+class DownloadFailed(Exception):
+    """User-facing (Spanish) reason in args[0]."""
+
+
+def _write_audio_tags(file_path: str, meta: dict) -> None:
+    """Clean Spotify title/artist/album in the file's own tags (only for files we just downloaded)."""
+    from mutagen import File as MFile
+    mf = MFile(file_path, easy=True)
+    if mf is None:
+        return
+    if mf.tags is None:
+        try:
+            mf.add_tags()
+        except Exception:
+            return
+    mf["title"] = [meta.get("name") or ""]
+    mf["artist"] = [a for a in (meta.get("artists") or [])] or [""]
+    if meta.get("album"):
+        mf["album"] = [meta["album"]]
+    mf.save()
+
+
+async def download_spotify_track(meta: dict, dm=None, *, cancelled=lambda: False) -> tuple[str, bool]:
+    """Make a Spotify track (meta = spotify_catalog.track_meta) available in the library.
+    Returns (library track id, downloaded). Already known tracks (Spotify map or the
+    library match) are returned without downloading. Raises DownloadFailed."""
+    dm = dm or get_download_manager()
+    sid = meta.get("id") or ""
+    cand = spotify_candidate({"name": meta.get("name"), "duration_ms": meta.get("duration_ms"),
+                              "artists": [{"name": a} for a in meta.get("artists") or []],
+                              "album": {"name": meta.get("album")}})
+    rows = await asyncio.to_thread(_all_tracks)
+    by_id = {r["id"]: r for r in rows}
+    if sid:
+        mapped = await asyncio.to_thread(_map_get, [sid])
+        if mapped.get(sid) in by_id:
+            return mapped[sid], False
+    best, score, bd = LibraryIndex(rows).best(cand)
+    if best and accept_library_match(score, bd):
+        if sid:
+            _map_put(sid, best, "match")
+        return best, False
+    known_before = set(by_id)
+    await _wait_throttle()
+    found, reason = await download_candidate(dm, cand, known_before, set(), None, cancelled)
+    if not found and reason and _is_throttled(reason) and not cancelled():
+        _trip_throttle()
+        await _wait_throttle()
+        found, reason = await download_candidate(dm, cand, known_before, set(), None, cancelled)
+    if not found:
+        raise DownloadFailed(reason or NOT_FOUND_REASON)
+    if found["id"] in known_before:                      # that video was downloaded before
+        if sid:
+            _map_put(sid, found["id"], "youtube")
+        return found["id"], False
+    try:
+        await asyncio.to_thread(_write_audio_tags, found["file_path"], meta)
+    except Exception as exc:
+        logger.info("could not write tags to %s: %s", found["id"], type(exc).__name__)
+    if sid:
+        _map_put(sid, found["id"], "youtube")
+    await asyncio.to_thread(postprocess_track, found["id"], meta)   # DB metadata, cover, lyrics
+    return found["id"], True

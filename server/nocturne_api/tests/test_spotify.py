@@ -149,7 +149,7 @@ class FakeDownloadManager:
         self.in_flight = 0
         self.max_in_flight = 0
 
-    async def search_youtube(self, query):
+    async def search_youtube(self, query, limit=8):
         self.queries.append(query)
         return self.results.get(query, [])
 
@@ -409,7 +409,7 @@ async def test_full_import(client, fake_spotify, monkeypatch):
     dm = FakeDownloadManager({
         "Artista Nuevo - Canción Nueva": [
             _yt("bad1", "Artista Nuevo - Canción Nueva (Slowed)", "Artista Nuevo", 260),
-            _yt("good1", "Artista Nuevo - Canción Nueva (Video Oficial)", "Artista Nuevo", 203)],
+            _yt("good1", "Artista Nuevo - Canción Nueva (Video Oficial)", "Artista Nuevo", 201)],
         "Artista Nuevo - Otra Nueva": [dict(_yt("good2", "Artista Nuevo - Otra Nueva", "Artista Nuevo - Topic", 151),
                                             track="Otra Nueva")],
         "Nadie - Sin Resultado": [_yt("x", "Something else entirely", "Random", 100)],
