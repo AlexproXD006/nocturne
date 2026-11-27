@@ -2,6 +2,14 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.2-beta.1 — 2026-11-27
+
+**Compartir en historias de Instagram (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Botón «Historia de Instagram» en la tarjeta de letras y en el resumen de Estadísticas: abre el editor de historias con la tarjeta como pegatina y el fondo con sus colores (Android e iPhone).
+
 ## 1.1.1 — 2026-11-19
 
 **Android Auto, ecualizador y widgets** · android, windows, linux, ios
