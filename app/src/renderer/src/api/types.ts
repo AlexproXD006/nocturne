@@ -163,6 +163,13 @@ export interface ServerInfo {
     radio?: boolean
     /** Server implements /v1/listenbrainz/* (scrobbling to ListenBrainz). */
     listenbrainz?: boolean
+    /** An Instagram Stories App ID is configured (see `integrations.instagramStories`). */
+    instagramStories?: boolean
+  }
+  /** Present only when the server operator configured them. */
+  integrations?: {
+    /** Public Facebook App ID (NOCTURNE_FACEBOOK_APP_ID): enables "share to Instagram story" in the mobile apps. */
+    instagramStories?: { appId: string }
   }
 }
 

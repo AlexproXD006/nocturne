@@ -122,6 +122,16 @@ MUSIC_ROOT: str = str(Path(_music_dir).resolve())
 # ── Art cache ─────────────────────────────────────────────────────────────────
 ART_CACHE_DIR: str = str(Path(DATA_DIR) / "art_cache")
 
+# ── Instagram Stories sharing ──────────────────────────────────────────────────
+# Public numeric Facebook App ID (NOT a secret; Instagram's `source_application`). Empty = the
+# apps hide "Compartir en historia de Instagram". A malformed value is ignored. See docs/INSTAGRAM.md.
+def _facebook_app_id(raw: str) -> str:
+    raw = (raw or "").strip()
+    return raw if raw.isdigit() and 5 <= len(raw) <= 25 else ""
+
+
+FACEBOOK_APP_ID: str = _facebook_app_id(_optional("NOCTURNE_FACEBOOK_APP_ID"))
+
 # ── Spotify account connection + playlist import ──────────────────────────────
 # App credentials (https://developer.spotify.com/dashboard). Both spellings are
 # accepted: SPOTIPY_* is what spotipy/spotdl read, SPOTIFY_* is the older alias.

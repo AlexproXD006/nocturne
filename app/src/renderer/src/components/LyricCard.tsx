@@ -6,11 +6,14 @@ import { prefersReducedMotion, useSettings } from '../store/settings'
 import { cx } from './common'
 import {
   drawLyricCard,
+  paletteFor,
   ensureCardFonts,
   loadCardImage,
   type CardRatio
 } from '../lib/lyricCard'
 import { exportCard } from '../lib/cardExport'
+import { storyColorsFromPalette } from '../lib/instagramStory'
+import { InstagramStoryButton } from './InstagramStoryButton'
 import type { ImageIntent } from '../platform'
 import { useT, type MessageKey } from '../i18n'
 
@@ -197,6 +200,16 @@ export function LyricCard({ title, artist, lines, coverUrl, onClose }: LyricCard
               <Share2 className="h-4 w-4" /> {tr('card.share')}
             </button>
           )}
+        </div>
+        <div className="px-5 pb-5">
+          <InstagramStoryButton
+            canvas={() => canvasRef.current}
+            redrawWithoutImages={() => canvasRef.current && drawLyricCard(canvasRef.current, ratio, { title, artist, lines }, null)}
+            filename="nocturne-lyrics.png"
+            colors={() => storyColorsFromPalette(paletteFor(`${title}|${artist}`))}
+            meta={{ title, text: artist ? `${title} — ${artist}` : title }}
+            disabled={busy}
+          />
         </div>
       </div>
     </div>,

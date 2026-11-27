@@ -39,6 +39,11 @@ import {
   nocturneColors,
   patchMainActivity,
   mainActivityJava,
+  SHARE_PLUGIN_IMPORT,
+  SHARE_PLUGIN_REGISTER,
+  ensureFileProvider,
+  ensureInstagramQueries,
+  patchFilePaths,
   MAIN_ACTIVITY_MARKER,
   patchManifest,
   patchProject,
@@ -401,7 +406,7 @@ test('MainActivity: NocturneUpdates plugin registered after NocturneMedia, befor
     assert.equal(patchMainActivity(out), out)
   }
   // Patching the previous generation of the template yields exactly the current template.
-  const previous = mainActivityJava().replace(`${UPDATES_PLUGIN_IMPORT}\n`, '').replace(`        ${UPDATES_PLUGIN_REGISTER}\n`, '').replace(`${DIAG_PLUGIN_IMPORT}\n`, '').replace(`        ${DIAG_PLUGIN_REGISTER}\n`, '')
+  const previous = mainActivityJava().replace(`${UPDATES_PLUGIN_IMPORT}\n`, '').replace(`        ${UPDATES_PLUGIN_REGISTER}\n`, '').replace(`${DIAG_PLUGIN_IMPORT}\n`, '').replace(`        ${DIAG_PLUGIN_REGISTER}\n`, '').replace(`${SHARE_PLUGIN_IMPORT}\n`, '').replace(`        ${SHARE_PLUGIN_REGISTER}\n`, '')
   assert.doesNotMatch(previous, /NocturneUpdatesPlugin/)
   assert.equal(patchMainActivity(previous), mainActivityJava())
   // No onCreate(super): untouched. No imports at all: the import goes after the package line.
@@ -472,5 +477,57 @@ test('patchProject applies to a project copy and is idempotent', async (t) => {
 test('patchManifest points the application at NocturneApplication (crash reporter) and is idempotent', () => {
   const once = patchManifest(MANIFEST)
   assert.match(once, /<application\b[^>]*android:name="\.NocturneApplication"/)
+  assert.equal(patchManifest(once), once)
+})
+
+test('the share plugin is registered in the generated MainActivity and added to an older one', () => {
+  const j = mainActivityJava()
+  assert.ok(j.includes(SHARE_PLUGIN_IMPORT) && j.includes(SHARE_PLUGIN_REGISTER))
+  const previous = j.replace(`${SHARE_PLUGIN_IMPORT}\n`, '').replace(`        ${SHARE_PLUGIN_REGISTER}\n`, '')
+  assert.equal(patchMainActivity(previous), j)
+})
+
+const IG_MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application android:label="x">
+        <activity android:name=".MainActivity" android:exported="true"></activity>
+    </application>
+</manifest>
+`
+
+test('queries: Instagram package visibility is added once', () => {
+  const once = ensureInstagramQueries(IG_MANIFEST)
+  assert.match(once, /<queries>\s*<package android:name="com\.instagram\.android" \/>\s*<\/queries>/)
+  assert.ok(once.indexOf('<queries>') < once.indexOf('<application'))
+  assert.equal(ensureInstagramQueries(once), once)
+  const other = IG_MANIFEST.replace('<application', '<queries>\n        <package android:name="com.other" />\n    </queries>\n    <application')
+  const merged = ensureInstagramQueries(other)
+  assert.equal(merged.match(/<queries>/g).length, 1)
+  assert.ok(merged.includes('com.other') && merged.includes('com.instagram.android'))
+})
+
+test('FileProvider: declared when missing, left alone when Capacitor already has one', () => {
+  const added = ensureFileProvider(IG_MANIFEST)
+  assert.match(added, /androidx\.core\.content\.FileProvider/)
+  assert.match(added, /android:authorities="\$\{applicationId\}\.fileprovider"/)
+  assert.match(added, /android:grantUriPermissions="true"/)
+  assert.match(added, /android:exported="false"/)
+  assert.equal(ensureFileProvider(added), added)
+})
+
+test('file_paths.xml exposes the cache stories/ folder, idempotently', () => {
+  const stock = '<?xml version="1.0" encoding="utf-8"?>\n<paths xmlns:android="http://schemas.android.com/apk/res/android">\n    <cache-path name="my_cache_images" path="." />\n</paths>'
+  const out = patchFilePaths(stock)
+  assert.match(out, /<cache-path name="nocturne_stories" path="stories\/" \/>/)
+  assert.ok(out.includes('my_cache_images'))
+  assert.equal(patchFilePaths(out), out)
+  assert.match(patchFilePaths(''), /<paths[^>]*>[\s\S]*nocturne_stories/)
+})
+
+test('patchManifest adds provider + queries and stays idempotent', () => {
+  const once = patchManifest(IG_MANIFEST)
+  assert.match(once, /com\.instagram\.android/)
+  assert.match(once, /FileProvider/)
   assert.equal(patchManifest(once), once)
 })

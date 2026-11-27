@@ -8,6 +8,8 @@ import { ensureCardFonts, loadCardImage } from '../lib/lyricCard'
 import { exportCard } from '../lib/cardExport'
 import type { ImageIntent } from '../platform'
 import { drawRecapCard, parseAccent, type RecapImages } from '../lib/recapCard'
+import { storyColorsFromAccent } from '../lib/instagramStory'
+import { InstagramStoryButton } from './InstagramStoryButton'
 import type { RecapData } from '../lib/stats'
 import { useT } from '../i18n'
 
@@ -161,6 +163,16 @@ export function RecapCard({ data, onClose }: { data: RecapData; onClose: () => v
               <Share2 className="h-4 w-4" /> {tr('card.share')}
             </button>
           )}
+        </div>
+        <div className="px-5 pb-5">
+          <InstagramStoryButton
+            canvas={() => canvasRef.current}
+            redrawWithoutImages={() => canvasRef.current && drawRecapCard(canvasRef.current, data, { artists: [], cover: null }, accent())}
+            filename={fileName}
+            colors={() => storyColorsFromAccent(accent())}
+            meta={{ title: tr('card.recapShareTitle', { period: data.periodLabel }) }}
+            disabled={busy}
+          />
         </div>
       </div>
     </div>,

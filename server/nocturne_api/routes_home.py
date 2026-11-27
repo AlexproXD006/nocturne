@@ -32,7 +32,8 @@ async def server_info():
         sources.append("spotify")
     sources.append("youtube")
 
-    return {
+    instagram_app_id = config.FACEBOOK_APP_ID
+    body = {
         "name": "Nocturne Music Server",
         "version": "1.0.0",
         "apiVersion": 1,
@@ -49,8 +50,13 @@ async def server_info():
             "spotifyImport": has_spotify,
             "sources": sources,
             "uploadMaxBytes": config.UPLOAD_MAX_BYTES,
+            "instagramStories": bool(instagram_app_id),
         },
     }
+    if instagram_app_id:
+        # Public id (not a secret): the mobile apps pass it as Instagram's `source_application`.
+        body["integrations"] = {"instagramStories": {"appId": instagram_app_id}}
+    return body
 
 
 @router.get("/home")

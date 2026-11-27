@@ -4,10 +4,12 @@ import { createNativePlayer, type NocturneNativePlugin } from './nativePlayer'
 import type { NativePlayer } from './nativePlayerTypes'
 import { capacitorSaveOrShare, desktopSaveOrShare, webSaveOrShare, type SaveOrShareImage } from './saveImage'
 import { createNativeDiagnostics, type DiagnosticsPlugin, type NativeDiagnostics } from './diagnostics'
+import { createInstagramStoryShare, type InstagramStoryShare, type NocturneSharePlugin } from './instagramStory'
 import { createNativeUpdates, type NativeUpdates, type NocturneUpdatesPlugin } from './nocturneUpdates'
 
 export type { NativeUpdates } from './nocturneUpdates'
 export type { NativeDiagnostics, CrashReport } from './diagnostics'
+export type { InstagramStoryShare } from './instagramStory'
 export type { ImageIntent, ImageResult, SaveOrShareImage } from './saveImage'
 export type { NativePlayer, NativePlayerEvent, NativeQueueItem, NativeSnapshot, NativeSession } from './nativePlayerTypes'
 
@@ -67,6 +69,8 @@ export interface Platform {
   openExternal(url: string): Promise<void>
   /** Export a rendered PNG: share sheet (mobile), save dialog / clipboard (desktop), Web Share or download (web). */
   saveOrShareImage: SaveOrShareImage
+  /** Android / iOS apps only: open Instagram's "Add to story" with a sticker + background colours. */
+  shareInstagramStory?: InstagramStoryShare | null
   /** Native now-playing controls (Android Media3 session). Desktop and iOS use navigator.mediaSession. */
   nativeNowPlaying: NativeNowPlaying | null
   /**
@@ -88,6 +92,13 @@ export interface Platform {
 function isCapacitor(name: 'android' | 'ios'): boolean {
   const cap = (globalThis as { Capacitor?: { getPlatform?: () => string; isNativePlatform?: () => boolean } }).Capacitor
   return Boolean(cap?.isNativePlatform?.() && cap.getPlatform?.() === name)
+}
+
+/** App-local NocturneShare plugin (Android: NocturneSharePlugin.java, iOS: NocturneShare.swift). */
+function instagramShare(): InstagramStoryShare {
+  return createInstagramStoryShare(
+    import('@capacitor/core').then(({ registerPlugin }) => ({ plugin: registerPlugin<NocturneSharePlugin>('NocturneShare') }))
+  )
 }
 
 function isAndroid(): boolean {
@@ -201,7 +212,8 @@ function androidPlatform(): Platform {
     nativeUpdates: createNativeUpdates(updatesBox),
     diagnostics: createNativeDiagnostics(diagBox),
     notifyUpdate: null,
-    saveOrShareImage: capacitorSaveOrShare()
+    saveOrShareImage: capacitorSaveOrShare(),
+    shareInstagramStory: instagramShare()
   }
 }
 
@@ -238,7 +250,8 @@ function iosPlatform(): Platform {
     nativeNowPlaying: null,
     nativeUpdates: null,
     notifyUpdate: null,
-    saveOrShareImage: capacitorSaveOrShare()
+    saveOrShareImage: capacitorSaveOrShare(),
+    shareInstagramStory: instagramShare()
   }
 }
 

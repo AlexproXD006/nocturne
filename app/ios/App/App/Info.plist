@@ -72,6 +72,10 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>instagram-stories</string>
+	</array>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Nocturne guarda en tu galería las imágenes que compartes (resumen y letras).</string>
 </dict>
