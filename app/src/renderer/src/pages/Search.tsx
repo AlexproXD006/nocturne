@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Clock, Play, Search as SearchIcon, X } from 'lucide-react'
-import { api, playback } from '../services'
+import { api, playback, useConnectivity, useOffline } from '../services'
+import { ArrowDownToLine } from 'lucide-react'
+import { searchStored } from '../lib/offline/localSearch'
 import type { SearchResults } from '../api/types'
 import { describeError, isAbort } from '../api/errors'
 import { readJson, writeJson } from '../lib/storage'
@@ -41,11 +43,25 @@ export function SearchPage({ initial }: { initial?: string }): ReactNode {
   const [recent, setRecent] = useState<string[]>(() => readJson<string[]>(RECENT_KEY, [], (v): v is string[] => Array.isArray(v)))
   const debounced = useDebounced(query.trim(), 250)
   const replace = useNav((s) => s.replace)
+  const online = useConnectivity((s) => s.online)
+  const stored = useOffline((s) => s.tracks)
+  const available = useOffline((s) => s.available)
+  const [offlineOnly, setOfflineOnly] = useState(false)
+  // Offline (or with the filter on) the results come from what is stored on this device.
+  const local = useMemo<SearchResults | null>(
+    () =>
+      debounced && (!online || offlineOnly)
+        ? { tracks: searchStored(Object.values(stored).filter((x) => x.id in available), debounced), albums: [], artists: [], playlists: [] }
+        : null,
+    [debounced, online, offlineOnly, stored, available]
+  )
 
   useEffect(() => {
-    if (!debounced) {
-      setResults(null)
-      setError(null)
+    if (!debounced || !online) {
+      if (!debounced) {
+        setResults(null)
+        setError(null)
+      }
       return
     }
     const ctrl = new AbortController()
@@ -68,7 +84,7 @@ export function SearchPage({ initial }: { initial?: string }): ReactNode {
       })
     return () => ctrl.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounced])
+  }, [debounced, online])
 
   const header = (
     <div className="relative max-w-md">
@@ -138,10 +154,18 @@ export function SearchPage({ initial }: { initial?: string }): ReactNode {
                 {tr(f.label)}
               </button>
             ))}
-            {loading && <Spinner className="ml-2 h-5 w-5 self-center" />}
+            <button
+              type="button"
+              aria-pressed={offlineOnly}
+              onClick={() => setOfflineOnly((v) => !v)}
+              className={cx('inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition', offlineOnly ? 'bg-accent text-ink-950' : 'bg-white/[0.07] text-fg hover:bg-white/[0.12]')}
+            >
+              <ArrowDownToLine className="h-3.5 w-3.5" /> {tr('offline.filter')}
+            </button>
+            {loading && online && <Spinner className="ml-2 h-5 w-5 self-center" />}
           </div>
-          {error && <ErrorState message={error} />}
-          {results && <Results results={results} filter={filter} query={debounced} />}
+          {error && online && !offlineOnly && <ErrorState message={error} />}
+          {(local ?? results) && <Results results={(local ?? results)!} filter={filter} query={debounced} />}
         </>
       )}
     </Page>

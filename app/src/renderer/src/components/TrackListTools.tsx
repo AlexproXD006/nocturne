@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { CheckCheck, Heart, ListEnd, ListPlus, ListStart, Search, SquareCheckBig, Trash2, X } from 'lucide-react'
+import { ArrowDownToLine, CheckCheck, Heart, ListEnd, ListPlus, ListStart, Search, SquareCheckBig, Trash2, X } from 'lucide-react'
 import type { Track } from '../api/types'
-import { api, playback } from '../services'
+import { playback, sendLike } from '../services'
 import { useLikes } from '../store/likes'
 import { usePlaylistUi } from '../store/playlists'
 import { useUi } from '../store/ui'
@@ -24,7 +24,9 @@ export function ListToolbar({
   shown,
   total,
   selecting,
-  onToggleSelect
+  onToggleSelect,
+  offlineOnly,
+  onToggleOffline
 }: {
   searchable: boolean
   selectable: boolean
@@ -34,6 +36,9 @@ export function ListToolbar({
   total: number
   selecting: boolean
   onToggleSelect: () => void
+  /** "Available offline" filter chip (omitted when there is no handler). */
+  offlineOnly?: boolean
+  onToggleOffline?: () => void
 }): ReactNode {
   const tr = useT()
   const [open, setOpen] = useState(false)
@@ -79,6 +84,21 @@ export function ListToolbar({
             </>
           )}
         </div>
+      )}
+      {onToggleOffline && !expanded && (
+        <button
+          type="button"
+          aria-pressed={offlineOnly}
+          onClick={onToggleOffline}
+          className={cx(
+            'inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold transition active:scale-[0.97]',
+            offlineOnly ? 'bg-accent text-ink-950' : 'bg-white/[0.08] text-fg hover:bg-white/[0.14]',
+            !selectable && 'ml-auto'
+          )}
+        >
+          <ArrowDownToLine className="h-4 w-4" />
+          <span className="max-sm:hidden">{tr('offline.filter')}</span>
+        </button>
       )}
       {selectable && (
         <button
@@ -142,7 +162,7 @@ export function BulkBar({
     const todo = tracks.filter((t) => !useLikes.getState().isLiked(t.id, t.liked))
     if (todo.length === 0) return toast(tr('bk.allLiked'))
     try {
-      await mapLimit(todo, 6, (t) => useLikes.getState().toggle(t.id, false, (id, l) => api.setLiked(id, l)).then(() => undefined))
+      await mapLimit(todo, 6, (t) => useLikes.getState().toggle(t.id, false, (id, l) => sendLike(id, l)).then(() => undefined))
       toast(tr('bk.liked', { count: todo.length }))
     } catch (err) {
       toast(describeError(err), 'error')

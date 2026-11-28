@@ -37,6 +37,8 @@ export interface SessionDeps {
   cookieSession?: boolean
   /** Hosted web: the only server there is (`location.origin`). Login ignores the address argument. */
   hostedOrigin?: string | null
+  /** Outcome of every API request (null = success): feeds the offline detection. */
+  onResult?: (err: unknown | null) => void
 }
 
 /** True when the signed-in user is an admin AND the connected server implements the admin API. */
@@ -172,7 +174,8 @@ export function createSessionStore(deps: SessionDeps): { useSession: UseBoundSto
     getSession: () => useSession.getState().session,
     setSession: (s) => useSession.getState().setSession(s),
     fetch: fetchImpl,
-    now
+    now,
+    onResult: deps.onResult
   })
 
   return { useSession, api }

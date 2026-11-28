@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { api, platform, usePlayer } from '../services'
+import { api, platform, sendLike, usePlayer } from '../services'
 import { currentItem } from '../player/queue'
 import { applyRemoteCommand, hasNextOf, hasPrevOf, isPositionJump, nowPlayingInfo } from '../player/remote'
 import { useLikes } from '../store/likes'
@@ -14,7 +14,7 @@ function toggleCurrentLike(): void {
   const likes = useLikes.getState()
   const id = it.track.id
   likes
-    .toggle(id, likes.isLiked(id, it.track.liked), (trackId, liked) => api.setLiked(trackId, liked))
+    .toggle(id, likes.isLiked(id, it.track.liked), (trackId, liked) => sendLike(trackId, liked))
     .catch((err: unknown) => useUi.getState().toast(describeError(err), 'error'))
 }
 

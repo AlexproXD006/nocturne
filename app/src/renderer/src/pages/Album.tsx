@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
-import { api } from '../services'
+import { api, collectionWithOffline } from '../services'
 import { useResource } from '../hooks/useResource'
 import { useNav } from '../store/nav'
 import type { AlbumDetail } from '../api/types'
@@ -8,6 +8,7 @@ import { TrackList } from '../components/TrackList'
 import { formatTotal, plural } from '../lib/format'
 import { HeroHeader, Page, PlayButtons, useTint } from './Page'
 import { AddToPlaylistButton } from '../components/Playlists'
+import { DownloadButton } from '../components/DownloadButton'
 import { useT, type MessageKey } from '../i18n'
 
 const KIND_LABEL: Record<NonNullable<AlbumDetail['type']>, MessageKey> = {
@@ -40,7 +41,7 @@ export function PageSkeleton({ round = false }: { round?: boolean }): ReactNode 
 
 export function AlbumPage({ id }: { id: string }): ReactNode {
   const tr = useT()
-  const res = useResource<AlbumDetail>(`album:${id}`, (s) => api.album(id, s))
+  const res = useResource<AlbumDetail>(`album:${id}`, (s) => collectionWithOffline('album', id, () => api.album(id, s)))
   const go = useNav((s) => s.go)
   const album = res.data
   const tint = useTint(album?.artwork)
@@ -82,6 +83,7 @@ export function AlbumPage({ id }: { id: string }): ReactNode {
       <HeroHeader images={album.artwork} kind={tr(KIND_LABEL[album.type ?? 'album'])} title={album.title} meta={meta} />
       <PlayButtons tracks={album.tracks} context={context}>
         <AddToPlaylistButton tracks={album.tracks} label={album.title} size="lg" />
+        <DownloadButton tracks={album.tracks} collection={{ kind: 'album', id, name: album.title }} />
       </PlayButtons>
       {res.error && <ErrorState message={res.error} onRetry={res.reload} />}
       <TrackList tracks={album.tracks} context={context} showArt={false} showAlbum={false} searchable />

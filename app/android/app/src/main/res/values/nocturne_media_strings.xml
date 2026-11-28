@@ -16,4 +16,11 @@
     <string name="nocturne_auto_recent">Recently played</string>
     <string name="nocturne_auto_albums">Albums</string>
     <string name="nocturne_auto_artists">Artists</string>
+    <string name="nocturne_auto_downloads">Downloads</string>
+    <string name="nocturne_dl_channel_name">Downloads</string>
+    <string name="nocturne_dl_done_title">Downloads complete</string>
+    <plurals name="nocturne_dl_done_text">
+        <item quantity="one">%d song is ready to play offline</item>
+        <item quantity="other">%d songs are ready to play offline</item>
+    </plurals>
 </resources>

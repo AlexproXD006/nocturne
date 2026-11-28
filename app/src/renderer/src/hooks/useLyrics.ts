@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Track } from '../api/types'
 import { resolveLyrics, type Lyrics } from '../lyrics/service'
-import { api, lrclib, useSession } from '../services'
+import { lrclib, lyricsWithOffline, useSession } from '../services'
 import { LruCache } from '../lib/lru'
 
 export type LyricsState = { status: 'idle' } | { status: 'loading' } | { status: 'ready'; lyrics: Lyrics } | { status: 'error' }
@@ -59,7 +59,7 @@ export function useLyrics(track: Track | null | undefined, enabled = true): Lyri
     setState({ status: 'loading' })
     resolveLyrics(
       track,
-      { lrclib, server: serverLyrics ? (id, signal) => api.lyrics(id, signal) : undefined },
+      { lrclib, server: serverLyrics ? (id, signal) => lyricsWithOffline(id, signal) : undefined },
       ctrl.signal
     ).then(
       (lyrics) => {

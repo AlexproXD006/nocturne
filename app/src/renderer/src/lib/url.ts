@@ -61,3 +61,14 @@ export function thumbUrl(url: string, px: number): string {
   const want = ART_BUCKETS.find((b) => b >= px) ?? ART_BUCKETS[ART_BUCKETS.length - 1]!
   return want < Number(m[2]) ? url.replace(m[0], `${m[1]}s=${want}`) : url
 }
+
+/** The track id inside a Nocturne artwork URL (`…/v1/media/art/<id>?…`), or null. */
+export function artTrackId(url: string): string | null {
+  const m = /\/media\/art\/([^/?#]+)/.exec(url)
+  if (!m) return null
+  try {
+    return decodeURIComponent(m[1]!)
+  } catch {
+    return null
+  }
+}

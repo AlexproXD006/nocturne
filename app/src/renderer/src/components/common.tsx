@@ -2,8 +2,8 @@ import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AlertCircle, Disc3, Heart, Loader2, RotateCcw } from 'lucide-react'
 import type { Image } from '../api/types'
 import { finish, hasObserver, track, type ArtJob } from '../lib/artLoader'
-import { pickImage, thumbUrl } from '../lib/url'
-import { api, platform } from '../services'
+import { artTrackId, pickImage, thumbUrl } from '../lib/url'
+import { api, platform, sendLike, useConnectivity, useOffline } from '../services'
 import { useLikes } from '../store/likes'
 import { useUi } from '../store/ui'
 import { describeError } from '../api/errors'
@@ -37,7 +37,20 @@ export const Artwork = memo(function Artwork({
   const px = Math.ceil(size * (typeof devicePixelRatio === 'number' ? Math.min(3, devicePixelRatio) : 1))
   const picked = pickImage(images, px)
   // Small thumbnails (the server caches them on disk) instead of the 300/640 px defaults; eager covers keep theirs.
-  const url = picked && !eager ? thumbUrl(picked, px) : picked
+  const baseUrl = picked && !eager ? thumbUrl(picked, px) : picked
+  // Offline: the cover stored with the track (blob URL) replaces the signed URL that cannot load.
+  const online = useConnectivity((s) => s.online)
+  const [offlineSrc, setOfflineSrc] = useState<{ for: string; url: string } | null>(null)
+  useEffect(() => {
+    const id = baseUrl && !online ? artTrackId(baseUrl) : null
+    if (!id) return
+    let alive = true
+    void useOffline.getState().artFor(id).then((u) => alive && u && setOfflineSrc({ for: baseUrl!, url: u }))
+    return () => {
+      alive = false
+    }
+  }, [baseUrl, online])
+  const url = !online && offlineSrc && offlineSrc.for === baseUrl ? offlineSrc.url : baseUrl
   // Failure state is tied to the URL it happened for: a new track's cover always gets a fresh attempt.
   const [err, setErr] = useState<{ url: string; n: number }>({ url: '', n: 0 })
   const failures = err.url === url ? err.n : 0
@@ -199,7 +212,7 @@ export function LikeButton({ trackId, serverValue, size = 'sm' }: { trackId: str
         e.stopPropagation()
         useLikes
           .getState()
-          .toggle(trackId, liked, (id, v) => api.setLiked(id, v))
+          .toggle(trackId, liked, (id, v) => sendLike(id, v))
           .catch((err: unknown) => useUi.getState().toast(describeError(err), 'error'))
       }}
       className={cx(

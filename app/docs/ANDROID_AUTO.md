@@ -32,7 +32,8 @@ Nocturne
 ├── Me gusta        (/v1/library/tracks)
 ├── Recientes       (sección "recent" de /v1/home)
 ├── Álbumes         (/v1/library/albums)
-└── Artistas        (/v1/library/artists)
+├── Artistas        (/v1/library/artists)
+└── Descargas       (índice local de descargas: funciona sin conexión, ver docs/OFFLINE.md)
 ```
 
 Cada nodo devuelve como mucho 100 elementos por página (Android Auto pide páginas) y con carátulas. Tocar una
@@ -81,6 +82,8 @@ línea); el artista sigue siendo el campo `artist`.
 **No es una función oficial de Android Auto**: las normas de distracción al volante de Google no permiten una
 pantalla de letras en apps multimedia. Es un truco con los metadatos y puede verse distinto (o no verse) según el
 coche y la versión de Android Auto. Por eso viene apagado.
+
+- **Sin conexión**: solo el nodo *Descargas* (y lo que ya esté en la caché automática, si lo abres desde la cola) funciona sin red; el resto de nodos necesitan el servidor. Las canciones no guardadas se saltan solas.
 
 ## Límites conocidos
 

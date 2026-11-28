@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { IPC, type NocturneBridge, type WindowState } from '../shared/ipc'
+import { IPC, type NocturneBridge, type OfflineProgress, type WindowState } from '../shared/ipc'
 
 // Minimal, typed surface. No raw ipcRenderer is ever exposed to the page.
 const bridge: NocturneBridge = {
@@ -23,6 +23,21 @@ const bridge: NocturneBridge = {
     info: () => ipcRenderer.invoke(IPC.appInfo),
     openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
     notifyUpdate: (info) => ipcRenderer.invoke(IPC.notifyUpdate, info)
+  },
+  offline: {
+    list: () => ipcRenderer.invoke(IPC.offlineList),
+    store: (id, url, opts) => ipcRenderer.invoke(IPC.offlineStore, id, url, opts),
+    abort: (id) => ipcRenderer.invoke(IPC.offlineAbort, id),
+    onProgress: (listener) => {
+      const wrapped = (_e: IpcRendererEvent, p: OfflineProgress): void => listener(p)
+      ipcRenderer.on(IPC.offlineProgress, wrapped)
+      return () => ipcRenderer.removeListener(IPC.offlineProgress, wrapped)
+    },
+    setPinned: (id, pinned) => ipcRenderer.invoke(IPC.offlineSetPinned, id, pinned),
+    touch: (id) => ipcRenderer.invoke(IPC.offlineTouch, id),
+    remove: (ids) => ipcRenderer.invoke(IPC.offlineRemove, ids),
+    clearAuto: () => ipcRenderer.invoke(IPC.offlineClear),
+    configure: (settings) => ipcRenderer.invoke(IPC.offlineConfigure, settings)
   },
   image: {
     save: (bytes, filename) => ipcRenderer.invoke(IPC.imageSave, bytes, filename),

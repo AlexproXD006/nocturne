@@ -19,7 +19,7 @@ export function buildCsp(opts: { dev?: boolean; devServer?: string } = {}): stri
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
     "img-src 'self' https: http: data: blob:",
-    "media-src 'self' https: http: blob:",
+    "media-src 'self' https: http: blob: nocturne-offline: nocturne-stream:",
     `connect-src 'self' https: http:${devWs}`,
     "worker-src 'self' blob:",
     "object-src 'none'",

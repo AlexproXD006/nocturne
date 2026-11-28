@@ -80,7 +80,14 @@ export interface PlayerDeps {
     onError(message: string): void
     onReactiveChange(reactive: boolean): void
   }): PlaybackEngine
-  resolveStream(trackId: string): Promise<StreamInfo>
+  /** `force`: bypass local copies and caches (a retry after a playback error). */
+  resolveStream(trackId: string, force?: boolean): Promise<StreamInfo>
+  /** False when the track cannot play right now (offline and not stored): the queue skips it. */
+  isPlayable?(trackId: string): boolean
+  /** A track started playing (offline cache bookkeeping). */
+  onTrackStarted?(track: Track): void
+  /** Called when nothing in the queue can play offline. */
+  onNothingPlayable?(): void
   reportPlayed?(trackId: string, seconds: number, meta?: { playId: string; at: string; dur: number }): void
   /** Persists the listen in progress (~every 15 s) so it survives the app being killed. */
   persistListen?(listen: { playId: string; trackId: string; seconds: number; at: string; dur: number }): void
@@ -172,7 +179,7 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
   async function resolveUrl(trackId: string, force = false): Promise<string> {
     const cached = streams.get(trackId)
     if (!force && cached && cached.expiresAt - URL_SAFETY_MS > now()) return cached.url
-    const info = await deps.resolveStream(trackId)
+    const info = force ? await deps.resolveStream(trackId, true) : await deps.resolveStream(trackId)
     const parsed = Date.parse(info.expiresAt)
     streams.set(trackId, { url: info.url, expiresAt: Number.isFinite(parsed) ? parsed : now() + 5 * 60_000 })
     if (streams.size > 64) streams.delete(streams.keys().next().value as string)
@@ -333,6 +340,20 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
     }
   }
 
+  /** The first track from the current one onwards that can play now, as a queue; null when none can. */
+  function firstPlayable(q: Q.QueueState): Q.QueueState | null {
+    let cur: Q.QueueState = q
+    for (let i = 0; i < q.items.length; i++) {
+      const it = Q.currentItem(cur)
+      if (!it) return null
+      if (!deps.isPlayable || deps.isPlayable(it.track.id)) return cur
+      const next = Q.advance(cur, true)
+      if (!next || next.index === cur.index) return null
+      cur = next
+    }
+    return null
+  }
+
   /** True once something started playback in this run (a late native snapshot must not override it). */
   let touched = false
   async function startCurrent(opts: { autoplay?: boolean; startAt?: number; forceUrl?: boolean } = {}): Promise<void> {
@@ -344,6 +365,19 @@ export function createPlayerStore(deps: PlayerDeps): UseBoundStore<StoreApi<Play
       return
     }
     reportIfListened()
+    // Offline: skip what is not stored and keep going with what is.
+    if (deps.isPlayable && !deps.isPlayable(item.track.id)) {
+      const q = firstPlayable(store.getState().queue)
+      if (!q) {
+        engine.stop()
+        store.setState({ status: 'paused', position: 0, error: null })
+        deps.onNothingPlayable?.()
+        return
+      }
+      store.setState({ queue: q })
+      return startCurrent({ ...opts, startAt: undefined })
+    }
+    deps.onTrackStarted?.(item.track)
     store.setState({ status: 'loading', position: opts.startAt ?? 0, duration: item.track.duration, error: null })
     if (native) {
       const q = store.getState().queue

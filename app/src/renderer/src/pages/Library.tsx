@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { AudioLines, Heart, Library as LibraryIcon, Plus } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { ArrowDownToLine, AudioLines, Disc3, Heart, Library as LibraryIcon, ListMusic, Plus } from 'lucide-react'
 import { api } from '../services'
 import { usePaged } from '../hooks/usePaged'
 import { useNav, type LibraryTab } from '../store/nav'
@@ -12,6 +12,9 @@ import { HeroHeader, Page, PlayButtons } from './Page'
 import { CreatePlaylistDialog, NewPlaylistTile, usePlaylistsEnabled } from '../components/Playlists'
 import { ImportSpotifyTile, SpotifyImportDialog, SpotifyImports, useSpotifyImportEnabled } from '../components/Spotify'
 import { useT, type MessageKey } from '../i18n'
+import { DownloadButton } from '../components/DownloadButton'
+import { useConnectivity, useOffline } from '../services'
+import type { Track } from '../api/types'
 
 /** Loading placeholder for a list of songs (matches the TrackList row height). */
 function SongsSkeleton(): ReactNode {
@@ -157,18 +160,64 @@ function LibrarySongs(): ReactNode {
   )
 }
 
+/** What can be browsed with no connection: downloaded playlists / albums / mixes and the stored songs. */
+function OfflineLibrary({ tab }: { tab: LibraryTab }): ReactNode {
+  const tr = useT()
+  const go = useNav((s) => s.go)
+  const collections = useOffline((s) => s.collections)
+  const stored = useOffline((s) => s.tracks)
+  const available = useOffline((s) => s.available)
+  const songs = useMemo(() => Object.values(stored).filter((x: Track) => x.id in available), [stored, available])
+  const ctx = { type: 'library' as const, id: 'offline', name: tr('lib.allSongs') }
+  if (tab === 'songs') {
+    if (songs.length === 0) return <EmptyState icon={<ArrowDownToLine className="h-9 w-9" strokeWidth={1.4} />} title={tr('offline.emptyTitle')} hint={tr('offline.emptyHint')} />
+    return (
+      <>
+        <PlayButtons tracks={songs} context={ctx} />
+        <TrackList tracks={songs} context={ctx} searchable />
+      </>
+    )
+  }
+  const kinds = tab === 'albums' ? ['album'] : tab === 'playlists' ? ['playlist', 'mix'] : []
+  const list = Object.values(collections).filter((c) => kinds.includes(c.kind))
+  if (list.length === 0) return <EmptyState icon={<ArrowDownToLine className="h-9 w-9" strokeWidth={1.4} />} title={tr('offline.emptyTitle')} hint={tr('offline.emptyHint')} />
+  return (
+    <ul className="space-y-1">
+      {list.map((c) => (
+        <li key={c.key}>
+          <button type="button" onClick={() => go({ name: c.kind, id: c.id })} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-white/[0.06]">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-white/[0.08]">
+              {c.kind === 'album' ? <Disc3 className="h-5 w-5 text-fg-muted" /> : <ListMusic className="h-5 w-5 text-fg-muted" />}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold">{c.name}</span>
+              <span className="block truncate text-xs text-fg-muted">{tr(`dl.kind.${c.kind}` as 'dl.kind.mix')}</span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export function LibraryPage({ tab = 'playlists' }: { tab?: LibraryTab }): ReactNode {
   const tr = useT()
   const replace = useNav((s) => s.replace)
   const go = useNav((s) => s.go)
   const reduced = prefersReducedMotion(useSettings((s) => s.motion))
+  const online = useConnectivity((s) => s.online)
   return (
     <Page>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{tr('lib.title')}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => go({ name: 'downloads' })} className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] px-4 py-2 text-sm font-medium hover:bg-white/[0.12]">
+          <ArrowDownToLine className="h-4 w-4 text-accent" /> {tr('dl.nav')}
+        </button>
         <button onClick={() => go({ name: 'liked' })} className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] px-4 py-2 text-sm font-medium hover:bg-white/[0.12]">
           <Heart className="h-4 w-4 text-accent" fill="currentColor" /> {tr('nav.likedSongs')}
         </button>
+        </div>
       </div>
       <div className="hide-scrollbar -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 md:mx-0 md:px-0" role="tablist">
         {TABS.map((t) => (
@@ -184,8 +233,14 @@ export function LibraryPage({ tab = 'playlists' }: { tab?: LibraryTab }): ReactN
         ))}
       </div>
       <div key={tab} className={cx(!reduced && 'fade-up')}>
-        {tab === 'playlists' && <SpotifyImports />}
-        {tab === 'songs' ? <LibrarySongs /> : <LibraryGrid tab={tab} />}
+        {!online ? (
+          <OfflineLibrary tab={tab} />
+        ) : (
+          <>
+            {tab === 'playlists' && <SpotifyImports />}
+            {tab === 'songs' ? <LibrarySongs /> : <LibraryGrid tab={tab} />}
+          </>
+        )}
       </div>
     </Page>
   )
@@ -209,7 +264,9 @@ export function LikedPage(): ReactNode {
         }
         meta={paged.total ? `${plural(paged.total)}${paged.done ? ` • ${formatTotal(total)}` : ''}` : null}
       />
-      <PlayButtons tracks={paged.items} context={ctx} />
+      <PlayButtons tracks={paged.items} context={ctx}>
+        <DownloadButton tracks={paged.items} />
+      </PlayButtons>
       {paged.error && paged.items.length === 0 && <ErrorState message={paged.error} onRetry={paged.reload} />}
       {paged.done && paged.items.length === 0 && (
         <EmptyState icon={<Heart className="h-9 w-9" strokeWidth={1.4} />} title={tr('lib.likedEmpty')} hint={tr('lib.likedEmptyHint')} />

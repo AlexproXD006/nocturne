@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp, ListMusic, ListPlus, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
-import { api } from '../services'
+import { api, collectionWithOffline } from '../services'
 import { useResource } from '../hooks/useResource'
 import type { PlaylistDetail, PlaylistTrack } from '../api/types'
 import { describeError } from '../api/errors'
@@ -14,6 +14,7 @@ import { TrackList } from '../components/TrackList'
 import { Menu, useMenu } from '../components/Menu'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AddToPlaylistButton, PlaylistFormDialog, usePlaylistsEnabled } from '../components/Playlists'
+import { DownloadButton } from '../components/DownloadButton'
 import { artistNames, formatTotal, plural } from '../lib/format'
 import { HeroHeader, Page, PlayButtons, useTint } from './Page'
 import { PageSkeleton } from './Album'
@@ -135,7 +136,7 @@ function PlaylistEditList({
 export function PlaylistPage({ id }: { id: string }): ReactNode {
   const tr = useT()
   const key = playlistKey(id)
-  const res = useResource<PlaylistDetail>(key, (s) => api.playlist(id, s))
+  const res = useResource<PlaylistDetail>(key, (s) => collectionWithOffline('playlist', id, () => api.playlist(id, s)))
   const pl = res.data
   const tint = useTint(pl?.artwork)
   const context = useMemo(() => ({ type: 'playlist' as const, id, name: pl?.name ?? '' }), [id, pl?.name])
@@ -285,6 +286,7 @@ export function PlaylistPage({ id }: { id: string }): ReactNode {
       <HeroHeader images={pl.artwork} kind={tr('nav.playlist')} title={pl.name} meta={meta} />
       <PlayButtons tracks={pl.tracks} context={context}>
         <AddToPlaylistButton tracks={pl.tracks} label={pl.name} size="lg" />
+        <DownloadButton tracks={pl.tracks} collection={{ kind: 'playlist', id, name: pl.name }} />
         {canEdit && (
           <div className="ml-auto flex min-w-0 items-center gap-1">
             {pl.tracks.length > 0 && (

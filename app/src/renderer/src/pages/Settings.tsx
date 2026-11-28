@@ -15,6 +15,7 @@ import { ListenBrainzSettings, useListenBrainzEnabled } from '../components/List
 import { isPrerelease } from '../lib/version'
 import { Row, Segmented, Toggle } from './SettingsControls'
 import { AdaptiveSettingsPanel } from './AdaptiveSettings'
+import { OfflineSettingsRows } from './OfflineSettings'
 import { useT, type MessageKey } from '../i18n'
 
 function DiagnosticsSection(): ReactNode {
@@ -327,6 +328,10 @@ export function SettingsPage(): ReactNode {
               <Toggle label={tr('set.lyricsInCar')} checked={lyricsInCar} onChange={(v) => update({ lyricsInCar: v })} />
             </Row>
           )}
+        </Section>
+
+        <Section title={tr('set.offline')}>
+          <OfflineSettingsRows />
         </Section>
 
         <Section title={tr('set.eq')}>

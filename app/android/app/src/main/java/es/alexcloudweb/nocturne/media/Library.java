@@ -64,10 +64,20 @@ final class Library {
     }
 
     private final NocturneApi api;
+    @Nullable private DownloadsSource downloads;
     private final Map<String, Cached> cache = new HashMap<>();
+
+    /** Completed downloads (Track JSON, newest first); read locally, so the node works with no network. */
+    interface DownloadsSource {
+        List<JSONObject> completed();
+    }
 
     Library(NocturneApi api) {
         this.api = api;
+    }
+
+    void setDownloads(@Nullable DownloadsSource d) {
+        downloads = d;
     }
 
     synchronized void clearCache() {
@@ -91,6 +101,8 @@ final class Library {
                 return artists(pageItems("/v1/library/artists", w));
             case MediaIds.LIKED:
                 return tracks(pageItems("/v1/library/tracks", w), MediaIds.LIKED);
+            case MediaIds.DOWNLOADS:
+                return slice(tracks(downloadedInfos(), MediaIds.DOWNLOADS), w);
             case MediaIds.RECENT:
                 return slice(tracks(recentItems(), MediaIds.RECENT), w);
             case MediaIds.KIND_ALBUM: {
@@ -143,6 +155,8 @@ final class Library {
             }
             case MediaIds.RECENT:
                 return new TrackList("", trackInfos(recentItems()));
+            case MediaIds.DOWNLOADS:
+                return new TrackList("", cap(downloadedInfos()));
             case MediaIds.KIND_MIX: {
                 JSONObject o = api.getJson("/v1/mixes/" + NocturneApi.pathId(p.id));
                 return new TrackList(o.optString("name", ""), cap(trackInfos(o.optJSONArray("tracks"))));
@@ -236,6 +250,17 @@ final class Library {
             if (fallback == null) fallback = s.optJSONArray("items");
         }
         return fallback;
+    }
+
+    private List<TrackInfo> downloadedInfos() {
+        List<TrackInfo> out = new ArrayList<>();
+        DownloadsSource d = downloads;
+        if (d == null) return out;
+        for (JSONObject o : d.completed()) {
+            TrackInfo t = TrackInfo.from(o);
+            if (t != null) out.add(t);
+        }
+        return out;
     }
 
     private static List<TrackInfo> trackInfos(@Nullable JSONArray arr) {

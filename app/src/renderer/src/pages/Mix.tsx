@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { ListEnd, ListMusic, Save } from 'lucide-react'
-import { api, playback } from '../services'
+import { api, collectionWithOffline, playback } from '../services'
 import { useResource } from '../hooks/useResource'
 import type { PlaylistDetail } from '../api/types'
 import { describeError } from '../api/errors'
@@ -10,6 +10,7 @@ import { invalidatePlaylists } from '../store/playlists'
 import { EmptyState, ErrorState, IconButton } from '../components/common'
 import { TrackList } from '../components/TrackList'
 import { AddToPlaylistButton, usePlaylistsEnabled } from '../components/Playlists'
+import { DownloadButton } from '../components/DownloadButton'
 import { formatTotal, plural } from '../lib/format'
 import { HeroHeader, Page, PlayButtons, useTint } from './Page'
 import { PageSkeleton } from './Album'
@@ -22,7 +23,7 @@ import { useT } from '../i18n'
  */
 export function MixPage({ id }: { id: string }): ReactNode {
   const tr = useT()
-  const res = useResource<PlaylistDetail>(`mix:${id}`, (s) => api.mix(id, s))
+  const res = useResource<PlaylistDetail>(`mix:${id}`, (s) => collectionWithOffline('mix', id, () => api.mix(id, s)))
   const mix = res.data
   const tint = useTint(mix?.artwork)
   const context = useMemo(() => ({ type: 'tracks' as const, id: `mix:${id}`, name: mix?.name ?? '' }), [id, mix?.name])
@@ -81,6 +82,7 @@ export function MixPage({ id }: { id: string }): ReactNode {
           <ListEnd className="h-5 w-5" />
         </IconButton>
         <AddToPlaylistButton tracks={mix.tracks} label={mix.name} size="lg" />
+        <DownloadButton tracks={mix.tracks} collection={{ kind: 'mix', id, name: mix.name }} />
         {enabled && (
           <button
             type="button"

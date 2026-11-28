@@ -409,6 +409,25 @@ Returns a short-lived, pre-signed URL for the audio:
 
 See [Streaming design](#streaming-design) for what the media endpoint must do.
 
+### `GET /v1/tracks/:id/offline-manifest`
+
+Optional (`capabilities.offline`). Everything a client needs to store one track for offline use, in one call, with
+the same short-lived signed URLs as `/stream` and `/media/art` (no new public endpoints):
+
+```json
+{
+  "trackId": "…", "track": { "…": "Track" },
+  "stream": { "url": "…", "expiresAt": "…", "mimeType": "audio/flac" },
+  "sizeBytes": 31457280,
+  "art": { "url": "…?s=512", "size": 512 },
+  "lyrics": { "synced": "…", "plain": null, "offsetMs": 0 }
+}
+```
+
+`art` and `lyrics` may be `null`; `404` when the track or its audio file does not exist. `POST /v1/offline/manifest`
+takes `{ "trackIds": [...] }` (1–50 ids) and returns `{ "items": [manifest…], "missing": [ids] }`.
+`capabilities.transcode` is `false` when the server only serves the original files (downloads are then original-only).
+
 ### `GET /v1/tracks/:id/lyrics`
 
 See [Lyrics](#lyrics).

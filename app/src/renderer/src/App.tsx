@@ -33,6 +33,8 @@ import { AlbumPage } from './pages/Album'
 import { ArtistPage } from './pages/Artist'
 import { HomePage } from './pages/Home'
 import { LibraryPage, LikedPage } from './pages/Library'
+import { DownloadsPage } from './pages/Downloads'
+import { OfflineBanner } from './components/OfflineBanner'
 import { Login } from './pages/Login'
 import { MixPage } from './pages/Mix'
 import { PlaylistPage } from './pages/Playlist'
@@ -91,6 +93,8 @@ function RouteView({ route, index }: { route: Route; index: number }): ReactNode
       return <MixPage key={route.id} id={route.id} />
     case 'liked':
       return <LikedPage />
+    case 'downloads':
+      return <DownloadsPage />
     case 'stats':
       return <StatsPage />
     case 'settings':
@@ -224,6 +228,7 @@ export function App(): ReactNode {
       {status === 'signedOut' && <Login />}
       {status === 'signedIn' && (
         <div className="flex h-full flex-col">
+          <OfflineBanner />
           <UpdateBanner />
           <CrashReportPrompt />
           <div className="min-h-0 flex-1">

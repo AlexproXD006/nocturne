@@ -9,7 +9,8 @@ vi.mock('@/services', async () => {
     platform: { kind: 'web' },
     getEngine: () => null,
     usePlayer: create(() => ({ status: 'playing', queue: { items: [{ track: { artwork: [{ url: 'https://img.test/c.jpg', width: 300 }] } }], index: 0 } })),
-    useConnect: create(() => ({ remote: null }))
+    useConnect: create(() => ({ remote: null })),
+    ...(await import('../helpers/services-mock')).offlineMocks()
   }
 })
 vi.mock('@/player/queue', () => ({ currentItem: (q: { items: unknown[]; index: number }) => q.items[q.index] ?? null }))

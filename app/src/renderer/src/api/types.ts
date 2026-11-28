@@ -165,6 +165,10 @@ export interface ServerInfo {
     listenbrainz?: boolean
     /** An Instagram Stories App ID is configured (see `integrations.instagramStories`). */
     instagramStories?: boolean
+    /** Server implements GET /v1/tracks/{id}/offline-manifest and POST /v1/offline/manifest. */
+    offline?: boolean
+    /** Server can transcode downloads to a smaller format (otherwise downloads are the original files). */
+    transcode?: boolean
   }
   /** Present only when the server operator configured them. */
   integrations?: {
@@ -366,6 +370,18 @@ export interface StreamInfo {
   expiresAt: string
   mimeType?: string
   bitrate?: number
+}
+
+/** GET /v1/tracks/{id}/offline-manifest: everything needed to store one track for offline use, in one call. */
+export interface OfflineManifest {
+  trackId: string
+  track: Track
+  stream: StreamInfo
+  /** File size in bytes, when the server knows it. */
+  sizeBytes: number | null
+  /** Signed cover (512 px) URL, or null when the track has no cover. */
+  art: { url: string; size: number } | null
+  lyrics: ServerLyrics | null
 }
 
 export interface ServerLyrics {

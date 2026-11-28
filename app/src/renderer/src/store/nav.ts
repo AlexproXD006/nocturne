@@ -9,6 +9,7 @@ export type Route =
   | { name: 'playlist'; id: string }
   | { name: 'mix'; id: string }
   | { name: 'liked' }
+  | { name: 'downloads' }
   | { name: 'settings' }
   | { name: 'equalizer' }
   | { name: 'stats' }

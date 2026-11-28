@@ -12,8 +12,37 @@ export const IPC = {
   openExternal: 'shell:open-external',
   notifyUpdate: 'app:notify-update',
   imageSave: 'image:save',
-  imageCopy: 'image:copy'
+  imageCopy: 'image:copy',
+  offlineList: 'offline:list',
+  offlineStore: 'offline:store',
+  offlineAbort: 'offline:abort',
+  offlineProgress: 'offline:progress',
+  offlineSetPinned: 'offline:set-pinned',
+  offlineTouch: 'offline:touch',
+  offlineRemove: 'offline:remove',
+  offlineClear: 'offline:clear',
+  offlineConfigure: 'offline:configure'
 } as const
+
+/** One track in the desktop offline store. */
+export interface OfflineAudio {
+  id: string
+  bytes: number
+  pinned: boolean
+  lastPlayed: number
+}
+
+/** Progress of a store; `done` also fires for a track cached by the streaming tee. */
+export interface OfflineProgress {
+  id: string
+  bytes: number
+  total: number
+  done?: boolean
+}
+
+/** Custom schemes served by the main process (see src/main/offline.ts). */
+export const OFFLINE_SCHEME = 'nocturne-offline'
+export const STREAM_SCHEME = 'nocturne-stream'
 
 export interface WindowState {
   maximized: boolean
@@ -51,6 +80,21 @@ export interface NocturneBridge {
      * Optional so older preloads / test fakes stay valid.
      */
     notifyUpdate?(info: { version: string; url: string; locale?: string }): Promise<boolean>
+  }
+  /** Desktop offline audio store (optional so older preloads / fakes stay valid). */
+  offline?: {
+    list(): Promise<OfflineAudio[]>
+    /** Main downloads `url` (a signed stream URL) into the store; resolves with the size. */
+    store(id: string, url: string, opts: { pinned: boolean; mime?: string }): Promise<number>
+    abort(id: string): Promise<void>
+    onProgress(listener: (p: OfflineProgress) => void): () => void
+    setPinned(id: string, pinned: boolean): Promise<void>
+    touch(id: string): Promise<void>
+    remove(ids: string[]): Promise<void>
+    /** Removes every auto-cached track (never pinned ones); resolves with the removed ids. */
+    clearAuto(): Promise<string[]>
+    /** Cache budget (see shared/offlinePolicy); resolves with the evicted ids. */
+    configure(settings: unknown): Promise<string[]>
   }
   /** Desktop image export (optional so older preloads / fakes stay valid). */
   image?: {

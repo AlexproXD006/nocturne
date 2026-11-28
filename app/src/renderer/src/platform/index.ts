@@ -6,8 +6,15 @@ import { capacitorSaveOrShare, desktopSaveOrShare, webSaveOrShare, type SaveOrSh
 import { createNativeDiagnostics, type DiagnosticsPlugin, type NativeDiagnostics } from './diagnostics'
 import { createInstagramStoryShare, type InstagramStoryShare, type NocturneSharePlugin } from './instagramStory'
 import { createNativeUpdates, type NativeUpdates, type NocturneUpdatesPlugin } from './nocturneUpdates'
+import { createNativeOffline, type NocturneOfflinePlugin } from './nativeOffline'
+import { createDesktopBackend } from './offline/desktopBackend'
+import { createIdbBackend } from './offline/idbBackend'
+import { idbAvailable } from './offline/kv'
+import { idbMetaStore } from './offline/meta'
+import type { MetaStore, NativeOffline, OfflineBackend } from './offline/types'
 
 export type { NativeUpdates } from './nocturneUpdates'
+export type { MetaStore, NativeOffline, OfflineBackend } from './offline/types'
 export type { NativeDiagnostics, CrashReport } from './diagnostics'
 export type { InstagramStoryShare } from './instagramStory'
 export type { ImageIntent, ImageResult, SaveOrShareImage } from './saveImage'
@@ -87,6 +94,12 @@ export interface Platform {
    * and opens `url`. Resolves false when notifications are unsupported or the call fails.
    */
   notifyUpdate?: ((info: { version: string; url: string }) => Promise<boolean>) | null
+  /**
+   * Offline playback storage. `native` (Android): the Media3 cache + DownloadManager own the audio;
+   * `backend` (desktop main process, web/iOS IndexedDB) stores it for the renderer's queue; `meta` keeps the
+   * track JSON, lyrics and covers of stored tracks (every platform, WebView/browser storage).
+   */
+  offline?: { native: NativeOffline | null; backend: OfflineBackend | null; meta: MetaStore | null }
 }
 
 function isCapacitor(name: 'android' | 'ios'): boolean {
@@ -156,6 +169,11 @@ function desktopPlatform(bridge: NocturneBridge): Platform {
     saveOrShareImage: desktopSaveOrShare(bridge),
     nativeNowPlaying: null,
     nativeUpdates: null,
+    offline: {
+      native: null,
+      backend: bridge.offline ? createDesktopBackend(bridge.offline) : idbAvailable() ? createIdbBackend() : null,
+      meta: idbAvailable() ? idbMetaStore() : null
+    },
     notifyUpdate: async (info) => {
       try {
         return typeof bridge.app.notifyUpdate === 'function' ? (await bridge.app.notifyUpdate({ ...info, locale: getLocale() })) === true : false
@@ -185,6 +203,10 @@ function androidPlatform(): Platform {
   const diagBox = import('@capacitor/core').then(({ registerPlugin }) => ({
     plugin: registerPlugin<DiagnosticsPlugin>('NocturneDiag')
   }))
+  // App-local offline plugin (android/.../media/NocturneOfflinePlugin.java): downloads + automatic cache.
+  const offlineBox = import('@capacitor/core').then(({ registerPlugin }) => ({
+    plugin: registerPlugin<NocturneOfflinePlugin>('NocturneOffline')
+  }))
 
   return {
     kind: 'android',
@@ -212,6 +234,7 @@ function androidPlatform(): Platform {
     nativeUpdates: createNativeUpdates(updatesBox),
     diagnostics: createNativeDiagnostics(diagBox),
     notifyUpdate: null,
+    offline: { native: createNativeOffline(offlineBox), backend: null, meta: idbAvailable() ? idbMetaStore() : null },
     saveOrShareImage: capacitorSaveOrShare(),
     shareInstagramStory: instagramShare()
   }
@@ -250,6 +273,7 @@ function iosPlatform(): Platform {
     nativeNowPlaying: null,
     nativeUpdates: null,
     notifyUpdate: null,
+    offline: { native: null, backend: idbAvailable() ? createIdbBackend() : null, meta: idbAvailable() ? idbMetaStore() : null },
     saveOrShareImage: capacitorSaveOrShare(),
     shareInstagramStory: instagramShare()
   }
@@ -269,6 +293,7 @@ function webPlatform(): Platform {
     nativeNowPlaying: null,
     nativeUpdates: null,
     notifyUpdate: null,
+    offline: { native: null, backend: idbAvailable() ? createIdbBackend() : null, meta: idbAvailable() ? idbMetaStore() : null },
     saveOrShareImage: webSaveOrShare()
   }
 }

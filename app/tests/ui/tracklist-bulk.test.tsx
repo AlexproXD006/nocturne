@@ -17,7 +17,8 @@ vi.mock('@/services', async () => {
     getEngine: () => null,
     useSession,
     usePlayer,
-    playback: { toggle: vi.fn(), playTracks: h.played, addToQueue: h.queued, addNext: h.next }
+    playback: { toggle: vi.fn(), playTracks: h.played, addToQueue: h.queued, addNext: h.next },
+    ...(await import('../helpers/services-mock')).offlineMocks()
   }
 })
 vi.mock('@/hooks/useNowPlaying', () => ({ useNowTrack: () => null, useNowContext: () => null, useNowPlaying: () => false }))

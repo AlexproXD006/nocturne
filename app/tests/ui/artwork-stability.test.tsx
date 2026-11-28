@@ -1,7 +1,7 @@
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/services', () => ({ api: {}, platform: { kind: 'web' }, usePlayer: {}, useConnect: {} }))
+vi.mock('@/services', async () => ({ api: {}, platform: { kind: 'web' }, usePlayer: {}, useConnect: {}, ...(await import('../helpers/services-mock')).offlineMocks() }))
 
 import { Artwork, ARTWORK_RETRY_MS } from '@/components/common'
 import { cachedPalette, clearPaletteCache, extractPalette } from '@/lib/color'

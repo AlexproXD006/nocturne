@@ -45,6 +45,7 @@ import type {
   UpdateUserInput,
   ServerInfo,
   ServerLyrics,
+  OfflineManifest,
   Session,
   StreamInfo,
   Track,
@@ -68,6 +69,8 @@ interface RequestOptions {
 }
 
 export interface ApiClientOptions {
+  /** Reports every request outcome: `null` on success, the error otherwise (feeds the offline detection). */
+  onResult?: (err: unknown | null) => void
   getSession: () => StoredSession | null
   setSession: (session: StoredSession | null) => void
   fetch?: typeof fetch
@@ -285,6 +288,18 @@ export class ApiClient {
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+    try {
+      const res = await this.requestInner<T>(method, path, options)
+      this.opts.onResult?.(null)
+      return res
+    } catch (err) {
+      // An answer from the server (even 4xx/5xx) proves it is reachable; only transport failures matter.
+      if (err instanceof ApiError && err.code !== 'aborted') this.opts.onResult?.(err.code === 'network' || err.code === 'timeout' ? err : null)
+      throw err
+    }
+  }
+
+  private async requestInner<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
     const auth = options.auth !== false
     let session = auth ? this.session() : this.opts.getSession()
     if (auth && session && session.expiresAt - EXPIRY_SKEW_MS <= this.now()) session = await this.refresh()
@@ -502,6 +517,15 @@ export class ApiClient {
 
   stream(trackId: string, signal?: AbortSignal): Promise<StreamInfo> {
     return this.request('GET', `/v1/tracks/${encodeURIComponent(trackId)}/stream`, { signal })
+  }
+
+  offlineManifest(trackId: string, signal?: AbortSignal): Promise<OfflineManifest> {
+    return this.request('GET', `/v1/tracks/${encodeURIComponent(trackId)}/offline-manifest`, { signal })
+  }
+
+  /** Up to 50 manifests at once; unknown tracks are listed in `missing`. */
+  offlineManifests(trackIds: string[], signal?: AbortSignal): Promise<{ items: OfflineManifest[]; missing: string[] }> {
+    return this.request('POST', '/v1/offline/manifest', { body: { trackIds }, signal })
   }
 
   lyrics(trackId: string, signal?: AbortSignal): Promise<ServerLyrics> {

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { BarChart3, ChevronLeft, ChevronRight, Copy, Heart, Home, Library, LogOut, Minus, Search, Settings, ShieldCheck, Square, X } from 'lucide-react'
+import { ArrowDownToLine, BarChart3, ChevronLeft, ChevronRight, Copy, Heart, Home, Library, LogOut, Minus, Search, Settings, ShieldCheck, Square, X } from 'lucide-react'
 import { useT, type MessageKey } from '../i18n'
 import { api, platform, useSession } from '../services'
 import { isAdmin } from '../store/session'
@@ -46,6 +46,7 @@ const NAV: { route: Route; label: MessageKey; short?: MessageKey; icon: typeof H
   { route: { name: 'home' }, label: 'nav.home', icon: Home },
   { route: { name: 'search' }, label: 'nav.search', icon: Search },
   { route: { name: 'library' }, label: 'nav.library', short: 'nav.libraryShort', icon: Library },
+  { route: { name: 'downloads' }, label: 'dl.nav', icon: ArrowDownToLine },
   { route: { name: 'stats' }, label: 'nav.stats', icon: BarChart3 }
 ]
 

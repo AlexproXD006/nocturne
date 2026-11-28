@@ -21,6 +21,13 @@ import { createListenBrainzStore } from './store/listenbrainz'
 import { currentItem } from './player/queue'
 import { appThemePayload, sameAppTheme, type AppThemePayload } from './lib/widgetTheme'
 import { loadSavedSession, storeSavedSession } from './lib/playerSession'
+import { createConnectivityStore } from './store/connectivity'
+import { createOfflineStore } from './store/offline'
+import { createLikeQueue } from './lib/offline/pendingLikes'
+import { isNetworkFailure } from './lib/offline/connectivity'
+import { t as tr } from './i18n'
+import type { Track, ServerLyrics, PlaylistDetail, AlbumDetail } from './api/types'
+import type { CollectionKind } from './lib/offline/sync'
 
 export { platform }
 
@@ -33,7 +40,15 @@ function deviceName(): string {
   return useSettings.getState().deviceName || autoDeviceName()
 }
 
+/** Online / offline: navigator.onLine, native connectivity (Android) and whether the server answers. */
+export const useConnectivity = createConnectivityStore({
+  browserOnline: () => (typeof navigator === 'undefined' ? true : navigator.onLine !== false),
+  // Any answer proves the server is reachable (only transport failures reject as 'network' / 'timeout').
+  ping: () => api.serverInfo().then(() => undefined)
+})
+
 export const { useSession, api } = createSessionStore({
+  onResult: (err) => useConnectivity.getState().report(err),
   secure: platform.secure,
   cookieSession: Boolean(platform.hostedOrigin),
   hostedOrigin: platform.hostedOrigin,
@@ -57,6 +72,76 @@ export const playQueue = createPlayQueue({
   owner: () => useSession.getState().session?.user.id ?? '',
   send: (p) => api.reportPlayed(p.trackId, p.seconds, { playId: p.playId, at: p.at })
 })
+
+/** True when the network type is known to be metered (Network Information API; native on Android). */
+function unmetered(): boolean | null {
+  const native = useConnectivity.getState().unmetered
+  if (native !== null) return native
+  const c = (typeof navigator !== 'undefined' ? (navigator as { connection?: { type?: string; saveData?: boolean } }).connection : undefined) ?? null
+  if (!c) return null
+  if (c.type) return c.type !== 'cellular'
+  return c.saveData ? false : null
+}
+
+/**
+ * Offline playback and downloads: the automatic cache of recent tracks, pinned downloads, their queue
+ * and metadata (see store/offline.ts and docs/OFFLINE.md).
+ */
+export const useOffline = createOfflineStore({
+  backend: platform.offline?.backend ?? null,
+  native: platform.offline?.native ?? null,
+  meta: platform.offline?.meta ?? null,
+  api: {
+    stream: (id, signal) => api.stream(id, signal),
+    offlineManifest: (id, signal) => api.offlineManifest(id, signal),
+    playlist: (id, signal) => api.playlist(id, signal),
+    album: (id, signal) => api.album(id, signal),
+    mix: (id, signal) => api.mix(id, signal)
+  },
+  online: () => useConnectivity.getState().online,
+  unmetered,
+  notify: (message, tone) => useUi.getState().toast(message, tone)
+})
+
+/** Like / unlike that survives being offline: queued and sent later. */
+export const likeQueue = createLikeQueue({
+  owner: () => useSession.getState().session?.user.id ?? '',
+  send: (id, liked) => api.setLiked(id, liked)
+})
+export const sendLike = (trackId: string, liked: boolean): Promise<void> => likeQueue.set(trackId, liked)
+
+/** Lyrics from the server, or the stored copy when there is no network. */
+export async function lyricsWithOffline(trackId: string, signal?: AbortSignal): Promise<ServerLyrics> {
+  try {
+    const l = await api.lyrics(trackId, signal)
+    if (useOffline.getState().isAvailable(trackId)) void platform.offline?.meta?.putLyrics(trackId, l).catch(() => undefined)
+    return l
+  } catch (err) {
+    if (isNetworkFailure(err)) {
+      const cached = await useOffline.getState().lyricsFor(trackId)
+      if (cached) return cached
+    }
+    throw err
+  }
+}
+
+/**
+ * Playlist / album / mix details: from the server, or - when the collection is downloaded and there is no
+ * network - rebuilt from the stored track metadata.
+ */
+export async function collectionWithOffline<T extends PlaylistDetail | AlbumDetail>(kind: CollectionKind, id: string, fetcher: () => Promise<T>): Promise<T> {
+  try {
+    return await fetcher()
+  } catch (err) {
+    const col = useOffline.getState().collections[`${kind}:${id}`]
+    if (!col || !isNetworkFailure(err)) throw err
+    const tracks = useOffline.getState().tracks
+    const list = col.trackIds.map((tid) => tracks[tid]).filter((x): x is Track => Boolean(x))
+    const art = list[0]?.artwork ?? []
+    const base = { id, artwork: art, tracks: list }
+    return (kind === 'album' ? { ...base, title: col.name, artists: list[0]?.artists ?? [] } : { ...base, name: col.name }) as unknown as T
+  }
+}
 
 function scrobbleOff(): boolean {
   return useSession.getState().server?.capabilities?.scrobble === false
@@ -96,7 +181,10 @@ export const usePlayer = createPlayerStore({
     engineRef.setEq(useEq.getState().snapshot())
     return engineRef
   },
-  resolveStream: (trackId) => api.stream(trackId),
+  resolveStream: (trackId, force) => useOffline.getState().playbackFor(trackId, () => api.stream(trackId), force === true),
+  isPlayable: (trackId) => useConnectivity.getState().online || useOffline.getState().isAvailable(trackId),
+  onTrackStarted: (track) => useOffline.getState().onPlay(track),
+  onNothingPlayable: () => useUi.getState().toast(tr('offline.nothingToPlay'), 'error'),
   reportPlayed: (trackId, seconds, meta) => {
     if (scrobbleOff()) return
     if (!meta) {
@@ -201,6 +289,46 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
     if (document.visibilityState === 'visible') flushPlays()
   })
 }
+
+// ---- Offline wiring ------------------------------------------------------------------------------
+
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('online', () => {
+    useConnectivity.getState().setBrowser(true)
+    void useConnectivity.getState().probe()
+  })
+  window.addEventListener('offline', () => useConnectivity.getState().setBrowser(false))
+}
+const nativeOffline = platform.offline?.native ?? null
+if (nativeOffline) {
+  const apply = (online: boolean, unmeteredNow: boolean): void => useConnectivity.getState().setNative(online, unmeteredNow)
+  void nativeOffline.network().then((n) => apply(n.online, n.unmetered))
+  nativeOffline.on((e) => {
+    if (e.type === 'network') apply(e.online, e.unmetered)
+  })
+}
+// Storage + downloaded collections are ready once signed in; sync them (and send queued likes) whenever we are online.
+const syncOffline = (): void => {
+  if (useSession.getState().status !== 'signedIn' || !useConnectivity.getState().online) return
+  void useOffline.getState().syncCollections().catch(() => undefined)
+  void likeQueue.flush().catch(() => undefined)
+}
+useSession.subscribe((s, prev) => {
+  if (s.status === 'signedIn' && prev.status !== 'signedIn') {
+    void useOffline.getState().init().then(syncOffline)
+  }
+})
+if (useSession.getState().status === 'signedIn') void useOffline.getState().init().then(syncOffline)
+useConnectivity.subscribe((s, prev) => {
+  if (s.online && !prev.online) {
+    syncOffline()
+    flushPlays()
+  }
+})
+// Downloads' Wi-Fi gate follows the network type.
+useConnectivity.subscribe((s, prev) => {
+  if (s.unmetered !== prev.unmetered) useOffline.getState().update({})
+})
 
 // ---- Android native player (Media3 service, also the Android Auto backend) --------------------------
 

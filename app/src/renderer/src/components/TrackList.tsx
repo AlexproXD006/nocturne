@@ -1,8 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Check, Clock3, Disc3, GripVertical, ListEnd, ListMinus, ListMusic, ListPlus, MoreHorizontal, Pause, Play, UserRound } from 'lucide-react'
+import { ArrowDownToLine, Check, Clock3, Disc3, GripVertical, ListEnd, ListMinus, ListMusic, ListPlus, MoreHorizontal, Pause, Play, UserRound } from 'lucide-react'
 import type { Track } from '../api/types'
 import type { QueueContext } from '../player/queue'
-import { playback } from '../services'
+import { playback, useOffline } from '../services'
+import { useAvailability } from '../hooks/useAvailability'
 import { useNowContext, useNowPlaying, useNowTrack } from '../hooks/useNowPlaying'
 import { useNav } from '../store/nav'
 import { useUi } from '../store/ui'
@@ -79,6 +80,9 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
   const toast = useUi((s) => s.toast)
   const toggle = playback.toggle
   const playlists = usePlaylistsEnabled()
+  const avail = useAvailability(track.id)
+  const pinned = useOffline((s) => s.available[track.id] === 'pinned')
+  const unavailable = avail === 'unavailable'
   // The row only becomes draggable while the mouse is down on the grip, so touch scrolling and
   // text selection elsewhere in the row behave normally.
   const [armed, setArmed] = useState(false)
@@ -94,13 +98,20 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
   const items = [
     { label: tr('tl.playNext'), icon: <ListPlus />, onSelect: () => (playback.addNext([track]), toast(tr('tl.willPlayNext', { title: track.title }))) },
     { label: tr('tl.addToQueue'), icon: <ListEnd />, onSelect: () => (playback.addToQueue([track]), toast(tr('tl.addedToQueue'))) },
+    pinned
+      ? { label: tr('dl.remove'), icon: <ArrowDownToLine />, onSelect: () => void useOffline.getState().removeTrack(track.id) }
+      : { label: tr('dl.download'), icon: <ArrowDownToLine />, onSelect: () => (void useOffline.getState().downloadTracks([track]), toast(tr('dl.queued', { count: 1 }))) },
     ...(playlists ? [{ label: tr('tl.addToPlaylist'), icon: <ListMusic />, onSelect: () => usePlaylistUi.getState().openPicker([track]) }] : []),
     ...(playlists && onRemove ? [{ label: tr('tl.removeFromPlaylist'), icon: <ListMinus />, onSelect: () => onRemove(index) }] : []),
     ...(track.album ? [{ label: tr('tl.goAlbum'), icon: <Disc3 />, onSelect: () => go({ name: 'album', id: track.album!.id }) }] : []),
     ...(track.artists[0] ? [{ label: tr('tl.goArtist'), icon: <UserRound />, onSelect: () => go({ name: 'artist', id: track.artists[0]!.id }) }] : [])
   ]
 
-  const activate = (): void => (isCurrent ? toggle() : onPlay(index))
+  const activate = (): void => {
+    if (unavailable && !isCurrent) return toast(tr('offline.unavailable', { title: track.title }))
+    if (isCurrent) toggle()
+    else onPlay(index)
+  }
   const pick = (shift: boolean): void => onSelect?.(index, shift)
   const quickQueue = (): void => {
     const undo = playback.addToQueue([track])
@@ -204,6 +215,7 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
         'grid-cols-[28px_minmax(0,1fr)_auto] md:grid-cols-[28px_minmax(0,1fr)_minmax(0,0.7fr)_auto]',
         !showAlbum && 'md:grid-cols-[28px_minmax(0,1fr)_auto]',
         'hover:bg-white/[0.05] focus-visible:bg-white/[0.05]',
+        unavailable && 'opacity-40',
         over && 'ring-1 ring-accent/60',
         selected && 'bg-accent/[0.12] hover:bg-accent/[0.16]'
       )}
@@ -248,6 +260,9 @@ const TrackRow = memo(function TrackRow({ track, index, showArt, showAlbum, isCu
         <div className="min-w-0">
           <p className={cx('truncate font-medium', isCurrent ? 'text-accent' : 'text-fg')}>{track.title}</p>
           <p className="truncate text-[13px] text-fg-muted">
+            {avail === 'available' && (
+              <ArrowDownToLine className="mr-1.5 inline h-3.5 w-3.5 -translate-y-px text-accent" aria-label={tr('offline.badge')} role="img" />
+            )}
             {track.explicit && (
               <span className="mr-1.5 inline-flex h-4 items-center rounded-[3px] bg-white/15 px-1 text-[10px] font-bold text-fg/80">E</span>
             )}
@@ -369,10 +384,15 @@ export function TrackList({
   const [selecting, setSelecting] = useState(false)
   const [sel, setSel] = useState<SelectionState>({ selected: new Set(), anchor: null })
   const [confirmRemove, setConfirmRemove] = useState(false)
-  const filtering = query.trim() !== ''
+  const [offlineOnly, setOfflineOnly] = useState(false)
+  const available = useOffline((s) => s.available)
+  const filtering = query.trim() !== '' || offlineOnly
 
   // `view` = indices into `tracks` that are shown; everything below works on the shown rows.
-  const view = useMemo(() => filterIndices(tracks, query), [tracks, query])
+  const view = useMemo(() => {
+    const idx = filterIndices(tracks, query)
+    return offlineOnly ? idx.filter((i) => tracks[i]!.id in available) : idx
+  }, [tracks, query, offlineOnly, available])
   const viewTracks = useMemo(() => (filtering ? view.map((i) => tracks[i]!) : tracks), [filtering, view, tracks])
   const keyAt = useCallback((i: number): string => rowKeys?.[i] ?? `${tracks[i]!.id}:${i}`, [rowKeys, tracks])
   const viewKeys = useMemo(() => view.map(keyAt), [view, keyAt])
@@ -459,6 +479,8 @@ export function TrackList({
           total={tracks.length}
           selecting={selecting}
           onToggleSelect={() => (selecting ? exitSelect() : setSelecting(true))}
+          offlineOnly={offlineOnly}
+          onToggleOffline={() => setOfflineOnly((v) => !v)}
         />
       )}
       {header && (
@@ -478,7 +500,9 @@ export function TrackList({
           </span>
         </div>
       )}
-      {filtering && view.length === 0 && <p className="px-3 py-10 text-center text-sm text-fg-muted">{tr('ts.noMatches', { q: query.trim() })}</p>}
+      {filtering && view.length === 0 && (
+        <p className="px-3 py-10 text-center text-sm text-fg-muted">{offlineOnly && query.trim() === '' ? tr('offline.nothingToPlay') : tr('ts.noMatches', { q: query.trim() })}</p>
+      )}
       {view.map((oi, vi) => {
         const t = tracks[oi]!
         return (

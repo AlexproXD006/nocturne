@@ -39,6 +39,10 @@ import {
   nocturneColors,
   patchMainActivity,
   mainActivityJava,
+  OFFLINE_PLUGIN_IMPORT,
+  OFFLINE_PLUGIN_REGISTER,
+  ensureDownloadService,
+  DOWNLOAD_SERVICE_MARKER,
   SHARE_PLUGIN_IMPORT,
   SHARE_PLUGIN_REGISTER,
   ensureFileProvider,
@@ -406,7 +410,7 @@ test('MainActivity: NocturneUpdates plugin registered after NocturneMedia, befor
     assert.equal(patchMainActivity(out), out)
   }
   // Patching the previous generation of the template yields exactly the current template.
-  const previous = mainActivityJava().replace(`${UPDATES_PLUGIN_IMPORT}\n`, '').replace(`        ${UPDATES_PLUGIN_REGISTER}\n`, '').replace(`${DIAG_PLUGIN_IMPORT}\n`, '').replace(`        ${DIAG_PLUGIN_REGISTER}\n`, '').replace(`${SHARE_PLUGIN_IMPORT}\n`, '').replace(`        ${SHARE_PLUGIN_REGISTER}\n`, '')
+  const previous = mainActivityJava().replace(`${UPDATES_PLUGIN_IMPORT}\n`, '').replace(`        ${UPDATES_PLUGIN_REGISTER}\n`, '').replace(`${DIAG_PLUGIN_IMPORT}\n`, '').replace(`        ${DIAG_PLUGIN_REGISTER}\n`, '').replace(`${SHARE_PLUGIN_IMPORT}\n`, '').replace(`        ${SHARE_PLUGIN_REGISTER}\n`, '').replace(`${OFFLINE_PLUGIN_IMPORT}\n`, '').replace(`        ${OFFLINE_PLUGIN_REGISTER}\n`, '')
   assert.doesNotMatch(previous, /NocturneUpdatesPlugin/)
   assert.equal(patchMainActivity(previous), mainActivityJava())
   // No onCreate(super): untouched. No imports at all: the import goes after the package line.
@@ -483,7 +487,7 @@ test('patchManifest points the application at NocturneApplication (crash reporte
 test('the share plugin is registered in the generated MainActivity and added to an older one', () => {
   const j = mainActivityJava()
   assert.ok(j.includes(SHARE_PLUGIN_IMPORT) && j.includes(SHARE_PLUGIN_REGISTER))
-  const previous = j.replace(`${SHARE_PLUGIN_IMPORT}\n`, '').replace(`        ${SHARE_PLUGIN_REGISTER}\n`, '')
+  const previous = j.replace(`${SHARE_PLUGIN_IMPORT}\n`, '').replace(`        ${SHARE_PLUGIN_REGISTER}\n`, '').replace(`${OFFLINE_PLUGIN_IMPORT}\n`, '').replace(`        ${OFFLINE_PLUGIN_REGISTER}\n`, '')
   assert.equal(patchMainActivity(previous), j)
 })
 
@@ -530,4 +534,21 @@ test('patchManifest adds provider + queries and stays idempotent', () => {
   assert.match(once, /com\.instagram\.android/)
   assert.match(once, /FileProvider/)
   assert.equal(patchManifest(once), once)
+})
+
+test('the offline plugin is registered in the generated MainActivity and added to an older one', () => {
+  const j = mainActivityJava()
+  assert.ok(j.includes(OFFLINE_PLUGIN_IMPORT) && j.includes(OFFLINE_PLUGIN_REGISTER))
+  const previous = j.replace(`${OFFLINE_PLUGIN_IMPORT}\n`, '').replace(`        ${OFFLINE_PLUGIN_REGISTER}\n`, '')
+  assert.equal(patchMainActivity(previous), j)
+})
+
+test('the downloads foreground service is declared once (dataSync type, not exported) and idempotently', () => {
+  const once = patchManifest(MANIFEST)
+  assert.equal(once.split(DOWNLOAD_SERVICE_MARKER).length - 1, 2) // opening + closing marker comments
+  assert.match(once, /<service\s+android:name="\.media\.NocturneDownloadService"\s+android:exported="false"\s+android:foregroundServiceType="dataSync"/)
+  assert.match(once, /PlatformScheduler\$PlatformSchedulerService/)
+  assert.match(once, /android:permission="android\.permission\.BIND_JOB_SERVICE"/)
+  assert.equal(patchManifest(once), once)
+  assert.equal(ensureDownloadService('<manifest></manifest>'), '<manifest></manifest>')
 })

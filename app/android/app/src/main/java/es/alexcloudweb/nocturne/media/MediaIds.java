@@ -10,7 +10,7 @@ import java.net.URLEncoder;
  *
  * <pre>
  * root                      browse root
- * mixes | playlists | liked | recent | albums | artists     the six top level nodes
+ * mixes | playlists | liked | recent | albums | artists | downloads     the seven top level nodes
  * mix:ID | playlist:ID | album:ID | artist:ID               containers (browsable and playable)
  * track:ID|CTX              a song listed inside the container CTX (CTX is liked, recent, mix:ID, ...)
  * </pre>
@@ -25,6 +25,8 @@ final class MediaIds {
     static final String RECENT = "recent";
     static final String ALBUMS = "albums";
     static final String ARTISTS = "artists";
+    /** Songs downloaded for offline playback (read from the download index: works with no network). */
+    static final String DOWNLOADS = "downloads";
 
     static final String KIND_TRACK = "track";
     static final String KIND_MIX = "mix";

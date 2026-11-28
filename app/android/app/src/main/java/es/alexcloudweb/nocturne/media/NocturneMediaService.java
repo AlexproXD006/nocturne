@@ -19,9 +19,6 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.Timeline;
 import androidx.media3.common.util.UnstableApi;
-import androidx.media3.datasource.DefaultDataSource;
-import androidx.media3.datasource.DefaultHttpDataSource;
-import androidx.media3.datasource.ResolvingDataSource;
 import androidx.media3.common.audio.AudioProcessor;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -103,6 +100,9 @@ public final class NocturneMediaService extends MediaLibraryService {
     @Nullable private NocturneApi api;
     @Nullable private Library library;
     @Nullable private PlayReporter reporter;
+    @Nullable private OfflineCache offline;
+    /** Prefetch of the next queued track in progress (cancelled when the item changes). */
+    @Nullable private volatile androidx.media3.datasource.cache.CacheWriter prefetch;
 
     private String lastStatus = "";
     private String buttonsKey = "";
@@ -148,6 +148,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         try {
             api = NocturneApi.get(this);
             library = new Library(api);
+            library.setDownloads(() -> DownloadsController.get(this).completedTracks());
             reporter = new PlayReporter(this, api);
             api.setListener(session -> {
                 // The refresh token rotated: tell the WebView so it does not keep a dead one.
@@ -158,20 +159,11 @@ public final class NocturneMediaService extends MediaLibraryService {
                     /* never */
                 }
             });
-            final NocturneApi apiRef = api;
-
-            ResolvingDataSource.Factory dataSources = new ResolvingDataSource.Factory(
-                new DefaultDataSource.Factory(this, new DefaultHttpDataSource.Factory().setUserAgent("Nocturne-Android").setAllowCrossProtocolRedirects(true)),
-                dataSpec -> {
-                    Uri u = dataSpec.uri;
-                    if ("nocturne".equals(u.getScheme()) && "track".equals(u.getHost())) {
-                        String id = u.getLastPathSegment();
-                        if (id == null) throw new IOException("bad track uri");
-                        return dataSpec.withUri(Uri.parse(apiRef.streamUrl(id)));
-                    }
-                    return dataSpec;
-                }
-            );
+            // Playback reads through the shared SimpleCache (key = track id): what is played is cached as it
+            // streams (no second download), and a cached track plays with no network. Signed URLs are only
+            // resolved on a cache miss.
+            offline = OfflineCache.get(this);
+            final androidx.media3.datasource.cache.CacheDataSource.Factory dataSources = offline.dataSources();
             // Equalizer: a custom AudioProcessor inside the DefaultAudioSink. Its last state is persisted natively
             // (EqPrefs) so it applies on a cold start (app closed, Android Auto) before any JS runs.
             eqProcessor.setState(EqPrefs.load(this));
@@ -302,6 +294,7 @@ public final class NocturneMediaService extends MediaLibraryService {
         } catch (Throwable t) {
             AppLog.e(TAG, "release failed", t);
         }
+        cancelPrefetch();
         io.shutdown();
         super.onDestroy();
     }
@@ -311,9 +304,10 @@ public final class NocturneMediaService extends MediaLibraryService {
     // ---------------------------------------------------------------------------------------------
 
     /** Aligns the ExoPlayer playlist with the WebView's queue; keeps the current item playing when it is still there. */
-    void cmdSetQueue(List<MediaItem> items, int index, @Nullable Boolean play, long startMs, boolean reset) {
+    void cmdSetQueue(List<MediaItem> itemsIn, int index, @Nullable Boolean play, long startMs, boolean reset) {
         ExoPlayer p = player;
-        if (p == null || items.isEmpty()) return;
+        if (p == null || itemsIn.isEmpty()) return;
+        final List<MediaItem> items = withOfflineArt(itemsIn);
         int target = Math.min(Math.max(0, index), items.size() - 1);
         String targetUid = items.get(target).mediaId;
         MediaItem cur = p.getCurrentMediaItem();
@@ -607,6 +601,7 @@ public final class NocturneMediaService extends MediaLibraryService {
             lastLyricIdx = -2;
             widgetLine = "";
             loadLyricsForCurrent();
+            onTrackStarted(item);
             refreshButtons();
             scheduleWidgets();
             try {
@@ -644,7 +639,7 @@ public final class NocturneMediaService extends MediaLibraryService {
             ExoPlayer p = player;
             if (p == null) return;
             MediaItem cur = p.getCurrentMediaItem();
-            if (cur != null && !cur.mediaId.equals(retriedUid) && api != null) {
+            if (cur != null && !cur.mediaId.equals(retriedUid) && api != null && NetMonitor.isOnline(NocturneMediaService.this)) {
                 // Signed URLs expire: fetch a fresh one once and resume where we were.
                 retriedUid = cur.mediaId;
                 api.invalidateStream(trackIdOf(cur));
@@ -668,11 +663,26 @@ public final class NocturneMediaService extends MediaLibraryService {
                 p.pause();
                 return;
             }
-            if (p.hasNextMediaItem()) {
-                p.seekToNextMediaItem();
+            int target = nextPlayableIndex(p);
+            if (target != C.INDEX_UNSET) {
+                p.seekTo(target, 0);
                 p.prepare();
             }
         }
+    }
+
+    /**
+     * The item to skip to after an error: the next one; while offline, the next one that is fully cached
+     * (an uncached song can only fail again), so a playlist plays through what is available.
+     */
+    private int nextPlayableIndex(ExoPlayer p) {
+        int cur = p.getCurrentMediaItemIndex();
+        boolean online = NetMonitor.isOnline(this);
+        OfflineCache oc = offline;
+        for (int i = cur + 1; i < p.getMediaItemCount(); i++) {
+            if (online || oc == null || oc.isFullyCached(trackIdOf(p.getMediaItemAt(i)))) return i;
+        }
+        return C.INDEX_UNSET;
     }
 
     private void emitState() {
@@ -780,7 +790,8 @@ public final class NocturneMediaService extends MediaLibraryService {
         if (!wantLyrics() || id == null || a == null || !a.hasSession()) return;
         io.execute(() -> {
             try {
-                JSONObject o = a.getJson("/v1/tracks/" + NocturneApi.pathId(id) + "/lyrics");
+                JSONObject o = OfflineMeta.lyrics(this, id);
+                if (o == null) o = a.getJson("/v1/tracks/" + NocturneApi.pathId(id) + "/lyrics");
                 String synced = o.isNull("synced") ? "" : o.optString("synced", "");
                 if (synced.isEmpty()) return;
                 final LrcParser parsed = LrcParser.parse(synced, o.optLong("offsetMs", 0));
@@ -941,8 +952,82 @@ public final class NocturneMediaService extends MediaLibraryService {
         return new MediaItem.Builder()
             .setMediaId(newUid())
             .setUri(trackUri(t.id))
-            .setMediaMetadata(songMeta(t.title, t.artist, t.album, t.artUrl, t.durationMs).build())
+            .setMediaMetadata(offlineArt(songMeta(t.title, t.artist, t.album, t.artUrl, t.durationMs), t.id).build())
             .build();
+    }
+
+    /** While offline the signed cover URL cannot load: embed the stored 512 px cover so the notification still has art. */
+    private MediaMetadata.Builder offlineArt(MediaMetadata.Builder b, String trackId) {
+        if (trackId.isEmpty() || NetMonitor.isOnline(this)) return b;
+        java.io.File f = OfflineMeta.art(this, trackId);
+        if (f == null || f.length() > 400 * 1024) return b;
+        try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            b.setArtworkData(out.toByteArray(), MediaMetadata.PICTURE_TYPE_FRONT_COVER);
+        } catch (java.io.IOException ignored) {
+            /* no cover offline */
+        }
+        return b;
+    }
+
+    private List<MediaItem> withOfflineArt(List<MediaItem> items) {
+        if (NetMonitor.isOnline(this)) return items;
+        List<MediaItem> out = new ArrayList<>(items.size());
+        for (MediaItem it : items) {
+            out.add(it.buildUpon().setMediaMetadata(offlineArt(it.mediaMetadata.buildUpon(), trackIdOf(it)).build()).build());
+        }
+        return out;
+    }
+
+    private final Runnable prefetchTask = this::runPrefetch;
+
+    /** A track started playing: it becomes the most recent in the cache, its extras are stored, the next one is prefetched. */
+    private void onTrackStarted(MediaItem item) {
+        final String id = trackIdOf(item);
+        OfflineCache oc = offline;
+        final NocturneApi a = api;
+        if (oc == null || id.isEmpty()) return;
+        oc.evictor().touch(id);
+        if (a != null && a.hasSession() && !OfflineMeta.has(this, id) && NetMonitor.isOnline(this)) {
+            io.execute(() -> OfflineMeta.fetch(this, a, id));
+        }
+        cancelPrefetch();
+        main.postDelayed(prefetchTask, 8000);
+    }
+
+    private void cancelPrefetch() {
+        main.removeCallbacks(prefetchTask);
+        androidx.media3.datasource.cache.CacheWriter w = prefetch;
+        prefetch = null;
+        if (w != null) w.cancel();
+    }
+
+    /** Warms the cache with the next queued track (Wi-Fi only unless the user allowed mobile data). */
+    private void runPrefetch() {
+        final ExoPlayer p = player;
+        final OfflineCache oc = offline;
+        if (p == null || oc == null || p.getMediaItemCount() == 0) return;
+        int ni = p.getNextMediaItemIndex();
+        if (ni == C.INDEX_UNSET) return;
+        final String id = trackIdOf(p.getMediaItemAt(ni));
+        if (id.isEmpty() || oc.isFullyCached(id) || !NetMonitor.isOnline(this)) return;
+        if (OfflinePrefs.prefetchWifiOnly(this) && !NetMonitor.isUnmetered(this)) return;
+        io.execute(() -> {
+            try {
+                androidx.media3.datasource.DataSpec spec = new androidx.media3.datasource.DataSpec.Builder().setUri(trackUri(id)).setKey(id).build();
+                androidx.media3.datasource.cache.CacheWriter w =
+                    new androidx.media3.datasource.cache.CacheWriter(oc.dataSources().createDataSourceForDownloading(), spec, null, null);
+                prefetch = w;
+                w.cache();
+            } catch (Throwable t) {
+                AppLog.w(TAG, "prefetch skipped: " + t.getClass().getSimpleName());
+            } finally {
+                prefetch = null;
+            }
+        });
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -1044,14 +1129,15 @@ public final class NocturneMediaService extends MediaLibraryService {
             folder(MediaIds.LIKED, getString(R.string.nocturne_auto_liked)),
             folder(MediaIds.RECENT, getString(R.string.nocturne_auto_recent)),
             folder(MediaIds.ALBUMS, getString(R.string.nocturne_auto_albums)),
-            folder(MediaIds.ARTISTS, getString(R.string.nocturne_auto_artists)));
+            folder(MediaIds.ARTISTS, getString(R.string.nocturne_auto_artists)),
+            folder(MediaIds.DOWNLOADS, getString(R.string.nocturne_auto_downloads)));
     }
 
     private MediaItem nodeItem(Library.Node n) {
         MediaMetadata.Builder md;
         MediaItem.Builder b = new MediaItem.Builder().setMediaId(n.id);
         if (n.track != null) {
-            md = songMeta(n.track.title, n.track.artist, n.track.album, n.track.artUrl, n.track.durationMs);
+            md = offlineArt(songMeta(n.track.title, n.track.artist, n.track.album, n.track.artUrl, n.track.durationMs), n.track.id);
             b.setUri(trackUri(n.track.id));
             if (n.track.liked) likedIds.add(n.track.id);
         } else {
@@ -1255,7 +1341,7 @@ public final class NocturneMediaService extends MediaLibraryService {
             @Nullable LibraryParams params) {
             if (!signedIn()) return Futures.immediateFuture(authError());
             if (MediaIds.ROOT.equals(parentId)) {
-                int[] sl = MediaIds.slice(6, MediaIds.window(page, pageSize));
+                int[] sl = MediaIds.slice(7, MediaIds.window(page, pageSize));
                 return Futures.immediateFuture(LibraryResult.ofItemList(tabs().subList(sl[0], sl[1]), params));
             }
             return io.submit(() -> {
