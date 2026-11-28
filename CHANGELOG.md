@@ -2,6 +2,17 @@
 
 Historial de versiones de Nocturne. Las versiones `-beta` se publican en el canal beta de Android.
 
+## 1.1.2-beta.2 — 2026-11-28
+
+**Modo sin conexión y descargas (beta)** · android, windows, linux, ios
+
+### Novedades
+
+- Las últimas 30 canciones que escuchas se guardan solas para oírlas sin conexión (ajustable por número o por espacio en Ajustes).
+- Descargas al estilo Netflix de playlists, álbumes, mixes y canciones, con progreso, pausa y sincronización automática; pantalla «Descargas» en la Biblioteca.
+- Modo sin conexión: aviso, canciones disponibles marcadas con ⬇ y filtro «Disponibles sin conexión»; las escuchas y los Me gusta se envían al volver la conexión.
+- Android: descargas en segundo plano con la app cerrada y sección «Descargas» en Android Auto.
+
 ## 1.1.2-beta.1 — 2026-11-27
 
 **Compartir en historias de Instagram (beta)** · android, windows, linux, ios
